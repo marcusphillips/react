@@ -34,7 +34,7 @@ Since a rendered MV template retrains all the same directives that went into ren
 </script>
 
 
--------- But check this out --------
+-------- The Mutable Views way --------
 
 <div id="profile">
   <div class="mugshot">
@@ -55,4 +55,4 @@ Since a rendered MV template retrains all the same directives that went into ren
 --------
 
 
-In this example, the mv.render function could be the same one used to render the template the first time.  Once there's an update to the data, the re-render step is trivial, since none of the rendering instructions have been discarded in the render process.
+In this example, you might have also used the mv.render function to render the template in the first place, but it isn's necessary.  Once there's an update to the data, the re-render step is trivial, since none of the rendering instructions have been discarded in the render process.
