@@ -8,7 +8,7 @@ Since a rendered MV template retrains all the same directives that went into ren
 
 <div id="profile">
   <div class="mugshot">
-    <img src="/pictures/knitting_with_50_cent"/>
+    <img src="/pictures/knitting_with_50_cent.png"/>
     <span class="caption">Gee, you knit?</span>
   </div>
   <div class="admin_links">
@@ -21,7 +21,9 @@ Since a rendered MV template retrains all the same directives that went into ren
   var updateProfileDiv = function(userInfo, profile){
     var profileDiv = $('#profile');
 
-    profileDiv.find('.mugshot .caption').html(user.mugshot_caption);
+    profileDiv.find('.mugshot img').attr('src', user.mugshotUrl);
+
+    profileDiv.find('.mugshot .caption').html(user.mugshotCaption);
 
     if(userInfo.isAdmin){
       profileDiv.find('.admin_links').show();
@@ -38,8 +40,8 @@ Since a rendered MV template retrains all the same directives that went into ren
 
 <div id="profile">
   <div class="mugshot">
-    <img src="/pictures/knitting_with_50_cent"/>
-    <span class="caption" mv="contain caption">Gee, you knit?</span>
+    <img mv="attr 'src' mugshotUrl"/>
+    <span class="caption" mv="contain mugshotCaption">Gee, you knit?</span>
   </div>
   <div class="admin_links" mv="if isAdmin display">
     <a href="/ray_guns/mind_control">Mind control ray</a>
