@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="../../lib/jquery/jquery-1.4.2.js" ></script>
+    <script src="../../lib/js_dot_standin/js.js" ></script>
+    <script src="../../mv.js" ></script>
+  </head>
+
+  <body>
+
+    <div id="app">
+      welcome <span mv="tether app, mask user, contain name, unmask, if foo attr 'bar' 'baz'"></span>
+      </span>!
+
+      <p>
+         you are
+         <span mv="if isAdmin display">an admin!</span>
+         <span mv="unless isAdmin display">a member</span>
+      </p>
+
+      <p>today is <span mv="contain day"></span></p>
+
+      <p><input type="checkbox" mv="if on attr 'checked' 'true'"/></p>
+    </div>
+
+
+
+    <script>
+      // example app code
+
+      var app = mv.scopes.app = {
+        isAdmin:true,
+        day: 'friday',
+        user: {
+          name: 'jon'
+        },
+        on: true,
+        foo: true
+      };
+
+      mv.render($('#app'), app);
+
+    </script>
+
+  </body>
+</html>

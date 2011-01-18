@@ -1,0 +1,58 @@
+Mutable views is a templating language expressed entirely in HTML.  All template directives are written in custom tag attributes.
+
+Since a rendered MV template retrains all the same directives that went into rendering it, it can be re-rendered just as easily, without any complicated DOM surgery.  Check this out:
+
+
+
+-------- The old way --------
+
+<div id="profile">
+  <div class="mugshot">
+    <img src="/pictures/knitting_with_50_cent"/>
+    <span class="caption">Gee, you knit?</span>
+  </div>
+  <div class="admin_links">
+    <a href="/ray_guns/mind_control">Mind control ray</a>
+    <a href="/blowup/moon">Blow up the moon</a>
+  </div>
+</div>
+
+<script>
+  var updateProfileDiv = function(userInfo, profile){
+    var profileDiv = $('#profile');
+
+    profileDiv.find('.mugshot .caption').html(user.mugshot_caption);
+
+    if(userInfo.isAdmin){
+      profileDiv.find('.admin_links').show();
+    } else {
+     profileDiv.find('.admin_links').hide();
+    }
+  };
+
+  updateProfileDiv(user, $('#profile'));
+</script>
+
+
+-------- But check this out --------
+
+<div id="profile">
+  <div class="mugshot">
+    <img src="/pictures/knitting_with_50_cent"/>
+    <span class="caption" mv="contain caption">Gee, you knit?</span>
+  </div>
+  <div class="admin_links" mv="if isAdmin display">
+    <a href="/ray_guns/mind_control">Mind control ray</a>
+    <a href="/blowup/moon">Blow up the moon</a>
+  </div>
+</div>
+
+<script>
+  mv.render(user, $('#profile'));
+</script>
+
+
+--------
+
+
+In this example, the mv.render function could be the same one used to render the template the first time.  Once there's an update to the data, the re-render step is trivial, since none of the rendering instructions have been discarded in the render process.
