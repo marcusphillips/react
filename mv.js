@@ -25,7 +25,7 @@
 
   js.merge(mv, {
 
-    scopes: {},
+    scopes: js.create(window),
 
     nodes: {},
 
@@ -49,7 +49,7 @@
       scope.tethers = js.filter(tetheredNodeKeys).sort().join(', ');
     },
 
-    render: function($roots, scope){
+    update: function($roots, scope){
       if(typeof scope === 'string'){
         scope = mv.scopes[scope];
       }
@@ -264,3 +264,7 @@
   });
 
 }());
+
+jQuery.fn.update = function(scope){
+  mv.update(this, scope);
+};
