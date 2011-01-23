@@ -37,6 +37,12 @@ test('containing node variables', function(){
   equal($(node).children()[0], child, 'contain directive inserted a variable');
 });
 
+test('keys can use dot operator', function(){
+  var node = $('<div mv="contain key.subkey"/>')[0];
+  mv.update(node, {key:{subkey:'content'}});
+  equal($(node).html(), 'content', 'key resolved while using a dot operator');
+});
+
 test('conditional display', function(){
   var node = $('<div mv="showIf key"></div>')[0];
   mv.update(node, {key:false});
@@ -46,9 +52,11 @@ test('conditional display', function(){
 });
 
 test('conditional visibility', function(){
-  var node = $('<div mv="contain \'example\'"></div>')[0];
-  mv.update(node, {});
-  equal(node.innerHTML, 'example', 'contain directive inserted a string');
+  var node = $('<div mv="visIf key"></div>')[0];
+  mv.update(node, {key:false});
+  equal($(node).css('visibility'), 'hidden', 'node is invisible when key is false');
+  mv.update(node, {key:true});
+  equal($(node).css('visibility'), 'visible', 'node is visible again when key is changed to true');
 });
 
 test('setting string attributes', function(){

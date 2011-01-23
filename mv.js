@@ -14,7 +14,9 @@
 (function () {
 
   window.mv = {
+
     commands: {
+
       contain: function(key){
         jQuery(this.node).html(this._lookup(key));
       },
@@ -45,6 +47,7 @@
           jQuery(this.node).removeAttr(this._lookup(name));
         }
       }
+
     },
 
     update: function(root, scope){
@@ -121,7 +124,11 @@
       if (mv._matchers.isString.test(key)) {
         resolution = key.slice(1, key.length-1);
       } else {
-        resolution = this._scope[key];
+        var keys = key.split('.');
+        resolution = this._scope;
+        while(keys.length){
+          resolution = resolution[keys.shift()]
+        }
       }
       return negate ? ! resolution : resolution;
     }
