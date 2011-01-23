@@ -16,11 +16,37 @@
   window.mv = {
 
     /*
-     * when a command runs, it will have a 'this' scope like the following
-     * mv.commands <- mv.commandScope <- updateScope <- processingScope
+     * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships
+     * mv.commands {
+     *   command handler definitions
+     * }
+     *  ^
+     *  |
+     * mv.commandScope {
+     *   lookup(key)
+     * }
+     *  ^
+     *  |
+     * updateScope {
+     *   _rootNode, _rootScope
+     *   scopeChainCache
+     * }
+     *  ^
+     *  |
+     * processingScope {
+     *   scopeChain
+     * }
      */
 
     commands: {
+
+      within: function(key){
+        this.scopeChain.push(this._lookup(key));
+      },
+
+      without: function(key){
+        this.scopeChain.pop();
+      },
 
       contain: function(key){
         jQuery(this.node).html(this._lookup(key));
@@ -55,7 +81,8 @@
 
     },
 
-    update: function(root, scope){
+    update: function(root /* , scope1, ..., scopeN */){
+      var baseScopeChain = Array.prototype.slice.call(arguments, 1);
       /* todo: add support for strings
       if(typeof scope === 'string'){
         scope = mv.scopes[scope];
@@ -66,7 +93,7 @@
       */
 
       var updateScope = js.create(this.commandScope, {
-        _scope: scope,
+        _baseScopeChain: baseScopeChain,
         _root: root,
         _scopeChainCache: {},
         _scopeChainCachedNodes: []
@@ -100,10 +127,11 @@
       isNumber: /\d+/
     },
 
-    _process: function(node, commandScope){
+    _process: function(node, updateScope){
       var directives = node.getAttribute('mv').split(this._matchers.spaceCommaSpace);
-      var processingScope = js.create(commandScope, {
-        node: node
+      var processingScope = js.create(updateScope, {
+        node: node,
+        scopeChain: js.copy(updateScope._baseScopeChain)
       });
       for( var i = 0, length = directives.length; i < length; i++ ){
         this._followDirective(processingScope, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
@@ -125,17 +153,28 @@
         negate = true;
         key = key.slice(1);
       }
-      var resolution;
       if (mv._matchers.isString.test(key)) {
-        resolution = key.slice(1, key.length-1);
+        value = key.slice(1, key.length-1);
       } else {
         var keys = key.split('.');
-        resolution = this._scope;
+        var baseKey = keys.shift();
+        var value;
+        var scopeDepth = this.scopeChain.length - 1;
+        while(0 <= scopeDepth){
+          value = this.scopeChain[scopeDepth][baseKey];
+          if(typeof value === 'function'){
+            value = this.scopeChain[scopeDepth][baseKey]();
+          };
+          if(typeof value !== 'undefined'){
+            break;
+          }
+          scopeDepth--;
+        }
         while(keys.length){
-          resolution = resolution[keys.shift()]
+          value = value[keys.shift()]
         }
       }
-      return negate ? ! resolution : resolution;
+      return negate ? ! value : value;
     }
   });
 

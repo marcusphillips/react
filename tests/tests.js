@@ -26,15 +26,16 @@ test('containing strings', function(){
 
 test('containing variables', function(){
   var node = $('<div mv="contain key"></div>')[0];
+debugger;
   mv.update(node, {key:'value'});
-  equal(node.innerHTML, 'value', 'contain directive inserted a variable');
+  equal(node.innerHTML, 'value', 'contain directive inserted a string variable');
 });
 
 test('containing node variables', function(){
   var node = $('<div mv="contain child"></div>')[0];
   var child = $('<div/>')[0];
   mv.update(node, {child:child});
-  equal($(node).children()[0], child, 'contain directive inserted a variable');
+  equal($(node).children()[0], child, 'contain directive inserted a node variable');
 });
 
 test('keys can use dot operator', function(){
@@ -103,5 +104,23 @@ test('conditions can be negated', function(){
 
   mv.update(node, {condition:false});
   equal($(node).attr('foo'), 'bar', 'with a space, attribute was added when negated condition is false');
+});
+
+test('scope can be shifted within a property', function(){
+  var node = $('<div mv="within subobject, contain key"/>')[0];
+  mv.update(node, {subobject: {key: 'content'}, key:'wrongContent'});
+  equal($(node).html(), 'content', 'content was correct from within a subobject');
+
+  var node = $('<div mv="within subobject, without, contain key"/>')[0];
+  mv.update(node, {subobject: {key: 'wrongcontent'}, key:'content'});
+  equal($(node).html(), 'content', 'content was correct after shifting within and without a subobject');
+
+  var node = $('<div mv="within subobject, without, contain key"/>')[0];
+  mv.update(node, {subobject: {otherkey: 'wrongcontent'}, key:'content'});
+  equal($(node).html(), 'content', 'key fell through fell through to next higher scope when local key is missing');
+
+  var node = $('<div mv="within subobject, without, contain key"/>')[0];
+  mv.update(node, {subobject: {key: undefined}, key:'content'});
+  equal($(node).html(), 'content', 'key fell through fell through to next higher scope when local key is undefined');
 });
 
