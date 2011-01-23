@@ -179,6 +179,13 @@
   });
 
 
+  mv.integrate = {
+    jQuery: function(){
+      jQuery.fn.update = function(scope){
+        mv.update(this, scope);
+      };
+    }
+  }
 
 /*
   js.merge(mv, {
@@ -352,7 +359,3 @@
 */
 
 }());
-
-jQuery.fn.update = function(scope){
-  mv.update(this, scope);
-};
