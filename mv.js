@@ -16,7 +16,11 @@
   window.mv = {
     commands: {
       contain: function(key){
-        this.node.innerHTML = this._lookup(key);
+        jQuery(this.node).html(this._lookup(key));
+      },
+
+      attr: function(name, value){
+        jQuery(this.node).attr(this._lookup(name), this._lookup(value));
       }
     },
 
@@ -50,7 +54,7 @@
       for(var i = 0, length = hash._scopeChainCachedNodes.length; i< length; i++){
         hash._scopeChainCachedNodes[i].scopeChainKey = undefined;
       }
-       */
+      */
     },
 
     hashBase: {
@@ -83,7 +87,9 @@
     },
 
     _followDirective: function(hash, directive){
-      this.commands[js.trim(directive.shift())].apply(hash, directive);
+      var command = js.trim(directive.shift());
+      js.errorIf(!this.commands[command], command+' is not a valid mv command');
+      this.commands[command].apply(hash, directive);
     }
 
   };
