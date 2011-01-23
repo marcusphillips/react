@@ -72,7 +72,8 @@
     _matchers: {
       spaceCommaSpace: /\s*,\s*/,
       space: /\s+/,
-      isString: /(^'.*'$)|(^".*"$)/
+      isString: /(^'.*'$)|(^".*"$)/,
+      negation: /!\s*/
     },
 
     _process: function(node, commandScope){
@@ -81,7 +82,7 @@
         node: node
       });
       for( var i = 0, length = directives.length; i < length; i++ ){
-        this._followDirective(localCommandScope, js.trim(directives[i]).split(this._matchers.space));
+        this._followDirective(localCommandScope, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
       }
     },
 
@@ -95,10 +96,15 @@
 
   mv.commandScope = js.create(mv.commands, {
     _lookup: function(key){
+      var negate;
+      if(key[0] === '!'){
+        negate = true;
+        key = key.slice(1);
+      }
       if(mv._matchers.isString.test(key)){
         return key.slice(1, key.length-1);
       }
-      return this._scope[key];
+      return negate ? !this._scope[key] : this._scope[key];
     }
   });
 

@@ -70,3 +70,15 @@ test('conditionally adding attributes', function(){
   mv.update(node, {condition:true});
   equal($(node).attr('foo'), 'bar', 'attribute was re-added when condition is true');
 });
+
+test('conditions can be negated', function(){
+  var node = $('<div mv="attrIf !condition \'foo\' \'bar\'"/>')[0];
+
+  mv.update(node, {condition:false});
+  equal($(node).attr('foo'), 'bar', 'attribute was added when negated condition is false');
+
+  var node = $('<div mv="attrIf ! condition \'foo\' \'bar\'"/>')[0];
+
+  mv.update(node, {condition:false});
+  equal($(node).attr('foo'), 'bar', 'with a space, attribute was added when negated condition is false');
+});
