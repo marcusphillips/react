@@ -1,0 +1,4 @@
+write tests:
+  undoing things changes them
+  empty mv string doesnt break univers
+

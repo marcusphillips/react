@@ -54,3 +54,19 @@ test('substituting variables in attribute values', function(){
   mv.update(node, {value:'bar'});
   equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
 });
+
+test('conditionally adding attributes', function(){
+  var node = $('<div mv="attrIf condition \'foo\' \'bar\'"/>')[0];
+
+  mv.update(node, {condition:true});
+  equal($(node).attr('foo'), 'bar', 'attribute was added when condition is true');
+
+  mv.update(node, {condition:false});
+  equal($(node).attr('foo'), undefined, 'attribute was not added when condition is false');
+
+  mv.update(node, {condition:undefined});
+  equal($(node).attr('foo'), undefined, 'attribute was not added when condition is undefined');
+
+  mv.update(node, {condition:true});
+  equal($(node).attr('foo'), 'bar', 'attribute was re-added when condition is true');
+});

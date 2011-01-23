@@ -21,6 +21,14 @@
 
       attr: function(name, value){
         jQuery(this.node).attr(this._lookup(name), this._lookup(value));
+      },
+
+      attrIf: function(condition, name, value){
+        if(this._lookup(condition)){
+          this.attr(name, value);
+        } else {
+          jQuery(this.node).removeAttr(this._lookup(name));
+        }
       }
     },
 
@@ -34,36 +42,27 @@
       }
       */
 
-      var hash = js.create(this.hashBase, {
+      var commandScope = js.create(this.commandScope, {
         _scope: scope,
         _root: root,
         _scopeChainCache: {},
         _scopeChainCachedNodes: []
       });
 
-      this._process(root, hash);
+      this._process(root, commandScope);
 
-      /* todo: support recursion
+      /* todo: support recursionp
       var nodes = mv.select(node);
       for(var i = 0, length = nodes.length; i< length; i++){
-        mv._updateSingle(nodes[i], hash);
+        mv._updateSingle(nodes[i], commandScope);
       }
 
       // clean up
       js.util.unique.reset('scopeChain');
-      for(var i = 0, length = hash._scopeChainCachedNodes.length; i< length; i++){
-        hash._scopeChainCachedNodes[i].scopeChainKey = undefined;
+      for(var i = 0, length = commandScope._scopeChainCachedNodes.length; i< length; i++){
+        commandScope._scopeChainCachedNodes[i].scopeChainKey = undefined;
       }
       */
-    },
-
-    hashBase: {
-      _lookup: function(key){
-        if(mv._matchers.isString.test(key)){
-          return key.slice(1, key.length-1);
-        }
-        return this._scope[key];
-      }
     },
 
     select: function(node){
@@ -76,23 +75,34 @@
       isString: /(^'.*'$)|(^".*"$)/
     },
 
-    _process: function(node, hash){
+    _process: function(node, commandScope){
       var directives = node.getAttribute('mv').split(this._matchers.spaceCommaSpace);
-      var localHash = js.create(hash, {
+      var localCommandScope = js.create(commandScope, {
         node: node
       });
       for( var i = 0, length = directives.length; i < length; i++ ){
-        this._followDirective(localHash, js.trim(directives[i]).split(this._matchers.space));
+        this._followDirective(localCommandScope, js.trim(directives[i]).split(this._matchers.space));
       }
     },
 
-    _followDirective: function(hash, directive){
-      var command = js.trim(directive.shift());
+    _followDirective: function(commandScope, directive){
+      var command = directive.shift();
       js.errorIf(!this.commands[command], command+' is not a valid mv command');
-      this.commands[command].apply(hash, directive);
+      this.commands[command].apply(commandScope, directive);
     }
 
   };
+
+  mv.commandScope = js.create(mv.commands, {
+    _lookup: function(key){
+      if(mv._matchers.isString.test(key)){
+        return key.slice(1, key.length-1);
+      }
+      return this._scope[key];
+    }
+  });
+
+
 
 /*
   js.merge(mv, {

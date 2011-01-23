@@ -9,18 +9,18 @@
   <body>
 
     <div id="app">
-      welcome <span mv="tether app, mask user, contain name, unmask, if foo attr 'bar' 'baz'"></span>
+      welcome <span mv="anchor 'app', within user, contain name, without, attrIf foo 'bar' 'baz'"></span>
       </span>!
 
       <p>
          you are
-         <span mv="if isAdmin display">an admin!</span>
-         <span mv="unless isAdmin display">a member</span>
+         <span mv="showIf isAdmin">an admin!</span>
+         <span mv="showUnless isAdmin">a member</span>
       </p>
 
       <p>today is <span mv="contain day"></span></p>
 
-      <p><input type="checkbox" mv="if on attr 'checked' 'true'"/></p>
+      <p><input type="checkbox" mv="checkedIf on"/></p>
     </div>
 
 
