@@ -19,8 +19,23 @@
         jQuery(this.node).html(this._lookup(key));
       },
 
+      showIf: function(condition){
+        jQuery(this.node)[this._lookup(condition) ? 'show' : 'hide']();
+      },
+
+      visIf: function(condition){
+        jQuery(this.node).css('visibility', this._lookup(condition) ? 'visible' : 'hidden');
+      },
+
       attr: function(name, value){
-        jQuery(this.node).attr(this._lookup(name), this._lookup(value));
+        name = this._lookup(name);
+        value = this._lookup(value);
+        js.errorIf(
+          !js.among(['string', 'number'], typeof name) ||
+          !js.among(['string', 'number'], typeof value),
+          'attr names and values must resolve to a string or number'
+        );
+        jQuery(this.node).attr(name, value);
       },
 
       attrIf: function(condition, name, value){
@@ -73,7 +88,8 @@
       spaceCommaSpace: /\s*,\s*/,
       space: /\s+/,
       isString: /(^'.*'$)|(^".*"$)/,
-      negation: /!\s*/
+      negation: /!\s*/,
+      isNumber: /\d+/
     },
 
     _process: function(node, commandScope){
@@ -101,10 +117,13 @@
         negate = true;
         key = key.slice(1);
       }
-      if(mv._matchers.isString.test(key)){
-        return key.slice(1, key.length-1);
+      var resolution;
+      if (mv._matchers.isString.test(key)) {
+        resolution = key.slice(1, key.length-1);
+      } else {
+        resolution = this._scope[key];
       }
-      return negate ? !this._scope[key] : this._scope[key];
+      return negate ? ! resolution : resolution;
     }
   });
 
@@ -136,30 +155,6 @@
 
       scope.tethers = js.filter(tetheredNodeKeys).sort().join(', ');
     },
-
-    update: function($roots, scope){
-      if(typeof scope === 'string'){
-        scope = mv.scopes[scope];
-      }
-      if(typeof $roots === 'string'){
-        $roots = $(mv.nodes[$roots]);
-      }
-
-      $($roots).each(function(which, root){
-        $(root).find('[mv]').each(function(which, node){
-          mv._updateNode(root, [scope], $(node));
-        });
-        mv._scopeChainCache = {};
-        $(mv._inScopeChainCache).each(function(which, node){
-          node.scopeChainKey = undefined;
-        });
-        mv._inScopeChainCache = [];
-        js.util.unique.reset('scopeChain');
-      });
-    },
-
-    _scopeChainCache: {},
-    _inScopeChainCache: [],
 
     _updateNode: function(root, rootScopeChain, $node){
       if($node[0].scopeChainKey){
@@ -283,66 +278,39 @@
           return mv.directive.handlers._if.apply(this, [true].concat(Array.prototype.slice.call(arguments)));
         },
 
-        mask: function(key){
+        within: function(key){
           var scope = this.lookup(key);
           if(typeof scope === 'undefined'){ return; };
           js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
           this.scopeChain.push(scope);
         },
 
-        unmask: function(){
+        without: function(){
           js.errorIf(!this.scopeChain.length, 'cannot unmask with no objects on the scope chain!');
           js.errorIf(this.scopeChain[this.scopeChain.length-2] === null, 'cannot unmask from a shift');
           this.scopeChain.pop();
         },
 
-        shift: function(key){
+        scope: function(key){
           var scope = this.lookup(key);
           if(typeof scope === 'undefined'){ return; };
           js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'shift commands must receive a namespacing value');
           this.scopeChain.concat([null, scope]);
         },
 
-        unshift: function(){
+        descope: function(){
           js.errorIf(!this.scopeChain.length, 'cannot unshift with no objects on the scope chain!');
           js.errorIf(this.scopeChain[this.scopeChain.length-2] !== null, 'cannot unshift from a mask');
           this.scopeChain.pop();
           this.scopeChain.pop();
         },
 
-        // js.todo('fix tether in other places not to be an attribute');
         tether: function(key){
           var scope = mv.scopes[key];
           js.errorIf(typeof scope === 'undefined', 'no scope object found at key '+key);
           if(this.active){
             this.scopeChain.push(scope);
           }
-        },
-
-        contain: function(key){
-          var contents = this.lookup(key);
-          if(typeof contents === 'undefined'){ return; }
-          this.$node.html(this.active ? contents : '');
-        },
-
-        display: function(){
-          this.$node[this.active ? 'show' : 'hide']();
-        },
-
-        visible: function(){
-          this.$node.css('visibility', this.active ? 'visible' : 'hidden');
-        },
-
-        attr: function(name, value){
-          name  = name[0]  === "'" || name[0]  === '"' && name[0]  === name[name.length-1]   ? name.slice(1,name.length-1)   : this.lookup(name);
-          value = value[0] === "'" || value[0] === '"' && value[0] === value[value.length-1] ? value.slice(1,value.length-1) : this.lookup(value);
-          if(typeof name === 'undefined' || typeof value === 'undefined'){ return; }
-          js.errorIf(
-            (typeof name !== 'string' && typeof name !== 'number') ||
-            (typeof value !== 'string' && typeof value !== 'number'),
-            'attr requires a string or number for its second argument'
-          );
-          this.active ? this.$node.attr(name, value) : this.$node.removeAttr(name);
         }
 
       }

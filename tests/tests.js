@@ -11,7 +11,7 @@ test('select', function(){
   ok(js.among(results, grandchild), 'mv grandchild was selected');
 });
 
-test('erros on unknown commands', function(){
+test('errors on unknown commands', function(){
   var node = $('<div mv="nonexistentcommand arg1"></div>')[0];
   raises(function(){
     mv.update(node, {});
@@ -24,7 +24,7 @@ test('containing strings', function(){
   equal(node.innerHTML, 'example', 'contain directive inserted a string');
 });
 
-test('containing string variables', function(){
+test('containing variables', function(){
   var node = $('<div mv="contain key"></div>')[0];
   mv.update(node, {key:'value'});
   equal(node.innerHTML, 'value', 'contain directive inserted a variable');
@@ -35,6 +35,20 @@ test('containing node variables', function(){
   var child = $('<div/>')[0];
   mv.update(node, {child:child});
   equal($(node).children()[0], child, 'contain directive inserted a variable');
+});
+
+test('conditional display', function(){
+  var node = $('<div mv="showIf key"></div>')[0];
+  mv.update(node, {key:false});
+  equal($(node).css('display'), 'none', 'node is hidden when key is false');
+  mv.update(node, {key:true});
+  equal($(node).css('display'), 'block', 'node is shown again when key is changed to true');
+});
+
+test('conditional visibility', function(){
+  var node = $('<div mv="contain \'example\'"></div>')[0];
+  mv.update(node, {});
+  equal(node.innerHTML, 'example', 'contain directive inserted a string');
 });
 
 test('setting string attributes', function(){
@@ -82,3 +96,4 @@ test('conditions can be negated', function(){
   mv.update(node, {condition:false});
   equal($(node).attr('foo'), 'bar', 'with a space, attribute was added when negated condition is false');
 });
+
