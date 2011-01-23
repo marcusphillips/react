@@ -37,9 +37,20 @@ test('containing node variables', function(){
   equal($(node).children()[0], child, 'contain directive inserted a variable');
 });
 
-test('substituting variables in attributes', function(){
+test('setting string attributes', function(){
   var node = $('<div mv="attr \'foo\' \'bar\'"/>')[0];
   mv.update(node, {});
   equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
 });
 
+test('substituting variables in attribute names', function(){
+  var node = $('<div mv="attr attrName \'bar\'"/>')[0];
+  mv.update(node, {attrName:'foo'});
+  equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
+});
+
+test('substituting variables in attribute values', function(){
+  var node = $('<div mv="attr \'foo\' value"/>')[0];
+  mv.update(node, {value:'bar'});
+  equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
+});
