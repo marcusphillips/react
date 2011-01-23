@@ -58,6 +58,7 @@
         if(mv._matchers.isString.test(key)){
           return key.slice(1, key.length-1);
         }
+        return this._scope[key];
       }
     },
 

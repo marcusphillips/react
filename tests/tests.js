@@ -17,3 +17,9 @@ test('containing strings', function(){
   equal(node.innerHTML, 'example', 'contain directive inserted a string');
 });
 
+test('containing variables', function(){
+  var node = $('<div mv="contain \key\"></div>')[0];
+  mv.update(node, {key:'value'});
+  equal(node.innerHTML, 'value', 'contain directive inserted a variable');
+});
+
