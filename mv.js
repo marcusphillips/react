@@ -15,6 +15,11 @@
 
   window.mv = {
 
+    /*
+     * when a command runs, it will have a 'this' scope like the following
+     * mv.commands <- mv.commandScope <- updateScope <- processingScope
+     */
+
     commands: {
 
       contain: function(key){
@@ -60,25 +65,25 @@
       }
       */
 
-      var commandScope = js.create(this.commandScope, {
+      var updateScope = js.create(this.commandScope, {
         _scope: scope,
         _root: root,
         _scopeChainCache: {},
         _scopeChainCachedNodes: []
       });
 
-      this._process(root, commandScope);
+      this._process(root, updateScope);
 
       /* todo: support recursionp
       var nodes = mv.select(node);
       for(var i = 0, length = nodes.length; i< length; i++){
-        mv._updateSingle(nodes[i], commandScope);
+        mv._updateSingle(nodes[i], updateScope);
       }
 
       // clean up
       js.util.unique.reset('scopeChain');
-      for(var i = 0, length = commandScope._scopeChainCachedNodes.length; i< length; i++){
-        commandScope._scopeChainCachedNodes[i].scopeChainKey = undefined;
+      for(var i = 0, length = updateScope._scopeChainCachedNodes.length; i< length; i++){
+        updateScope._scopeChainCachedNodes[i].scopeChainKey = undefined;
       }
       */
     },
@@ -97,18 +102,18 @@
 
     _process: function(node, commandScope){
       var directives = node.getAttribute('mv').split(this._matchers.spaceCommaSpace);
-      var localCommandScope = js.create(commandScope, {
+      var processingScope = js.create(commandScope, {
         node: node
       });
       for( var i = 0, length = directives.length; i < length; i++ ){
-        this._followDirective(localCommandScope, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
+        this._followDirective(processingScope, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
       }
     },
 
-    _followDirective: function(commandScope, directive){
+    _followDirective: function(scope, directive){
       var command = directive.shift();
       js.errorIf(!this.commands[command], command+' is not a valid mv command');
-      this.commands[command].apply(commandScope, directive);
+      this.commands[command].apply(scope, directive);
     }
 
   };
@@ -263,27 +268,6 @@
       handlers: {
 
         key: js.noop,
-
-        _if: function(flip, key){
-          var result, previousActive = this.active, active = this.lookup(key);
-          if(typeof active === 'undefined'){ return;};
-          js.errorIf(typeof active !== 'boolean', 'If directives must correspond to boolean values args: '+Array.prototype.join.call(arguments, ', '));
-          if(flip){
-            active = !active;
-          }
-          this.active = this.active === true && active === true;
-          result = mv.directive._follow(this, Array.prototype.slice.call(arguments, 2));
-          this.active = previousActive;
-          return result;
-        },
-
-        'if': function(key){
-          return mv.directive.handlers._if.apply(this, [false].concat(Array.prototype.slice.call(arguments)));
-        },
-
-        unless: function(){
-          return mv.directive.handlers._if.apply(this, [true].concat(Array.prototype.slice.call(arguments)));
-        },
 
         within: function(key){
           var scope = this.lookup(key);
