@@ -13,16 +13,81 @@
 
 (function () {
 
-  window.mv = function($nodes){
-    if($nodes instanceof mv){
-      return new mv($nodes._nodes);
+  window.mv = {
+    commands: {
+      contain: function(key){
+        this.node.innerHTML = this._lookup(key);
+      }
+    },
+
+    update: function(root, scope){
+      /* todo: add support for strings
+      if(typeof scope === 'string'){
+        scope = mv.scopes[scope];
+      }
+      if(typeof root === 'string'){
+        root = mv.nodes[root];
+      }
+      */
+
+      var hash = js.create(this.hashBase, {
+        _scope: scope,
+        _root: root,
+        _scopeChainCache: {},
+        _scopeChainCachedNodes: []
+      });
+
+      this._process(root, hash);
+
+      /* todo: support recursion
+      var nodes = mv.select(node);
+      for(var i = 0, length = nodes.length; i< length; i++){
+        mv._updateSingle(nodes[i], hash);
+      }
+
+      // clean up
+      js.util.unique.reset('scopeChain');
+      for(var i = 0, length = hash._scopeChainCachedNodes.length; i< length; i++){
+        hash._scopeChainCachedNodes[i].scopeChainKey = undefined;
+      }
+       */
+    },
+
+    hashBase: {
+      _lookup: function(key){
+        if(mv._matchers.isString.test(key)){
+          return key.slice(1, key.length-1);
+        }
+      }
+    },
+
+    select: function(node){
+      return [node].concat(Array.prototype.slice.call(node.querySelectorAll('[mv]')));
+    },
+
+    _matchers: {
+      spaceCommaSpace: /\s*,\s*/,
+      space: /\s+/,
+      isString: /(^'.*'$)|(^".*"$)/
+    },
+
+    _process: function(node, hash){
+      var directives = node.getAttribute('mv').split(this._matchers.spaceCommaSpace);
+      var localHash = js.create(hash, {
+        node: node
+      });
+      for( var i = 0, length = directives.length; i < length; i++ ){
+        this._followDirective(localHash, js.trim(directives[i]).split(this._matchers.space));
+      }
+    },
+
+    _followDirective: function(hash, directive){
+      this.commands[js.trim(directive.shift())].apply(hash, directive);
     }
-    if(! this instanceof mv){
-      return new mv($nodes);
-    }
-    this._$nodes = $($nodes);
+
   };
 
+/*
   js.merge(mv, {
 
     scopes: js.create(window),
@@ -39,7 +104,7 @@
       }
 
       var scopeKey = mv._addScopeKey(scope),
-          tetheredNodeKeys = $.trim((scope.tethers || '')).split(/\s*,\s*/);
+          tetheredNodeKeys = $.trim((scope.tethers || '')).split(this.matchers.spaceCommaSpace);
 
       $nodes.each(function(which, node){
         mv.directive.prepend('tether '+scopeKey, node);
@@ -95,7 +160,7 @@
     getNodeKey: function($node){
       $node = $($node);
       js.errorIf($node.length !== 1, 'getNodeKey() cannot operate on arrays multiple nodes');
-      var directive, directives = $.trim($node.attr('mv')).split(/\s*,\s*/);
+      var directive, directives = $.trim($node.attr('mv')).split(this.matchers.spaceCommaSpace);
       for(var which = 0; which < directives.length; which++){
         directive = $.trim(directives[which]).split(/\s+/);
         if(directive[0] === 'key'){
@@ -107,7 +172,7 @@
     setNodeKey: function($node, key){
       $node = $($node);
       js.errorIf($node.length !== 1, 'getNodeKey() cannot operate on arrays multiple nodes');
-      var directive, directives = $.trim($node.attr('mv')).split(/\s*,\s*/);
+      var directive, directives = $.trim($node.attr('mv')).split(this.matchers.spaceCommaSpace);
       for(var which = 0; which < directives.length; which++){
         directive = $.trim(directives[which]).split(/\s+/);
         if(directive[0] === 'key'){
@@ -157,7 +222,7 @@
 
       prepend: function(directive){
         this._$nodes.each(function(which, node){
-          var directives = [directive].concat($.trim($(node).attr('mv')).split(/\s*,\s*/)).join(', ');
+          var directives = [directive].concat($.trim($(node).attr('mv')).split(this.matchers.spaceCommaSpace)).join(', ');
           $(node).attr('mv', directives);
         });
       },
@@ -262,6 +327,8 @@
     }
 
   });
+
+*/
 
 }());
 
