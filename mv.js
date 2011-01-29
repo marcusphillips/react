@@ -299,7 +299,7 @@
         mv.update(this, scope);
       };
     }
-  }
+  };
 
 /*
   js.merge(mv, {
@@ -328,31 +328,7 @@
       scope.tethers = js.filter(tetheredNodeKeys).sort().join(', ');
     },
 
-    _getMvAncestor: function(root, $node){
-//todo: test for ancestor being empty, in case the node was deleted in the mean time
-      var $ancestor = $node.parent();
-      while($ancestor[0] !== root && ! $ancestor.attr('mv')){
-        $ancestor = $ancestor.parent();
-      }
-      return $ancestor;
-    },
-
     directive: {
-
-      prepend: function(directive){
-        this._$nodes.each(function(which, node){
-          var directives = [directive].concat($.trim($(node).attr('mv')).split(this.matchers.spaceCommaSpace)).join(', ');
-          $(node).attr('mv', directives);
-        });
-      },
-
-      _follow: function(thus, directive){
-        if(!directive[0]){
-          return;
-        }
-        js.errorIf(!mv.directive.handlers[directive[0]], directive[0] + ' is not a valid mv command');
-        mv.directive.handlers[directive[0]].apply(thus, directive.slice(1));
-      },
 
       handlers: {
 
@@ -364,26 +340,6 @@
   // todo: port and test this
           js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
           this.scopeChain.push(scope);
-        },
-
-        without: function(){
-          js.errorIf(!this.scopeChain.length, 'cannot unmask with no objects on the scope chain!');
-          js.errorIf(this.scopeChain[this.scopeChain.length-2] === null, 'cannot unmask from a shift');
-          this.scopeChain.pop();
-        },
-
-        scope: function(key){
-          var scope = this.lookup(key);
-          if(typeof scope === 'undefined'){ return; };
-          js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'shift commands must receive a namespacing value');
-          this.scopeChain.concat([null, scope]);
-        },
-
-        descope: function(){
-          js.errorIf(!this.scopeChain.length, 'cannot unshift with no objects on the scope chain!');
-          js.errorIf(this.scopeChain[this.scopeChain.length-2] !== null, 'cannot unshift from a mask');
-          this.scopeChain.pop();
-          this.scopeChain.pop();
         },
 
         tether: function(key){
