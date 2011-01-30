@@ -48,18 +48,11 @@
         this.scopeChain.push(this.lookup(key));
       },
 
-      without: function(key){
-        // todo: make sure this can't pop pseudoscopes
-        //js.errorIf(mv.pseudoscope.isPrototypeOf(js.last(this.scopeChain)), 'you cannot shift scope using \'without\' inside a loop!');
-        this.scopeChain.pop();
-      },
-
       contain: function(key){
         jQuery(this.node).html(this.lookup(key));
       },
 
       loop: function(keyAlias, valueAlias, conjunction, collectionKey){
-        //todo: support object iteration
         if(valueAlias === 'in'){
           collectionKey = conjunction;
           conjunction = valueAlias;
