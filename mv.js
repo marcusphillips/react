@@ -13,6 +13,8 @@
 
 (function () {
 
+  var undefined;
+
   window.mv = {
 
     /*
@@ -52,12 +54,20 @@
         jQuery(this.node).html(this.lookup(key));
       },
 
+      classIf: function(conditionKey, nameKey){
+        var className = this.lookup(nameKey);
+        if(!className){
+          return;
+        }
+        $(this.node)[this.lookup(conditionKey) ? 'addClass' : 'removeClass'](className);
+      },
+
       loop: function(keyAlias, valueAlias, conjunction, collectionKey){
         if(valueAlias === 'in'){
           collectionKey = conjunction;
           conjunction = valueAlias;
           valueAlias = keyAlias;
-          keyAlias = null;
+          keyAlias = undefined;
         }
         var collection = this.lookup(collectionKey);
         // todo: return here (and everywhere else) if collection is undefined.  test for this
@@ -69,17 +79,19 @@
           $loopChildren = $(this.node).children();
         }
 */
-        js.errorIf(!$loopChildren.length === 2, 'rv looping nodes must contain exactly 2 children - one item template and one results container');
+        js.errorIf($loopChildren.length < 2, 'rv looping nodes must contain at least 2 children - one item template and one results container');
         var $itemTemplate = $loopChildren.first();
+        //$itemTemplate.show();
         this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
-        var $resultsContainer = $loopChildren.last();
+        var $resultsContainer = $($loopChildren[1]);
+        var $resultsContents = $resultsContainer.children();
 
         var itemNodes = [];
         for(var i = 0, length = collection.length; i < length; i++){
-          itemNodes.push($itemTemplate.clone()[0]);
+          itemNodes.push($resultsContents[i] || $itemTemplate.clone()[0]);
           var loopItemScope = this.loopItemScopes[this.getNodeKey(js.last(itemNodes))] = {};
 
-          if(typeof keyAlias !== 'undefined'){
+          if(keyAlias !== undefined){
             loopItemScope[keyAlias] = i;
           }
 
@@ -89,10 +101,11 @@
             };
           }(collection[i]));
         }
+        // $itemTemplate.hide();
         $resultsContainer.html(itemNodes);
 
         // add top level item nodes to the update list if they don't have mv attributes
-        var additionalUpdateNodes = typeof $itemTemplate.attr('mv') === 'undefined' ? itemNodes : [];
+        var additionalUpdateNodes = $itemTemplate.attr('mv') === undefined ? itemNodes : [];
         additionalUpdateNodes = additionalUpdateNodes.concat(this._select($resultsContainer[0]).slice(1));
         this.nodes.push.apply(this.nodes, additionalUpdateNodes);
       },
@@ -163,6 +176,8 @@
       for(var i = 0; i < nodes.length; i++){
         this._updateSingle(nodes[i], updateScope);
       }
+
+      return root;
     },
 
     getNodeKey: function(node){
@@ -241,7 +256,7 @@
           if(typeof value === 'function'){
             value = this.scopeChain[scopeDepth][baseKey]();
           };
-          if(typeof value !== 'undefined'){
+          if(value !== undefined){
             break;
           }
           scopeDepth--;
@@ -329,7 +344,7 @@
 
         within: function(key){
           var scope = this.lookup(key);
-          if(typeof scope === 'undefined'){ return; };
+          if(scope === undefined){ return; };
   // todo: port and test this
           js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
           this.scopeChain.push(scope);
@@ -337,7 +352,7 @@
 
         tether: function(key){
           var scope = mv.scopes[key];
-          js.errorIf(typeof scope === 'undefined', 'no scope object found at key '+key);
+          js.errorIf(scope === undefined, 'no scope object found at key '+key);
           if(this.active){
             this.scopeChain.push(scope);
           }
