@@ -139,11 +139,17 @@ test('conditional visibility', function(){
 });
 
 test('conditional classes', function(){
-  var node = $('<div mv="classIf condition \'foo\'"/>')[0];
+  var node = $('<div class="bar" mv="classIf condition \'foo\'"/>')[0];
+  ok($(node).hasClass('bar'), 'node starts out with a bar class');
   mv.update(node, {condition:false});
   ok(!$(node).hasClass('foo'), 'class was not added when condition is false');
+  ok($(node).hasClass('bar'), 'bar class was not removed');
   mv.update(node, {condition:true});
   ok($(node).hasClass('foo'), 'class was added when condition is false');
+  ok($(node).hasClass('bar'), 'bar class was not removed');
+  mv.update(node, {});
+  ok(!$(node).hasClass('foo'), 'class was removed when condition is undefined');
+  ok($(node).hasClass('bar'), 'bar class was not removed');
 });
 
 test('conditional attributes', function(){

@@ -43,7 +43,7 @@ Since a rendered MV template retrains all the same directives that went into ren
     <img src="/pictures/knitting_with_50_cent.png" mv="attr 'src' mugshotUrl"/>
     <span class="caption" mv="contain mugshotCaption">Gee, you knit?</span>
   </div>
-  <div class="admin_links" mv="if isAdmin display">
+  <div class="admin_links" mv="showIf isAdmin">
     <a href="/ray_guns/mind_control">Mind control ray</a>
     <a href="/blowup/moon">Blow up the moon</a>
   </div>

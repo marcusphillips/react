@@ -55,11 +55,23 @@
       },
 
       classIf: function(conditionKey, nameKey){
-        var className = this.lookup(nameKey);
-        if(!className){
-          return;
+        this.node.classIfs = this.node.classIfs || {};
+        var condition = this.lookup(conditionKey);
+        var className;
+        var persistence = conditionKey + ' ' + nameKey;
+        if(condition){
+          className = this.lookup(nameKey);
+          if(className){
+            $(this.node).addClass(className);
+            this.node.classIfs[persistence] = className;
+          }
+        } else {
+          className = this.node.classIfs[persistence] || this.lookup(nameKey);
+          if(className){
+            $(this.node).removeClass(className);
+            delete this.node.classIfs[persistence];
+          }
         }
-        $(this.node)[this.lookup(conditionKey) ? 'addClass' : 'removeClass'](className);
       },
 
       loop: function(keyAlias, valueAlias, conjunction, collectionKey){
@@ -81,15 +93,27 @@
 */
         js.errorIf($loopChildren.length < 2, 'rv looping nodes must contain at least 2 children - one item template and one results container');
         var $itemTemplate = $loopChildren.first();
-        //$itemTemplate.show();
+        $itemTemplate.show();
         this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
         var $resultsContainer = $($loopChildren[1]);
         var $resultsContents = $resultsContainer.children();
 
         var itemNodes = [];
-        for(var i = 0, length = collection.length; i < length; i++){
-          itemNodes.push($resultsContents[i] || $itemTemplate.clone()[0]);
-          var loopItemScope = this.loopItemScopes[this.getNodeKey(js.last(itemNodes))] = {};
+        var additionalUpdateNodes = [];
+        var itemNode;
+        var i;
+        var length = collection.length;
+        for(i = 0; i < length; i++){
+          if($resultsContents[i]){
+            itemNode = $resultsContents[i];
+          } else {
+            itemNode = $itemTemplate.clone()[0];
+            additionalUpdateNodes = additionalUpdateNodes.concat(this._select(itemNode));
+          }
+          itemNodes.push(itemNode);
+
+          // set up a loop item scope to be applied for each item
+          var loopItemScope = this.loopItemScopes[this.getNodeKey(itemNode)] = {};
 
           if(keyAlias !== undefined){
             loopItemScope[keyAlias] = i;
@@ -101,12 +125,12 @@
             };
           }(collection[i]));
         }
-        // $itemTemplate.hide();
-        $resultsContainer.html(itemNodes);
+        $itemTemplate.hide();
+        if(collection.length !== $resultsContents.length){
+          $resultsContainer.html(itemNodes);
+        }
 
         // add top level item nodes to the update list if they don't have mv attributes
-        var additionalUpdateNodes = $itemTemplate.attr('mv') === undefined ? itemNodes : [];
-        additionalUpdateNodes = additionalUpdateNodes.concat(this._select($resultsContainer[0]).slice(1));
         this.nodes.push.apply(this.nodes, additionalUpdateNodes);
       },
 
@@ -173,7 +197,8 @@
         lookup: this._lookupInScopeChain
       });
 
-      for(var i = 0; i < nodes.length; i++){
+      var i;
+      for(i = 0; i < nodes.length; i++){
         this._updateSingle(nodes[i], updateScope);
       }
 
@@ -181,7 +206,7 @@
     },
 
     getNodeKey: function(node){
-      return node.key = node.key || js.util.unique('nodeKey');
+      return (node.key = node.key || js.util.unique('nodeKey'));
     },
 
     _updateSingle: function(node, updateScope){
@@ -197,9 +222,9 @@
         var ancestor = $(node).parent()[0];
         while(
           ancestor && // is defined
-          ! ancestor === updateScope.root && // is not root
+          ancestor !== updateScope.root && // is not root
           ! ancestor.getAttribute('mv') && // has no mv directives
-          ! this.loopItemScopes[this.getNodeKey(ancestor)] // isnt a loop item
+          ! updateScope.loopItemScopes[this.getNodeKey(ancestor)] // isnt a loop item
         ){
           ancestor = $(ancestor).parent()[0];
         }
@@ -225,11 +250,12 @@
       directives = js.filter(directives, function(directive){
         return !!directive;
       });
-      for( var i = 0, length = directives.length; i < length; i++ ){
+      var i;
+      for(i = 0, length = directives.length; i < length; i++){
         this._followDirective(processingScope, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
       }
 
-      return updateScope.scopeChains[nodeKey] = processingScope.scopeChain;
+      return (updateScope.scopeChains[nodeKey] = processingScope.scopeChain);
     },
 
     _followDirective: function(scope, directive){
@@ -240,6 +266,7 @@
 
     _lookupInScopeChain: function(key){
       var negate;
+      var value;
       if(key[0] === '!'){
         negate = true;
         key = key.slice(1);
@@ -249,24 +276,23 @@
       } else {
         var keys = key.split('.');
         var baseKey = keys.shift();
-        var value;
         var scopeDepth = this.scopeChain.length - 1;
         while(0 <= scopeDepth){
           value = this.scopeChain[scopeDepth][baseKey];
           if(typeof value === 'function'){
             value = this.scopeChain[scopeDepth][baseKey]();
-          };
+          }
           if(value !== undefined){
             break;
           }
           scopeDepth--;
         }
         while(keys.length){
-          value = value[keys.shift()]
+          value = value[keys.shift()];
         }
       }
       return negate ? ! value : value;
-    },
+    }
 
 /*
     getNodeKey: function(node){

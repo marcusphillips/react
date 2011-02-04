@@ -1,0 +1,42 @@
+      .square {
+        width: 22px;
+        height: 22px;
+        border: 1px solid #BBBBBB;
+        float: left;
+      }
+      .clearfix {
+        clear: both;
+      }
+      .n_border {
+        border-top: 1px solid red;
+      }
+      .s_border {
+        border-bottom: 1px solid red;
+      }
+      .e_border {
+        border-right: 1px solid red;
+      }
+      .w_border {
+        border-left: 1px solid red;
+      }
+      .is_target {
+        background-color: #DDDDDD;
+      }
+      .no_target {
+        /*background-color: #DDDDDD;*/
+      }
+      .red, .green, .blue, .yellow {
+        background-position: 178px -215px;
+      }
+      .red {
+        background-image: url("./images/atomic_robot.jpg");
+      }
+      .green {
+        background-image: url("./images/girl_android.jpg");
+      }
+      .blue {
+        background-image: url("./images/blue_robot.jpg");
+      }
+      .yellow {
+        background-image: url("./images/happy_robot.jpg");
+      }

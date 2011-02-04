@@ -1,0 +1,72 @@
+<html>
+  <head>
+    <link href="./lowbots.css" type="text/css" rel="stylesheet"/>
+    <script type="text/javascript" src="../../lib/jquery/jquery-1.4.2.js"></script>
+    <script type="text/javascript" src="../../lib/js_dot_standin/js.js"></script>
+    <script type="text/javascript" src="../../mv.css"></script>
+    <script type="text/javascript" src="../../mv.js"></script>
+    <script src="./lowbots.js"></script>
+    <script src="./ricochet.js"></script>
+  </head>
+  <body>
+    <div>Lowbots!!</div>
+    <div mv="showIf victorious">You win!!</div>
+    <div mv="within board, contain move_count"></div>
+    <div class="board">
+      <div mv="loop row in board">
+        <div class="row" mv="loop col in row">
+          <div class="square" mv="within col,
+                                  classIf n_border 'n_border',
+                                  classIf s_border 's_border',
+                                  classIf e_border 'e_border',
+                                  classIf w_border 'w_border',
+                                  classIf no_target 'no_target',
+                                  classIf is_target 'is_target',
+                                  classIf robot_color robot_color">
+          </div>
+          <div></div>
+          <div class="clearfix"></div>
+        </div>
+        <div></div>
+      </div>
+    </div>
+
+    <script>
+      var drawBoard = function(board){
+        mv.update($('body')[0], {board:board});
+      };
+
+      $(document).keyup(function(event){
+        console.log(event.keyCode);
+        var directionTranslationMatrix = {
+          37: 'west',
+          38: 'north',
+          39: 'east',
+          40: 'south'
+        };
+        var direction = directionTranslationMatrix[event.keyCode];
+        if(direction){
+          move[direction]();
+          drawBoard(board);
+        }
+        var robotTranslationMatrix = {
+          82: 'red',
+          71: 'green',
+          66: 'blue',
+          89: 'yellow'
+        };
+        var robot = robotTranslationMatrix[event.keyCode];
+        if(robot){
+          select_robot(color_robot_mapping[robot]);
+          drawBoard(board);
+        }
+        if(event.keyCode === 27){
+          reset();
+          drawBoard(board);
+        }
+      });
+      drawBoard(board);
+    </script>
+
+  </body>
+</html>
