@@ -282,3 +282,15 @@ test('scope can be shifted within a property', function(){
 });
 
 
+/*
+ * anchor
+ */
+
+test('', function(){
+  var object = {foo:1};
+  var node = $('<div react="contain foo"></div>')[0];
+  react.anchor(node, object);
+  object.foo = 2;
+  react.changed(object);
+  equal(node.innerHTML, 2, 'an anchored node was not required in the call to update');
+});

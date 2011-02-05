@@ -17,6 +17,10 @@
 
   window.react = {
 
+    nodes: {},
+
+    scopes: {},
+
     _matchers: {
       spaceCommaSpace: /\s*,\s*/,
       space: /\s+/,
@@ -29,7 +33,21 @@
       return [node].concat(Array.prototype.slice.call(node.querySelectorAll('[react]')));
     },
 
+    getNodeKey: function(node){
+      return (node.reactKey = node.reactKey || js.util.unique('reactNode'));
+    },
+
+    getObjectKey: function(object){
+      return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
+    },
+
     update: function(root /* , scope1, ..., scopeN */){
+      this.diagnostic = {
+        nodesVisted: 0
+      };
+      //todo: test these
+      //js.errorIf(!root, 'no root supplied to update()');
+      //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
       var baseScopeChain = Array.prototype.slice.call(arguments, 1);
       /* todo: add support for strings
       if(typeof scope === 'string'){
@@ -58,11 +76,8 @@
       return root;
     },
 
-    getNodeKey: function(node){
-      return (node.key = node.key || js.util.unique('nodeKey'));
-    },
-
     _updateSingle: function(node, updateScope){
+      this.diagnostic.nodesVisted++;
       //todo: test that you never revisit a node
       var nodeKey = this.getNodeKey(node);
       if(updateScope.scopeChains[nodeKey]){
@@ -115,6 +130,21 @@
       var command = directive.shift();
       js.errorIf(!this.commands[command], command+' is not a valid react command');
       this.commands[command].apply(scope, directive);
+    },
+
+    anchor: function(node, object){
+      var nodeKey = this.getNodeKey(node);
+      this.nodes[nodeKey] = node;
+      object.reactAnchors = object.reactAnchors || {};
+      object.reactAnchors[nodeKey] = true;
+    },
+
+    changed: function(object){
+      js.errorIf(!object.reactAnchors, 'the input to react.changed() hasn\'t been anchored to anything yet');
+      var key;
+      for(key in object.reactAnchors){
+        this.update(this.nodes[key], object);
+      }
     }
 
 /*
