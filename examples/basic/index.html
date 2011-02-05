@@ -9,13 +9,12 @@
   <body>
 
     <div id="app">
-      welcome <span mv="anchor 'app', within user, contain name, without, attrIf foo 'bar' 'baz'"></span>
-      </span>!
+      welcome <span mv="anchor 'app', attrIf foo 'bar' 'baz', contain user.name"></span>!
 
       <p>
          you are
          <span mv="showIf isAdmin">an admin!</span>
-         <span mv="showUnless isAdmin">a member</span>
+         <span mv="showIf !isAdmin">a member</span>
       </p>
 
       <p>today is <span mv="contain day"></span></p>

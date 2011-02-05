@@ -21,7 +21,6 @@
      * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships
      *
      * mv {
-     *   lookup(key)
      *   commands {
      *     command handler definitions
      *   }
@@ -29,8 +28,10 @@
      *
      *  ^
      *  |
+     * // an common updateScope is used for the entire duration of the update routine, covering all nodes
      * updateScope {
      *   root
+     *   lookup(key)
      *   baseScopeChain
      *   nodes to be processed
      *   scopeChains
@@ -38,6 +39,7 @@
      *
      *  ^
      *  |
+     * // a new processing scope is created for each node to be updated
      * processingScope {
      *   node
      *   scopeChain
@@ -74,29 +76,23 @@
         }
       },
 
-      loop: function(keyAlias, valueAlias, conjunction, collectionKey){
-        if(valueAlias === 'in'){
-          collectionKey = conjunction;
-          conjunction = valueAlias;
+      loop: function(as, keyAlias, valueAlias){
+        if(valueAlias === undefined){
           valueAlias = keyAlias;
           keyAlias = undefined;
         }
-        var collection = this.lookup(collectionKey);
+
         // todo: return here (and everywhere else) if collection is undefined.  test for this
 
         var $loopChildren = jQuery(this.node).children();
-/*todo: support and test a missing contents node
-        if($loopChildren.length === 1){
-          $(this.node).append($('<span></span>'));
-          $loopChildren = $(this.node).children();
-        }
-*/
         js.errorIf($loopChildren.length < 2, 'rv looping nodes must contain at least 2 children - one item template and one results container');
         var $itemTemplate = $loopChildren.first();
-        $itemTemplate.show();
         this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
         var $resultsContainer = $($loopChildren[1]);
         var $resultsContents = $resultsContainer.children();
+
+        var collection = js.last(this.scopeChain);
+        var loopItemScope;
 
         var itemNodes = [];
         var additionalUpdateNodes = [];
@@ -113,17 +109,24 @@
           itemNodes.push(itemNode);
 
           // set up a loop item scope to be applied for each item
-          var loopItemScope = this.loopItemScopes[this.getNodeKey(itemNode)] = {};
-
-          if(keyAlias !== undefined){
-            loopItemScope[keyAlias] = i;
+          if(!as){
+            // each item in the collection will be the new scope for it's correlative node
+            loopItemScope = collection[i];
+            js.errorIf(!js.among(['function', 'object'], typeof loopItemScope), 'looping without an "as" directive requires that each element of the collection be an object');
+          } else {
+            // a new scope will be created with bindings for valueAlias and optionally for keyAlias
+            loopItemScope = {};
+            if(keyAlias !== undefined){
+              loopItemScope[keyAlias] = i;
+            }
+            loopItemScope[valueAlias] = typeof collection[i] !== 'function' ? collection[i] : (function(original){
+              return function(){
+                return original.apply(collection, arguments);
+              };
+            }(collection[i]));
           }
 
-          loopItemScope[valueAlias] = typeof collection[i] !== 'function' ? collection[i] : (function(original){
-            return function(){
-              return original.apply(collection, arguments);
-            };
-          }(collection[i]));
+          this.loopItemScopes[this.getNodeKey(itemNode)] = loopItemScope;
         }
         $itemTemplate.hide();
         if(collection.length !== $resultsContents.length){

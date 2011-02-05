@@ -11,12 +11,11 @@
   <body>
     <div>Lowbots!!</div>
     <div mv="showIf victorious">You win!!</div>
-    <div mv="within board, contain move_count"></div>
+    <div mv="contain move_count"></div>
     <div class="board">
-      <div mv="loop row in board">
-        <div class="row" mv="loop col in row">
-          <div class="square" mv="within col,
-                                  classIf n_border 'n_border',
+      <div mv="loop">
+        <div class="row" mv="loop">
+          <div class="square" mv="classIf n_border 'n_border',
                                   classIf s_border 's_border',
                                   classIf e_border 'e_border',
                                   classIf w_border 'w_border',
@@ -33,7 +32,7 @@
 
     <script>
       var drawBoard = function(board){
-        mv.update($('body')[0], {board:board});
+        mv.update($('body')[0], board);
       };
 
       $(document).keyup(function(event){

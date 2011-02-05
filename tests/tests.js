@@ -179,20 +179,20 @@ module("loop");
 
 test('works with a missing key alias', function(){/*...*/});
 
-test('requires at least an item template node a contents node inside the loop node', function(){
+test('requires at least an item template node and a contents node inside the loop node', function(){
   throws(function(){
-    mv.update($('<div mv="loop item in list">'
+    mv.update($('<div mv="loop as item">'
                 + '<span class="exampleTemplate"></span>'
                 + '<!-- to prevent debeloper surprise, the missing container tag here is required -->'
-              + '</div>')[0], {list:[]});
+              + '</div>')[0], []);
   }, 'omitting second loop child is not allowed');
 });
 
 test('can loop across values in an array', function(){
-  var node = $('<div id=\"outter\" mv="loop which item in list"><div id=\"template\" mv="contain item"></div><div id="container"></div></div>')[0];
+  var node = $('<div id=\"outter\" mv="loop as which item"><div id=\"template\" mv="contain item"></div><div id="container"></div></div>')[0];
   var itemTemplate = $(node).children()[0];
   var resultsHolder = $(node).children()[1];
-  mv.update(node, {list:['a','b','c']});
+  mv.update(node, ['a','b','c']);
   equal($(node).children().last().children().length, 3, 'results container node contains three child elements');
   same([
     $($(resultsHolder).children()[0]).html(),
@@ -203,13 +203,13 @@ test('can loop across values in an array', function(){
 });
 
 test('can loop across keys in an array', function(){
-  var node = $('<div mv="loop which item in list">'
-               + '<div mv="contain which">'
-               + '</div>'
-               + '<div></div>'
-             + '</div>')[0];
+  var node = $('\
+    <div mv="loop as which item">\
+      <div mv="contain which"></div>\
+    <div></div></div>\
+  ')[0];
   var resultsHolder = $(node).children()[1];
-  mv.update(node, {list:['a','b','c']});
+  mv.update(node, ['a','b','c']);
   same([
     $($(resultsHolder).children()[0]).html(),
     $($(resultsHolder).children()[1]).html(),
@@ -217,28 +217,43 @@ test('can loop across keys in an array', function(){
   ], ['0','1','2'], 'children\'s innerHTML is set to array key\'s contents');
 });
 
+test('looping without an as clause implies a within statement', function(){
+  var node = $('\
+    <div mv="loop">\
+      <div mv="contain foo"></div>\
+    <span></span></div>\
+  ')[0];
+  var resultsHolder = $(node).children()[1];
+  mv.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
+  same([
+    $($(resultsHolder).children()[0]).html(),
+    $($(resultsHolder).children()[1]).html(),
+    $($(resultsHolder).children()[2]).html()
+  ], ['a','b','c'], 'children took their values from item objects\' foo properties');
+});
+
 test('results are put in second dom node', function(){
-  var node = $('<div mv="loop which item in list">'
+  var node = $('<div mv="loop as which item">'
                + '<div mv="contain item">'
                + '</div>'
                + '<div id="intended_destination"></div>'
                + '<div></div>'
              + '</div>')[0];
   var resultsHolder = $(node).find('#intended_destination');
-  mv.update(node, {list:['a']});
+  mv.update(node, ['a']);
   same($($(resultsHolder).children()[0]).html(), 'a', 'child\'s innerHTML is set to array elemnt\'s value');
 });
 
 test('originally rendered nodes are preserved on rerender', function(){
-  var node = $('<div mv="loop which item in list">'
-               + '<div mv="contain item">'
-               + '</div>'
-               + '<span></span>'
-             + '</div>')[0];
+  var node = $('\
+    <div mv="loop as which item">\
+      <div mv="contain item"></div>\
+    <span></span></div>\
+  ')[0];
   var resultsHolder = $(node).children()[1];
-  mv.update(node, {list:['a', 'b', 'c']});
+  mv.update(node, ['a', 'b', 'c']);
   var originalChildren = $(resultsHolder).children();
-  mv.update(node, {list:['d', 'e', 'f']});
+  mv.update(node, ['d', 'e', 'f']);
   var updatedChildren = $(resultsHolder).children();
   for(var i = 0; i < 3; i++){
     equal(originalChildren[i], updatedChildren[i], 'dom node '+i+' was reused');
