@@ -1,6 +1,6 @@
 Mutable views is a templating language expressed entirely in HTML.  All template directives are written in custom tag attributes.
 
-Since a rendered MV template retrains all the same directives that went into rendering it, it can be re-rendered just as easily, without any complicated DOM surgery.  Check this out:
+Since a rendered reactive template retrains all the same directives that went into rendering it, it can be re-rendered just as easily, without any complicated DOM surgery.  Check this out:
 
 
 
@@ -40,21 +40,21 @@ Since a rendered MV template retrains all the same directives that went into ren
 
 <div id="profile">
   <div class="mugshot">
-    <img src="/pictures/knitting_with_50_cent.png" mv="attr 'src' mugshotUrl"/>
-    <span class="caption" mv="contain mugshotCaption">Gee, you knit?</span>
+    <img src="/pictures/knitting_with_50_cent.png" react="attr 'src' mugshotUrl"/>
+    <span class="caption" react="contain mugshotCaption">Gee, you knit?</span>
   </div>
-  <div class="admin_links" mv="showIf isAdmin">
+  <div class="admin_links" react="showIf isAdmin">
     <a href="/ray_guns/mind_control">Mind control ray</a>
     <a href="/blowup/moon">Blow up the moon</a>
   </div>
 </div>
 
 <script>
-  mv.render(user, $('#profile'));
+  react.render(user, $('#profile'));
 </script>
 
 
 --------
 
 
-In this example, you might have also used the mv.render function to render the template in the first place, but it isn's necessary.  Once there's an update to the data, the re-render step is trivial, since none of the rendering instructions have been discarded in the render process.
+In this example, you might have also used the react.render function to render the template in the first place, but it isn's necessary.  Once there's an update to the data, the re-render step is trivial, since none of the rendering instructions have been discarded in the render process.

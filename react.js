@@ -15,12 +15,12 @@
 
   var undefined;
 
-  window.mv = {
+  window.react = {
 
     /*
      * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships
      *
-     * mv {
+     * react {
      *   commands {
      *     command handler definitions
      *   }
@@ -133,7 +133,7 @@
           $resultsContainer.html(itemNodes);
         }
 
-        // add top level item nodes to the update list if they don't have mv attributes
+        // add top level item nodes to the update list if they don't have react attributes
         this.nodes.push.apply(this.nodes, additionalUpdateNodes);
       },
 
@@ -175,7 +175,7 @@
     },
 
     _select: function(node){
-      return [node].concat(Array.prototype.slice.call(node.querySelectorAll('[mv]')));
+      return [node].concat(Array.prototype.slice.call(node.querySelectorAll('[react]')));
     },
 
     update: function(root /* , scope1, ..., scopeN */){
@@ -226,7 +226,7 @@
         while(
           ancestor && // is defined
           ancestor !== updateScope.root && // is not root
-          ! ancestor.getAttribute('mv') && // has no mv directives
+          ! ancestor.getAttribute('react') && // has no react directives
           ! updateScope.loopItemScopes[this.getNodeKey(ancestor)] // isnt a loop item
         ){
           ancestor = $(ancestor).parent()[0];
@@ -249,7 +249,7 @@
       if(updateScope.loopItemScopes[nodeKey]){
         processingScope.scopeChain.push(updateScope.loopItemScopes[nodeKey]);
       }
-      var directives = (node.getAttribute('mv')||'').split(this._matchers.spaceCommaSpace);
+      var directives = (node.getAttribute('react')||'').split(this._matchers.spaceCommaSpace);
       directives = js.filter(directives, function(directive){
         return !!directive;
       });
@@ -263,7 +263,7 @@
 
     _followDirective: function(scope, directive){
       var command = directive.shift();
-      js.errorIf(!this.commands[command], command+' is not a valid mv command');
+      js.errorIf(!this.commands[command], command+' is not a valid react command');
       this.commands[command].apply(scope, directive);
     },
 
@@ -299,7 +299,7 @@
 
 /*
     getNodeKey: function(node){
-      var directive, directives = $.trim($node.attr('mv')).split(this.matchers.spaceCommaSpace);
+      var directive, directives = $.trim($node.attr('react')).split(this.matchers.spaceCommaSpace);
       for(var which = 0; which < directives.length; which++){
         directive = $.trim(directives[which]).split(/\s+/);
         if(directive[0] === 'key'){
@@ -309,37 +309,37 @@
     },
 
     setNodeKey: function($node, key){
-      var directive, directives = $.trim($node.attr('mv')).split(this.matchers.spaceCommaSpace);
+      var directive, directives = $.trim($node.attr('react')).split(this.matchers.spaceCommaSpace);
       for(var which = 0; which < directives.length; which++){
         directive = $.trim(directives[which]).split(/\s+/);
         if(directive[0] === 'key'){
           directives[which] = 'key '+key;
         }
       };
-      $node.attr('mv', directives.join(', '));
+      $node.attr('react', directives.join(', '));
     },
 
     _addNodeKey: function($node, nodeKey){
-      return mv.setNodeKey(nodeKey || mv.getNodeNey($node) || js.util.unique('nodeKey'));
+      return react.setNodeKey(nodeKey || react.getNodeNey($node) || js.util.unique('nodeKey'));
     },
 
     _addScopeKey: function(scope, scopeKey){
-      return scope._mvScopeKey = scopeKey || scope._mvScopeKey || js.util.unique('scopeKey');
+      return scope._reactScopeKey = scopeKey || scope._reactScopeKey || js.util.unique('scopeKey');
     }
 */
 
   };
 
-  mv.integrate = {
+  react.integrate = {
     jQuery: function(){
       jQuery.fn.update = function(scope){
-        mv.update(this, scope);
+        react.update(this, scope);
       };
     }
   };
 
 /*
-  js.merge(mv, {
+  js.merge(react, {
 
     scopes: js.create(window),
 
@@ -348,18 +348,18 @@
     tether: function($nodes, scope){
       $nodes = $($nodes);
       if(typeof scope === 'string'){
-        scope = mv.scopes[scope];
+        scope = react.scopes[scope];
       }
       if(typeof $nodes === 'string'){
-        $nodes = $(mv.nodes[$nodes]);
+        $nodes = $(react.nodes[$nodes]);
       }
 
-      var scopeKey = mv._addScopeKey(scope),
+      var scopeKey = react._addScopeKey(scope),
           tetheredNodeKeys = $.trim((scope.tethers || '')).split(this.matchers.spaceCommaSpace);
 
       $nodes.each(function(which, node){
-        mv.directive.prepend('tether '+scopeKey, node);
-        tetheredNodeKeys.push(mv._addNodeKey(node));
+        react.directive.prepend('tether '+scopeKey, node);
+        tetheredNodeKeys.push(react._addNodeKey(node));
       });
 
       scope.tethers = js.filter(tetheredNodeKeys).sort().join(', ');
@@ -380,7 +380,7 @@
         },
 
         tether: function(key){
-          var scope = mv.scopes[key];
+          var scope = react.scopes[key];
           js.errorIf(scope === undefined, 'no scope object found at key '+key);
           if(this.active){
             this.scopeChain.push(scope);
