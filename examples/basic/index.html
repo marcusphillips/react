@@ -3,23 +3,23 @@
   <head>
     <script src="../../lib/jquery/jquery-1.4.2.js" ></script>
     <script src="../../lib/js_dot_standin/js.js" ></script>
-    <script src="../../mv.js" ></script>
+    <script src="../../react.js" ></script>
   </head>
 
   <body>
 
     <div id="app">
-      welcome <span mv="anchor 'app', attrIf foo 'bar' 'baz', contain user.name"></span>!
+      welcome <span react="anchor 'app', attrIf foo 'bar' 'baz', contain user.name"></span>!
 
       <p>
          you are
-         <span mv="showIf isAdmin">an admin!</span>
-         <span mv="showIf !isAdmin">a member</span>
+         <span react="showIf isAdmin">an admin!</span>
+         <span react="showIf !isAdmin">a member</span>
       </p>
 
-      <p>today is <span mv="contain day"></span></p>
+      <p>today is <span react="contain day"></span></p>
 
-      <p><input type="checkbox" mv="checkedIf on"/></p>
+      <p><input type="checkbox" react="checkedIf on"/></p>
     </div>
 
 
@@ -27,7 +27,7 @@
     <script>
       // example app code
 
-      var app = mv.scopes.app = {
+      var app = react.scopes.app = {
         isAdmin:true,
         day: 'friday',
         user: {
@@ -37,7 +37,7 @@
         foo: true
       };
 
-      mv.update($('#app'), app);
+      react.update($('#app'), app);
 
     </script>
 
