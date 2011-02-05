@@ -3,25 +3,24 @@
     <link href="./lowbots.css" type="text/css" rel="stylesheet"/>
     <script type="text/javascript" src="../../lib/jquery/jquery-1.4.2.js"></script>
     <script type="text/javascript" src="../../lib/js_dot_standin/js.js"></script>
-    <script type="text/javascript" src="../../mv.css"></script>
-    <script type="text/javascript" src="../../mv.js"></script>
+    <script type="text/javascript" src="../../react.js"></script>
     <script src="./lowbots.js"></script>
     <script src="./ricochet.js"></script>
   </head>
   <body>
     <div>Lowbots!!</div>
-    <div mv="showIf victorious">You win!!</div>
-    <div mv="contain move_count"></div>
+    <div react="showIf victorious">You win!!</div>
+    <div react="contain move_count"></div>
     <div class="board">
-      <div mv="loop">
-        <div class="row" mv="loop">
-          <div class="square" mv="classIf n_border 'n_border',
-                                  classIf s_border 's_border',
-                                  classIf e_border 'e_border',
-                                  classIf w_border 'w_border',
-                                  classIf no_target 'no_target',
-                                  classIf is_target 'is_target',
-                                  classIf robot_color robot_color">
+      <div react="loop">
+        <div class="row" react="loop">
+          <div class="square" react="classIf n_border 'n_border',
+                                     classIf s_border 's_border',
+                                     classIf e_border 'e_border',
+                                     classIf w_border 'w_border',
+                                     classIf no_target 'no_target',
+                                     classIf is_target 'is_target',
+                                     classIf robot_color robot_color">
           </div>
           <div></div>
           <div class="clearfix"></div>
@@ -32,11 +31,10 @@
 
     <script>
       var drawBoard = function(board){
-        mv.update($('body')[0], board);
+        react.update($('body')[0], board);
       };
 
       $(document).keyup(function(event){
-        console.log(event.keyCode);
         var directionTranslationMatrix = {
           37: 'west',
           38: 'north',
