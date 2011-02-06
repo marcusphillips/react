@@ -19,20 +19,9 @@ var throws = function(block, description){
 
 module("basics");
 
-test('select', function(){
-  var grandchild = $('<span react=""/>')[0];
-  var child = $('<p/>').html(grandchild)[0];
-  var node = $('<div/>').html(child)[0];
-  var results = react._select(node);
-  equal(results.length, 2, 'results included 2 nodes');
-  ok(js.among(results, node), 'node itself was selected');
-  ok(!js.among(results, child), 'non-react child was not selected');
-  ok(js.among(results, grandchild), 'react grandchild was selected');
-});
-
 test('errors on unknown commands', function(){
   var node = $('<div react="nonexistentcommand arg1"></div>')[0];
-  raises(function(){
+  throws(function(){
     react.update(node, {});
   }, 'throws at nonexistantcommand');
 });
@@ -232,6 +221,23 @@ test('looping without an as clause implies a within statement', function(){
   ], ['a','b','c'], 'children took their values from item objects\' foo properties');
 });
 
+test('nested loops', function(){
+  var node = $('\
+    <div react="loop">\
+      <div react="loop">\
+        <div react="contain foo"></div>\
+      <span></span></div>\
+    <span></span></div>\
+  ')[0];
+  var resultsHolder = $(node).children()[1];
+  react.update(node, [[{foo:'a'}], [{foo:'b'}], [{foo:'c'}]]);
+  same([
+    $($($(resultsHolder).children()[0]).children()[0]).html(),
+    $($($(resultsHolder).children()[1]).children()[0]).html(),
+    $($($(resultsHolder).children()[2]).children()[0]).html()
+  ], ['a','b','c'], 'doubly nested children took their values from item objects\' foo properties');
+});
+
 test('results are put in second dom node', function(){
   var node = $('<div react="loop as which item">'
                + '<div react="contain item">'
@@ -286,11 +292,46 @@ test('scope can be shifted within a property', function(){
  * anchor
  */
 
-test('', function(){
-  var object = {foo:1};
-  var node = $('<div react="contain foo"></div>')[0];
-  react.anchor(node, object);
-  object.foo = 2;
+test('anchored nodes re-render on change', function(){
+  var object = {foo:1, bar:1};
+  var node1 = $('<div react="contain foo"></div>')[0];
+  var node2 = $('<div react="contain bar"></div>')[0];
+  react.anchor(node1, object);
+  react.anchor(node2, object);
+  object.foo = object.bar = 2;
   react.changed(object);
-  equal(node.innerHTML, 2, 'an anchored node was not required in the call to update');
+  same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
 });
+
+/*
+
+test('updating anchored nodes does not revisit all nodes', function(){
+  var object = {foo:1, bar:1};
+  var node = $('<div>\
+    <div react="contain foo"></div>\
+    <div react="contain bar"></div>\
+  </div>')[0];
+  react.anchor(node, object);
+  object.bar = 2;
+  react.set(object, 'foo', 2);
+  same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
+  same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
+
+});
+
+test('updating anchored nodes does not revisit all nodes', function(){
+  var object = {foo:1, bar:{
+    baz: 1
+  }};
+  var node = $('<div>\
+    <div react="contain foo"></div>\
+    <div react="within bar">\
+      <div react="contain baz"></div>\
+    </div>\
+  </div>')[0];
+  react.anchor(node, object);
+  react.set(object.bar, 'baz', 2);
+  same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
+});
+
+*/

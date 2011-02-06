@@ -7,6 +7,13 @@
  */
 
 
+/*
+loop updates internally?
+make a tree for scope chain
+anon functions holding scope
+remove update context?
+*/
+
 // todo: add update(object, key) signature, for refreshing only from certain properties
 // todo: add set(object, key), for updating an object property and automatically incurring a call to soi.update() for same
 // todo: add augment(object), for adding an id and a set method directly to the object
@@ -29,10 +36,6 @@
       isNumber: /\d+/
     },
 
-    _select: function(node){
-      return [node].concat(Array.prototype.slice.call(node.querySelectorAll('[react]')));
-    },
-
     getNodeKey: function(node){
       return (node.reactKey = node.reactKey || js.util.unique('reactNode'));
     },
@@ -41,10 +44,20 @@
       return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
     },
 
+    set: function(object, key, value){
+      object[key] = value;
+      var reactListeners = object.reactListeners[key];
+      if(!reactListeners){
+        return;
+      }
+
+      for(var which in reactListeners){
+        var reactListener = reactListeners[which];
+        this.commands[reactListener.command].apply(reactListener.context, reactListener.args);
+      }
+    },
+
     update: function(root /* , scope1, ..., scopeN */){
-      this.diagnostic = {
-        nodesVisted: 0
-      };
       //todo: test these
       //js.errorIf(!root, 'no root supplied to update()');
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
@@ -58,41 +71,38 @@
       }
       */
 
-      var nodes = this._select(root);
-      var updateScope = js.create(this.commands, {
-        root: root,
+      var updateContext = js.create(this.commands, {
         baseScopeChain: baseScopeChain,
-        nodes: nodes,
         scopeChains: {},
         loopItemScopes: {},
         loopItemTemplates: {}
       });
+      updateContext.updateContext = updateContext; // this is unnecessary, can remove after refactor
+      this._updateSingle(root, root, updateContext);
 
-      var i;
-      for(i = 0; i < nodes.length; i++){
-        this._updateSingle(nodes[i], updateScope);
+      var nodes = root.querySelectorAll('[react]');
+      for(var i = 0; i < nodes.length; i++){
+        this._updateSingle(root, nodes[i], updateContext);
       }
 
       return root;
     },
 
-    _updateSingle: function(node, updateScope){
-      this.diagnostic.nodesVisted++;
+    _updateSingle: function(root, node, updateContext){
       //todo: test that you never revisit a node
       var nodeKey = this.getNodeKey(node);
-      if(updateScope.scopeChains[nodeKey]){
+      if(updateContext.scopeChains[nodeKey]){
         // node has already been visited
-        return updateScope.scopeChains[nodeKey];
+        return updateContext.scopeChains[nodeKey];
       }
 
-      var ancestorScopeChain = updateScope.baseScopeChain;
-      if(node !== updateScope.root){
+      var ancestorScopeChain = updateContext.baseScopeChain;
+      if(node !== root){
         var ancestor = $(node).parent()[0];
         while(
           ancestor && // is defined
-          ancestor !== updateScope.root && // is not root
-          ! ancestor.getAttribute('react') && // has no react directives
-          ! updateScope.loopItemScopes[this.getNodeKey(ancestor)] // isnt a loop item
+          ancestor !== root &&
+          ! ancestor.getAttribute('react') // has no react directives
         ){
           ancestor = $(ancestor).parent()[0];
         }
@@ -100,30 +110,26 @@
           // node was irrelevant - not a decendant of the root, ignore it
           return false;
         }
-        ancestorScopeChain = this._updateSingle(ancestor, updateScope);
+        ancestorScopeChain = this._updateSingle(root, ancestor, updateContext);
       }
-      if(!ancestorScopeChain || updateScope.loopItemTemplates[this.getNodeKey(node)]){
+      if(!ancestorScopeChain || updateContext.loopItemTemplates[this.getNodeKey(node)]){
         // node is a loop template or ancestor was irrelevant, so this node is irrelevant
         return false;
       }
 
-      var processingScope = js.create(updateScope, {
+      var nodeContext = js.create(updateContext, {
         node: node,
         scopeChain: js.copy(ancestorScopeChain)
       });
-      if(updateScope.loopItemScopes[nodeKey]){
-        processingScope.scopeChain.push(updateScope.loopItemScopes[nodeKey]);
-      }
       var directives = (node.getAttribute('react')||'').split(this._matchers.spaceCommaSpace);
       directives = js.filter(directives, function(directive){
         return !!directive;
       });
-      var i;
-      for(i = 0, length = directives.length; i < length; i++){
-        this._followDirective(processingScope, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
+      for(var i = 0; i < directives.length; i++){
+        this._followDirective(nodeContext, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
       }
 
-      return (updateScope.scopeChains[nodeKey] = processingScope.scopeChain);
+      return (updateContext.scopeChains[nodeKey] = nodeContext.scopeChain);
     },
 
     _followDirective: function(scope, directive){
@@ -226,17 +232,20 @@
    * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships
    *
    * react {
-   *   commands {
-   *     command handler definitions
-   *   }
    * }
    *
    *  ^
    *  |
-   * // an common updateScope is used for the entire duration of the update routine, covering all nodes
-   * updateScope {
-   *   root
+   * commands {
+   *   command handler definitions
    *   lookup(key)
+   * }
+   *
+   *  ^
+   *  |
+   * // a common updateContext is used for the entire duration of the update routine, covering all nodes
+   * updateContext {
+   *   root
    *   baseScopeChain
    *   nodes to be processed
    *   scopeChains
@@ -245,7 +254,7 @@
    *  ^
    *  |
    * // a new processing scope is created for each node to be updated
-   * processingScope {
+   * nodeContext {
    *   node
    *   scopeChain
    * }
@@ -282,8 +291,8 @@
     },
 
     within: function(key){
-  // todo: port and test this
-//          js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
+      // todo: port and test this
+      // js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
       this.scopeChain.push(this.lookup(key));
     },
 
@@ -330,19 +339,10 @@
       var loopItemScope;
 
       var itemNodes = [];
-      var additionalUpdateNodes = [];
       var itemNode;
       var i;
       var length = collection.length;
       for(i = 0; i < length; i++){
-        if($resultsContents[i]){
-          itemNode = $resultsContents[i];
-        } else {
-          itemNode = $itemTemplate.clone()[0];
-          additionalUpdateNodes = additionalUpdateNodes.concat(this._select(itemNode));
-        }
-        itemNodes.push(itemNode);
-
         // set up a loop item scope to be applied for each item
         if(!as){
           // each item in the collection will be the new scope for it's correlative node
@@ -361,15 +361,19 @@
           }(collection[i]));
         }
 
-        this.loopItemScopes[this.getNodeKey(itemNode)] = loopItemScope;
+        if($resultsContents[i]){
+          itemNode = $resultsContents[i];
+        } else {
+          itemNode = $itemTemplate.clone()[0];
+        }
+        itemNodes.push(itemNode);
+
+        this.update.apply(react, [itemNode].concat(this.scopeChain).concat([loopItemScope]));
       }
       $itemTemplate.hide();
       if(collection.length !== $resultsContents.length){
         $resultsContainer.html(itemNodes);
       }
-
-      // add top level item nodes to the update list if they don't have react attributes
-      this.nodes.push.apply(this.nodes, additionalUpdateNodes);
     },
 
     showIf: function(condition){
