@@ -29,7 +29,7 @@ remove update context?
     scopes: {},
 
     _matchers: {
-      spaceCommaSpace: /\s*,\s*/,
+      directiveDelimiter: /\s*,\s*/,
       space: /\s+/,
       isString: /(^'.*'$)|(^".*"$)/,
       negation: /!\s*/,
@@ -71,7 +71,9 @@ remove update context?
       }
       */
 
+      var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
       var updateContext = js.create(this.commands, {
+        nodes: nodes,
         baseScopeChain: baseScopeChain,
         scopeChains: {},
         loopItemScopes: {},
@@ -80,7 +82,6 @@ remove update context?
       updateContext.updateContext = updateContext; // this is unnecessary, can remove after refactor
       this._updateSingle(root, root, updateContext);
 
-      var nodes = root.querySelectorAll('[react]');
       for(var i = 0; i < nodes.length; i++){
         this._updateSingle(root, nodes[i], updateContext);
       }
@@ -101,8 +102,9 @@ remove update context?
         var ancestor = $(node).parent()[0];
         while(
           ancestor && // is defined
-          ancestor !== root &&
-          ! ancestor.getAttribute('react') // has no react directives
+          ancestor !== root && // isnt root
+          ! ancestor.getAttribute('react') && // has no react directives
+          ! updateContext.loopItemScopes[this.getNodeKey(ancestor)] // isnt a loop item
         ){
           ancestor = $(ancestor).parent()[0];
         }
@@ -121,7 +123,11 @@ remove update context?
         node: node,
         scopeChain: js.copy(ancestorScopeChain)
       });
-      var directives = (node.getAttribute('react')||'').split(this._matchers.spaceCommaSpace);
+      if(updateContext.loopItemScopes[nodeKey]){
+        nodeContext.scopeChain.push(updateContext.loopItemScopes[nodeKey]);
+      }
+
+      var directives = (node.getAttribute('react')||'').split(this._matchers.directiveDelimiter);
       directives = js.filter(directives, function(directive){
         return !!directive;
       });
@@ -132,10 +138,10 @@ remove update context?
       return (updateContext.scopeChains[nodeKey] = nodeContext.scopeChain);
     },
 
-    _followDirective: function(scope, directive){
+    _followDirective: function(context, directive){
       var command = directive.shift();
       js.errorIf(!this.commands[command], command+' is not a valid react command');
-      this.commands[command].apply(scope, directive);
+      this.commands[command].apply(context, directive);
     },
 
     anchor: function(node, object){
@@ -155,7 +161,7 @@ remove update context?
 
 /*
     getNodeKey: function(node){
-      var directive, directives = $.trim($node.attr('react')).split(this.matchers.spaceCommaSpace);
+      var directive, directives = $.trim($node.attr('react')).split(this.matchers.directiveDelimiter);
       for(var which = 0; which < directives.length; which++){
         directive = $.trim(directives[which]).split(/\s+/);
         if(directive[0] === 'key'){
@@ -165,7 +171,7 @@ remove update context?
     },
 
     setNodeKey: function($node, key){
-      var directive, directives = $.trim($node.attr('react')).split(this.matchers.spaceCommaSpace);
+      var directive, directives = $.trim($node.attr('react')).split(this.matchers.directiveDelimiter);
       for(var which = 0; which < directives.length; which++){
         directive = $.trim(directives[which]).split(/\s+/);
         if(directive[0] === 'key'){
@@ -211,7 +217,7 @@ remove update context?
       }
 
       var scopeKey = react._addScopeKey(scope),
-          tetheredNodeKeys = $.trim((scope.tethers || '')).split(this.matchers.spaceCommaSpace);
+          tetheredNodeKeys = $.trim((scope.tethers || '')).split(this.matchers.directiveDelimiter);
 
       $nodes.each(function(which, node){
         react.directive.prepend('tether '+scopeKey, node);
@@ -298,6 +304,7 @@ remove update context?
 
     contain: function(key){
       jQuery(this.node).html(this.lookup(key));
+      var a = 3;
     },
 
     classIf: function(conditionKey, nameKey){
@@ -365,10 +372,11 @@ remove update context?
           itemNode = $resultsContents[i];
         } else {
           itemNode = $itemTemplate.clone()[0];
+          this.nodes.push.apply(this.nodes, [itemNode].concat(Array.prototype.slice.apply(itemNode.querySelectorAll('[react]'))));
         }
+        this.loopItemScopes[this.getNodeKey(itemNode)] = loopItemScope;
         itemNodes.push(itemNode);
 
-        this.update.apply(react, [itemNode].concat(this.scopeChain).concat([loopItemScope]));
       }
       $itemTemplate.hide();
       if(collection.length !== $resultsContents.length){

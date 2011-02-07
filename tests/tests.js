@@ -222,20 +222,18 @@ test('looping without an as clause implies a within statement', function(){
 });
 
 test('nested loops', function(){
-  var node = $('\
+  var $node = $('\
     <div react="loop">\
       <div react="loop">\
         <div react="contain foo"></div>\
       <span></span></div>\
     <span></span></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
-  react.update(node, [[{foo:'a'}], [{foo:'b'}], [{foo:'c'}]]);
-  same([
-    $($($(resultsHolder).children()[0]).children()[0]).html(),
-    $($($(resultsHolder).children()[1]).children()[0]).html(),
-    $($($(resultsHolder).children()[2]).children()[0]).html()
-  ], ['a','b','c'], 'doubly nested children took their values from item objects\' foo properties');
+  ');
+  react.update($node[0], [[{foo:'a'}]]);
+  var $outterResultsHolder = $node.children().last();
+  var $innerLoop = $outterResultsHolder.children().first();
+  var $innerResultsHolder = $innerLoop.children().last();
+  same($innerResultsHolder.children().first().html(), 'a', 'doubly nested children took their values from item objects\' foo properties');
 });
 
 test('results are put in second dom node', function(){
