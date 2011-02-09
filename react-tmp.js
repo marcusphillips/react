@@ -75,7 +75,7 @@ remove update context?
       return {
         parent: link,
         scope: additionalLink
-      };
+      }
     },
 
     update: function(root /* , scope1, ..., scopeN */){
@@ -93,7 +93,6 @@ remove update context?
       */
 
       var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
-      var tree = this._buildTree(root, nodes);
       var updateContext = js.create(this.commands, {
         nodes: nodes,
         baseScopeChain: baseScopeChain,
@@ -109,27 +108,6 @@ remove update context?
       }
 
       return root;
-    },
-
-    _buildTree: function(root, nodes){
-      var trunk = {node: root, children:[]};
-      var branches = {};
-      branches[this.getNodeKey(root)] = trunk;
-      for(var i = 0; i < nodes.length; i++){
-        branches[this.getNodeKey(nodes[i])] = {
-          node: nodes[i],
-          children: []
-        };
-      }
-      for(var i = 0; i < nodes.length; i++){
-        var node = nodes[i];
-        var branch = branches[this.getNodeKey(node)];
-        // todo: start refactor spike from here
-        //var parent = this._getParent(root, node);
-        //var parentBranch = branches[this.getNodeKey(parent)];
-        //branch.parent = parentBranch;
-        //parentBranch.children.push(branch);
-      }
     },
 
     _updateSingle: function(root, node, updateContext){
