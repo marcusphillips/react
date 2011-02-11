@@ -93,11 +93,17 @@ remove update context?
       };
     },
 
-    update: function(root /* , scope1, ..., scopeN */){
+    update: function(){
+      return this._updateTree.apply(this, arguments);
+    },
+
+    _updateTree: function(root, scope, options){
+      options = options || {};
       //todo: test these
       //js.errorIf(!root, 'no root supplied to update()');
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
-      var baseScopeChain = this._buildScopeChain(Array.prototype.slice.call(arguments, 1));
+      js.errorIf(scope && options.scope || scope && options.scopeChain || options.scope && options.scopeChain, 'you must supply only one set of scopes');
+      var baseScopeChain = this._buildScopeChain([scope] || [options.scope] || options.scopeChain);
 
       var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
       var updateContext = js.create(this.commands, {
@@ -108,10 +114,10 @@ remove update context?
         loopItemTemplates: {}
       });
       updateContext.updateContext = updateContext; // this is unnecessary, can remove after refactor
-      this._updateSingle(root, root, updateContext);
+      this._updateNode(root, root, updateContext);
 
       for(var i = 0; i < nodes.length; i++){
-        this._updateSingle(root, nodes[i], updateContext);
+        this._updateNode(root, nodes[i], updateContext);
       }
 
       return root;
@@ -157,7 +163,7 @@ remove update context?
     },
 */
 
-    _updateSingle: function(root, node, updateContext){
+    _updateNode: function(root, node, updateContext){
       //todo: test that you never revisit a node
       var nodeKey = this.getNodeKey(node);
       if(updateContext.scopeChains[nodeKey]){
@@ -180,39 +186,39 @@ remove update context?
           // node was irrelevant - not a decendant of the root, ignore it
           return false;
         }
-        ancestorScopeChain = this._updateSingle(root, ancestor, updateContext);
+        ancestorScopeChain = this._updateNode(root, ancestor, updateContext);
       }
       if(!ancestorScopeChain || updateContext.loopItemTemplates[this.getNodeKey(node)]){
         // node is a loop template or ancestor was irrelevant, so this node is irrelevant
         return false;
       }
 
-      var scopeLinkForChildren = this._updateSingleWithScopeChain(node, ancestorScopeChain, updateContext);
+      var scopeChainForChildren = this._updateNodeWithScopeChain(node, ancestorScopeChain, updateContext);
 
-      return (updateContext.scopeChains[nodeKey] = scopeLinkForChildren);
+      return (updateContext.scopeChains[nodeKey] = scopeChainForChildren);
     },
 
-    _updateSingleWithScopeChain: function(node, scopeLink, updateContext){
+    _updateNodeWithScopeChain: function(node, scopeChain, updateContext){
       var nodeKey = this.getNodeKey(node);
       var directives = this._getDirectives(node);
       if(updateContext.loopItemScopes[nodeKey]){
-        scopeLink = this._addScopeLink(scopeLink, updateContext.loopItemScopes[nodeKey]);
+        scopeChain = this._addScopeLink(scopeChain, updateContext.loopItemScopes[nodeKey]);
       }
 
       var pushScope = function(scope){
-        scopeLink = this._addScopeLink(scopeLink, scope);
+        scopeChain = this._addScopeLink(scopeChain, scope);
       };
 
       for(var i = 0; i < directives.length; i++){
         this._followDirective(directives[i], js.create(updateContext, {
           node: node,
           directiveIndex: i,
-          scopeChain: scopeLink,
+          scopeChain: scopeChain,
           pushScope: pushScope
         }));
       }
 
-      return scopeLink;
+      return scopeChain;
     },
 
     _getDirectives: function(node){
@@ -359,9 +365,9 @@ remove update context?
       } else {
         var keys = key.split('.');
         var baseKey = keys.shift();
-        var scopeLink = this.scopeChain;
+        var scopeChain = this.scopeChain;
         do {
-          var object = scopeLink.scope;
+          var object = scopeChain.scope;
           var allListeners = object.reactListeners = object.reactListeners || {};
           var listenersPerKey = allListeners[key] = allListeners[key] || {};
           var listenerId = nodeKey + ' ' + this.directiveIndex;
@@ -375,8 +381,8 @@ remove update context?
           if(value !== undefined){
             break;
           }
-          scopeLink = scopeLink.parent;
-        } while(scopeLink)
+          scopeChain = scopeChain.parent;
+        } while(scopeChain)
 
         while(keys.length){
           object = value;
