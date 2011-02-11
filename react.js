@@ -59,16 +59,16 @@ remove update context?
       if(object.reactListeners && object.reactListeners[key]){
         for(var whichListener in object.reactListeners[key]){
           var listener = object.reactListeners[key][whichListener];
-          var nodeContext = js.create(this.commands, {
+          var directiveContext = js.create(this.commands, {
             node: listener.node,
             scopeChain: this._buildScopeChainFor(listener.node, listener.index),
-            currentDirectiveIndex: listener.index
+            directiveIndex: listener.index
           });
-          if(nodeContext.scopeChain.scope !== object){
+          if(directiveContext.scopeChain.scope !== object){
             // this means the object is not found in the same path that lead to registration of a listener
             continue;
           }
-          this._followDirective(nodeContext, this._getDirectives(listener.node)[listener.index]);
+          this._followDirective(this._getDirectives(listener.node)[listener.index], directiveContext);
         }
       }
     },
@@ -98,17 +98,8 @@ remove update context?
       //js.errorIf(!root, 'no root supplied to update()');
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
       var baseScopeChain = this._buildScopeChain(Array.prototype.slice.call(arguments, 1));
-      /* todo: add support for strings
-      if(typeof scope === 'string'){
-        scope = this.scopes[scope];
-      }
-      if(typeof root === 'string'){
-        root = this.nodes[root];
-      }
-      */
 
       var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
-      //var tree = this._buildTree(root, nodes);
       var updateContext = js.create(this.commands, {
         nodes: nodes,
         baseScopeChain: baseScopeChain,
@@ -196,21 +187,32 @@ remove update context?
         return false;
       }
 
-      var nodeContext = js.create(updateContext, {
-        node: node,
-        scopeChain: ancestorScopeChain
-      });
-      if(updateContext.loopItemScopes[nodeKey]){
-        nodeContext.scopeChain = this._addScopeLink(nodeContext.scopeChain, updateContext.loopItemScopes[nodeKey]);
-      }
+      var scopeLinkForChildren = this._updateSingleWithScopeChain(node, ancestorScopeChain, updateContext);
 
+      return (updateContext.scopeChains[nodeKey] = scopeLinkForChildren);
+    },
+
+    _updateSingleWithScopeChain: function(node, scopeLink, updateContext){
+      var nodeKey = this.getNodeKey(node);
       var directives = this._getDirectives(node);
-      for(var i = 0; i < directives.length; i++){
-        nodeContext.currentDirectiveIndex = i;
-        this._followDirective(nodeContext, directives[i]);
+      if(updateContext.loopItemScopes[nodeKey]){
+        scopeLink = this._addScopeLink(scopeLink, updateContext.loopItemScopes[nodeKey]);
       }
 
-      return (updateContext.scopeChains[nodeKey] = nodeContext.scopeChain);
+      var pushScope = function(scope){
+        scopeLink = this._addScopeLink(scopeLink, scope);
+      };
+
+      for(var i = 0; i < directives.length; i++){
+        this._followDirective(directives[i], js.create(updateContext, {
+          node: node,
+          directiveIndex: i,
+          scopeChain: scopeLink,
+          pushScope: pushScope
+        }));
+      }
+
+      return scopeLink;
     },
 
     _getDirectives: function(node){
@@ -224,7 +226,7 @@ remove update context?
       });
     },
 
-    _followDirective: function(context, directive){
+    _followDirective: function(directive, context){
       var command = directive.shift();
       js.errorIf(!this.commands[command], command+' is not a valid react command');
       this.commands[command].apply(context, directive);
@@ -362,13 +364,13 @@ remove update context?
           var object = scopeLink.scope;
           var allListeners = object.reactListeners = object.reactListeners || {};
           var listenersPerKey = allListeners[key] = allListeners[key] || {};
-          var listenerId = nodeKey + ' ' + this.currentDirectiveIndex;
+          var listenerId = nodeKey + ' ' + this.directiveIndex;
           var listener = listenersPerKey[listenerId] = listenersPerKey[listenerId] || {
             node: this.node,
-            index: this.currentDirectiveIndex
+            index: this.directiveIndex
           };
           this.node._scopeChainCache = this.node._scopeChainCache || {};
-          this.node._scopeChainCache[this.currentDirectiveIndex] = this.scopeChain;
+          this.node._scopeChainCache[this.directiveIndex] = this.scopeChain;
           value = object[baseKey];
           if(value !== undefined){
             break;
@@ -390,7 +392,7 @@ remove update context?
     within: function(key){
       // todo: port and test this
       // js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
-      this.scopeChain = this._addScopeLink(this.scopeChain, this.lookup(key));
+      this.pushScope(this.lookup(key));
     },
 
     contain: function(key){
