@@ -1,4 +1,4 @@
-Mutable views is a templating language expressed entirely in HTML.  All template directives are written in custom tag attributes.
+React is a templating language expressed entirely in HTML.  All template directives are written in custom tag attributes.
 
 Since a rendered reactive template retrains all the same directives that went into rendering it, it can be re-rendered just as easily, without any complicated DOM surgery.  Check this out:
 
@@ -36,7 +36,7 @@ Since a rendered reactive template retrains all the same directives that went in
 </script>
 
 
--------- The Mutable Views way --------
+-------- The Reactive way --------
 
 <div id="profile">
   <div class="mugshot">

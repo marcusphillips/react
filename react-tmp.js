@@ -1,5 +1,5 @@
 /*!
- * React for JavaScript - an easy-rerender template language
+ * React for JavaScript - an Easy-rerender templating language
  * http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
@@ -46,36 +46,21 @@ remove update context?
 
     set: function(object, key, value){
       object[key] = value;
-      this.changed(object, key);
-    },
-
-    changed: function(object, key){
-      if(arguments.length < 2){
-        for(var key in object){
-          this.changed(object, key);
-        }
+      if(!object.reactListeners || !object.reactListeners[key]){
         return;
       }
-      if(object.reactListeners && object.reactListeners[key]){
-        for(var whichListener in object.reactListeners[key]){
-          var listener = object.reactListeners[key][whichListener];
-          var nodeContext = js.create(this.commands, {
-            node: listener.node,
-            scopeChain: this._buildScopeChainFor(listener.node, listener.index),
-            currentDirectiveIndex: listener.index
-          });
-          if(nodeContext.scopeChain.scope !== object){
-            // this means the object is not found in the same path that lead to registration of a listener
-            continue;
-          }
-          this._followDirective(nodeContext, this._getDirectives(listener.node)[listener.index]);
+      for(var whichListener in object.reactListeners[key]){
+        var listener = object.reactListeners[key][whichListener];
+        var nodeContext = {
+          node: listener.node,
+          scopeChain: buildScopeChain(listener.node, listener.index)
+        };
+        if(nodeContext.scopeChain.scope !== object){
+          // this means the object is not found in the same path that lead to registration of a listener
+          continue;
         }
+        this._followDirective(nodeContext, this._getDirectives(listener.node)[listener.index]);
       }
-    },
-
-    _buildScopeChainFor: function(node, directiveIndex){
-      // todo: to improve automatic memory management, remove the _scopeChainCache cheat
-      return node._scopeChainCache[directiveIndex];
     },
 
     _buildScopeChain: function(scopes){
@@ -90,7 +75,7 @@ remove update context?
       return {
         parent: link,
         scope: additionalLink
-      };
+      }
     },
 
     update: function(root /* , scope1, ..., scopeN */){
@@ -108,7 +93,6 @@ remove update context?
       */
 
       var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
-      //var tree = this._buildTree(root, nodes);
       var updateContext = js.create(this.commands, {
         nodes: nodes,
         baseScopeChain: baseScopeChain,
@@ -125,46 +109,6 @@ remove update context?
 
       return root;
     },
-
-/*
-    _buildTree: function(root, nodes){
-      var trunk = {node: root, children:[]};
-      var branches = {};
-      branches[this.getNodeKey(root)] = trunk;
-      for(var i = 0; i < nodes.length; i++){
-        branches[this.getNodeKey(nodes[i])] = {
-          node: nodes[i],
-          children: []
-        };
-      }
-      for(i = 0; i < nodes.length; i++){
-        var node = nodes[i];
-        var branch = branches[this.getNodeKey(node)];
-        // todo: start refactor spike from here
-        var parent = this._getParent(root, node);
-        //var parentBranch = branches[this.getNodeKey(parent)];
-        //branch.parent = parentBranch;
-        //parentBranch.children.push(branch);
-      }
-    },
-
-    _getParent: function(root, node){
-      if(root === node){ return false; }
-      var $ancestor = $(node).parent();
-      while(!this._isReactNode($ancestor[0])){
-        if(!ancestor){ return false; }
-        $ancestor = $ancestor.parent();
-      }
-      return $ancestor[0];
-    },
-
-    _isReactNode: function(root, node){
-      return node === root ||
-        node.getAttribute('react') ||
-        this._isLoopItem(node) ||
-        this._isLoopTemplate(node);
-    },
-*/
 
     _updateSingle: function(root, node, updateContext){
       //todo: test that you never revisit a node
@@ -207,20 +151,15 @@ remove update context?
       var directives = this._getDirectives(node);
       for(var i = 0; i < directives.length; i++){
         nodeContext.currentDirectiveIndex = i;
-        this._followDirective(nodeContext, directives[i]);
+        this._followDirective(nodeContext, js.trim(directives[i]).replace(this._matchers.negation, '!').split(this._matchers.space));
       }
 
       return (updateContext.scopeChains[nodeKey] = nodeContext.scopeChain);
     },
 
     _getDirectives: function(node){
-      var directiveStrings = (node.getAttribute('react')||'').split(this._matchers.directiveDelimiter);
-      var that = this;
-      var directives = js.map(directiveStrings, function(which, string){
-        return js.trim(string).replace(that._matchers.negation, '!').split(that._matchers.space);
-      });
-      return js.filter(directives, function(directive){
-        return !!directive[0];
+      return js.filter((node.getAttribute('react')||'').split(this._matchers.directiveDelimiter), function(directive){
+        return !!directive;
       });
     },
 
@@ -235,6 +174,14 @@ remove update context?
       this.nodes[nodeKey] = node;
       object.reactAnchors = object.reactAnchors || {};
       object.reactAnchors[nodeKey] = true;
+    },
+
+    changed: function(object){
+      js.errorIf(!object.reactAnchors, 'the input to react.changed() hasn\'t been anchored to anything yet');
+      var key;
+      for(key in object.reactAnchors){
+        this.update(this.nodes[key], object);
+      }
     }
 
 /*
@@ -367,8 +314,6 @@ remove update context?
             node: this.node,
             index: this.currentDirectiveIndex
           };
-          this.node._scopeChainCache = this.node._scopeChainCache || {};
-          this.node._scopeChainCache[this.currentDirectiveIndex] = this.scopeChain;
           value = object[baseKey];
           if(value !== undefined){
             break;

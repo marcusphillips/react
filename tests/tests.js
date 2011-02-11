@@ -206,6 +206,21 @@ test('can loop across keys in an array', function(){
   ], ['0','1','2'], 'children\'s innerHTML is set to array key\'s contents');
 });
 
+test('functions bound at loop time evaluate in correct context', function(){
+  var node = $('\
+    <div react="loop as which item">\
+      <div react="contain item"></div>\
+    <div></div></div>\
+  ')[0];
+  var resultsHolder = $(node).children()[1];
+  react.update(node, ['a', function(){return this[2];}, 'b']);
+  same([
+    $($(resultsHolder).children()[0]).html(),
+    $($(resultsHolder).children()[1]).html(),
+    $($(resultsHolder).children()[2]).html()
+  ], ['a','b','b'], 'children\'s innerHTML is set to array key\'s contents');
+});
+
 test('looping without an as clause implies a within statement', function(){
   var node = $('\
     <div react="loop">\
@@ -287,8 +302,53 @@ test('scope can be shifted within a property', function(){
 
 
 /*
+ * function properties
+ */
+
+test('functions get evaluated', function(){
+  var node = $('<div react="contain foo"></div>')[0];
+  react.update(node, {
+    foo:function(){
+      return 'bar';
+    }
+  });
+  same(node.innerHTML, 'bar', 'function result was inserted');
+});
+
+test('functions evaluate in correct context', function(){
+  var node = $('<div react="contain foo"></div>')[0];
+  react.update(node, {
+    bar: 'right',
+    foo:function(){
+      return this.bar;
+    }
+  });
+  same(node.innerHTML, 'right', 'function evaluated with the correct this object');
+});
+
+test('functions can be dot accessed', function(){
+  var node = $('<div react="contain foo.bar"></div>')[0];
+  var didRun = false;
+  var object = {
+    foo: function(){
+      didRun = true;
+      return 'wrong';
+    }
+  };
+  object.foo.bar = function(){
+    return 'right';
+  };
+  react.update(node, object);
+  ok(!didRun, 'namespacing functions are not run');
+  same(node.innerHTML, 'right', 'function result was inserted');
+});
+
+
+/*
  * anchor
  */
+
+/*
 
 test('anchored nodes re-render on change', function(){
   var object = {foo:1, bar:1};
@@ -301,8 +361,6 @@ test('anchored nodes re-render on change', function(){
   same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
 });
 
-/*
-
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};
   var node = $('<div>\
@@ -314,8 +372,24 @@ test('updating anchored nodes does not revisit all nodes', function(){
   react.set(object, 'foo', 2);
   same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
-
 });
+
+test('unanchored nodes can have properties set with no side effects', function(){
+  var object = {foo:1, bar:1};
+  var node = $('<div>\
+    <div react="contain foo"></div>\
+    <div react="contain bar"></div>\
+  </div>')[0];
+  react.update(node, object);
+  object.bar = 2;
+  react.set(object, 'foo', 2);
+  same($(node).children()[0].innerHTML, '1', 'for unanchored nodes, properties that are set using react.set() are not updated');
+  same($(node).children()[1].innerHTML, '1', 'properties changed manually are alos not rerendered');
+});
+
+*/
+
+/*
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:{
@@ -331,5 +405,6 @@ test('updating anchored nodes does not revisit all nodes', function(){
   react.set(object.bar, 'baz', 2);
   same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
 });
+
 
 */
