@@ -302,19 +302,8 @@ test('scope can be shifted within a property', function(){
 
 
 /*
- * anchor
+ * function properties
  */
-
-test('anchored nodes re-render on change', function(){
-  var object = {foo:1, bar:1};
-  var node1 = $('<div react="contain foo"></div>')[0];
-  var node2 = $('<div react="contain bar"></div>')[0];
-  react.anchor(node1, object);
-  react.anchor(node2, object);
-  object.foo = object.bar = 2;
-  react.changed(object);
-  same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
-});
 
 test('functions get evaluated', function(){
   var node = $('<div react="contain foo"></div>')[0];
@@ -354,7 +343,23 @@ test('functions can be dot accessed', function(){
   same(node.innerHTML, 'right', 'function result was inserted');
 });
 
+
 /*
+ * anchor
+ */
+
+/*
+
+test('anchored nodes re-render on change', function(){
+  var object = {foo:1, bar:1};
+  var node1 = $('<div react="contain foo"></div>')[0];
+  var node2 = $('<div react="contain bar"></div>')[0];
+  react.anchor(node1, object);
+  react.anchor(node2, object);
+  object.foo = object.bar = 2;
+  react.changed(object);
+  same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
+});
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};
@@ -368,6 +373,23 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
 });
+
+test('unanchored nodes can have properties set with no side effects', function(){
+  var object = {foo:1, bar:1};
+  var node = $('<div>\
+    <div react="contain foo"></div>\
+    <div react="contain bar"></div>\
+  </div>')[0];
+  react.update(node, object);
+  object.bar = 2;
+  react.set(object, 'foo', 2);
+  same($(node).children()[0].innerHTML, '1', 'for unanchored nodes, properties that are set using react.set() are not updated');
+  same($(node).children()[1].innerHTML, '1', 'properties changed manually are alos not rerendered');
+});
+
+*/
+
+/*
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:{
