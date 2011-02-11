@@ -256,10 +256,12 @@ var move = {
     board.move_count++;
     //update its old indicator
     board[robot_list[current_robot].row][robot_list[current_robot].col].robot = null;
+    react.changed(board[robot_list[current_robot].row][robot_list[current_robot].col], 'robot_color');
     //update the robot's location
     robot_list[current_robot].row = location.row;
     robot_list[current_robot].col = location.col;
     //update its new indicator
     board[robot_list[current_robot].row][robot_list[current_robot].col].robot = current_robot;
+    react.changed(board[robot_list[current_robot].row][robot_list[current_robot].col], 'robot_color');
   }
 };
