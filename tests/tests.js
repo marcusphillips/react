@@ -37,6 +37,21 @@ test('calling update returns the root', function(){
   equal(react.update(node, {}), node, 'same node was returned');
 });
 
+test('rendering to nodes that are nested in others still works', function(){
+  var $parent = $('<div></div>');
+  var $child = $('<div react="contain foo"></div>');
+  $parent.html($child);
+  react.update($child[0], {foo:'bar'});
+  equal($child.html(), 'bar', 'the child node got the appropriate content');
+});
+
+test('rendering to nodes that are nested in others still works, an additional layer deep', function(){
+  var $parent = $('<div></div>');
+  var $child = $('<div><div react="contain foo"></div></div>');
+  $parent.html($child);
+  react.update($child[0], {foo:'bar'});
+  equal($child.children().first().html(), 'bar', 'the child node got the appropriate content');
+});
 
 /*
  *  containing
