@@ -293,7 +293,9 @@ remove update context?
           this.node._scopeChainCache = this.node._scopeChainCache || {};
           this.node._scopeChainCache[this.directiveIndex] = this.scopeChain;
           value = object[baseKey];
-          if(value !== undefined){
+          if(value instanceof this._Fallthrough){
+            baseKey = value.key;
+          }else if(value !== undefined){
             break;
           }
           scopeChain = scopeChain.parent;
@@ -340,6 +342,10 @@ remove update context?
       }
     },
 
+    _Fallthrough: function(key){
+      this.key = key;
+    },
+
     loop: function(as, keyAlias, valueAlias){
       if(valueAlias === undefined){
         valueAlias = keyAlias;
@@ -372,11 +378,7 @@ remove update context?
           if(keyAlias !== undefined){
             loopItemScope[keyAlias] = i;
           }
-          loopItemScope[valueAlias] = typeof collection[i] !== 'function' ? collection[i] : (function(original){
-            return function(){
-              return original.apply(collection, arguments);
-            };
-          }(collection[i]));
+          loopItemScope[valueAlias] = new this._Fallthrough(i);
         }
 
         if($resultsContents[i]){
