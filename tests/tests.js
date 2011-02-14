@@ -37,6 +37,21 @@ test('calling update returns the root', function(){
   equal(react.update(node, {}), node, 'same node was returned');
 });
 
+test('rendering to nodes that are nested in others still works', function(){
+  var $parent = $('<div></div>');
+  var $child = $('<div react="contain foo"></div>');
+  $parent.html($child);
+  react.update($child[0], {foo:'bar'});
+  equal($child.html(), 'bar', 'the child node got the appropriate content');
+});
+
+test('rendering to nodes that are nested in others still works, an additional layer deep', function(){
+  var $parent = $('<div></div>');
+  var $child = $('<div><div react="contain foo"></div></div>');
+  $parent.html($child);
+  react.update($child[0], {foo:'bar'});
+  equal($child.children().first().html(), 'bar', 'the child node got the appropriate content');
+});
 
 /*
  *  containing
@@ -178,7 +193,7 @@ test('requires at least an item template node and a contents node inside the loo
 });
 
 test('can loop across values in an array', function(){
-  var node = $('<div id=\"outter\" react="loop as which item"><div id=\"template\" react="contain item"></div><div id="container"></div></div>')[0];
+  var node = $('<div id="outter" react="loop as which item"><div id="item" react="contain item"></div><div id="container"></div></div>')[0];
   var itemTemplate = $(node).children()[0];
   var resultsHolder = $(node).children()[1];
   react.update(node, ['a','b','c']);
@@ -219,6 +234,21 @@ test('functions bound at loop time evaluate in correct context', function(){
     $($(resultsHolder).children()[1]).html(),
     $($(resultsHolder).children()[2]).html()
   ], ['a','b','b'], 'children\'s innerHTML is set to array key\'s contents');
+});
+
+test('looping several times on different sized arrays results in different amounts of result contents nodes', function(){
+  var node = $('\
+    <div react="loop">\
+      <div react="contain foo"></div>\
+    <span></span></div>\
+  ')[0];
+  var resultsHolder = $(node).children()[1];
+  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
+  same($(resultsHolder).children().length, 3, '3 children for inital render');
+  react.update(node, [{foo:'a'}, {foo:'b'}]);
+  same($(resultsHolder).children().length, 2, '2 children for inital render');
+  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}, {foo:'d'}]);
+  same($(resultsHolder).children().length, 4, '4 children for inital render');
 });
 
 test('looping without an as clause implies a within statement', function(){
@@ -347,6 +377,21 @@ test('functions can be dot accessed', function(){
 /*
  * anchor
  */
+
+test('can name objects', function(){
+  var obj = {};
+  react.name('foo', obj);
+  equal(react.scopes.foo, obj, 'react.scopes held the specified object at the specified name');
+});
+
+test('anchored nodes are prepended to scope chains on render', function(){
+  var outter = $('<div react="anchored \'obj\'"></div>')[0];
+  var inner = $('<div react="contain foo"></div>')[0];
+  $(outter).html(inner);
+  react.name('obj', {foo:'bar'});
+  react.update(outter, {});
+  equal($(inner).html(), 'bar', 'inner node had access to outter node\'s anchor object');
+});
 
 /*
 
