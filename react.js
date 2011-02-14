@@ -1,5 +1,5 @@
 /*!
- * React for JavaScript - an easy-rerender template language
+ * React for JavaScript 0.3 - an easy-rerender template language
  * http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
