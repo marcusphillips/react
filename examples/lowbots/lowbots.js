@@ -254,6 +254,7 @@ var move = {
     }
     //adding to the counter
     board.move_count++;
+    react.changed(board, 'move_count');
     //update its old indicator
     board[robot_list[current_robot].row][robot_list[current_robot].col].robot = null;
     react.changed(board[robot_list[current_robot].row][robot_list[current_robot].col], 'robot_color');
