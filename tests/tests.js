@@ -393,6 +393,8 @@ test('anchored nodes are prepended to scope chains on render', function(){
   equal($(inner).html(), 'bar', 'inner node had access to outter node\'s anchor object');
 });
 
+// todo: test support for anchoring to whole scope chains
+
 /*
 
 test('anchored nodes re-render on change', function(){

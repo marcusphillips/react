@@ -8,14 +8,11 @@
 
 
 /*
-loop updates internally?
-make a tree for scope chain
 anon functions holding scope
 remove update context?
 */
 
 // todo: add update(object, key) signature, for refreshing only from certain properties
-// todo: add set(object, key), for updating an object property and automatically incurring a call to soi.update() for same
 // todo: add augment(object), for adding an id and a set method directly to the object
 
 (function () {
@@ -79,8 +76,6 @@ remove update context?
 
     _buildScopeChainFor: function(node, directiveIndex, options){
       directiveIndex = directiveIndex || 0;
-      // todo: to improve automatic memory management, remove the _scopeChainCache cheat
-      //return node._scopeChainCache[directiveIndex];
       var lastLink;
       var that = this;
       var ancestors = $(Array.prototype.reverse.apply($(node).parents())).add(node);
@@ -295,13 +290,12 @@ remove update context?
       this.commands[command].apply(context, directive);
     },
 
-    // todo: support anchoring to whole scope chains
     anchor: function(node, object, options){
       var scopeChain = object ? [object] : options.scopeChain;
       var nodeKey = this.getNodeKey(node);
       this.nodes[nodeKey] = node;
       var directives = this._getDirectives(node);
-      // todo: any existing anchor cleanup?
+      // todo: clean up after any existing anchor
       directives.anchored = ['anchored'];
       for(var i = 0; i < scopeChain.length; i++){
         var scopeKey = this.getObjectKey(scopeChain[i]);
@@ -309,9 +303,8 @@ remove update context?
         directives.anchored.push('\''+scopeKey+'\'');
       }
       this._setDirectives(node, directives);
-      // todo: these react anchors need refactoring
-      object.reactAnchors = object.reactAnchors || {};
-      object.reactAnchors[nodeKey] = true;
+      object.anchors = object.anchors || {};
+      object.anchors[nodeKey] = true;
     },
 
     _Fallthrough: function(key){
