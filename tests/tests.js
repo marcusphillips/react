@@ -395,18 +395,22 @@ test('anchored nodes are prepended to scope chains on render', function(){
 
 // todo: test support for anchoring to whole scope chains
 
-/*
-
-test('anchored nodes re-render on change', function(){
+test('anchored nodes re-render on object change', function(){
   var object = {foo:1, bar:1};
   var node1 = $('<div react="contain foo"></div>')[0];
   var node2 = $('<div react="contain bar"></div>')[0];
   react.anchor(node1, object);
+  react.update(node1, object);
   react.anchor(node2, object);
+  react.update(node2, object);
   object.foo = object.bar = 2;
   react.changed(object);
   same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
 });
+
+// todo: test that calling changed on an object doesnt update all the sub properties
+
+/*
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};

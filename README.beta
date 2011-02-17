@@ -1,0 +1,35 @@
+additional documentation to be added
+
+
+--------
+
+
+ok, but how about something more interesting, like a whole chess game - how would you render that using this style?  easy:
+
+<body>
+  <div id="board"  react="loop">
+    <div react="loop">
+      <div react="class piece, class color"></div>
+    </div>
+  </div>
+
+  <script>
+    var chessboard = someChessLibrary.makeBoard();
+    react.anchor($('#board'), chessboard).render();
+  </script>
+</body>
+
+That's it.  After the call to render(), these 5 lines of template code will manage all the view updates for you. Whenver react gets notified of a change event on your js objects (and their contained objects), it will re-evaluate any relevant render directives.
+
+
+
+---
+
+other features
+- react is designed to hide from you until it's useful
+  - this means it doesn't impose any design patterns on you other than it's declaration syntax
+  - doesn't clutter your objects with lots of methods, uses one string hash 'observers'
+  - not top level
+    - so you can mix and match with other tools, jquery plugins, widgets, etc
+    - use on just one widget
+  - correct auto-escaping
