@@ -128,8 +128,10 @@ remove update context?
     _buildScopeChain: function(scopes, options){
       options = options || {};
       var lastLink = options.prefix;
-      for(var which = 0; which < scopes.length; which++){
-        lastLink = this._extendScopeChain(lastLink, scopes[which], options);
+      if(scopes){
+        for(var which = 0; which < scopes.length; which++){
+          lastLink = this._extendScopeChain(lastLink, scopes[which], options);
+        }
       }
       return lastLink;
     },
@@ -153,7 +155,7 @@ remove update context?
       //todo: test these
       //js.errorIf(!root, 'no root supplied to update()');
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
-      js.errorIf(scope && options.scope || scope && options.scopeChain || options.scope && options.scopeChain, 'you must supply only one set of scopes');
+      js.errorIf(scope && options.scope || scope && options.scopes || options.scope && options.scopes, 'you must supply only one set of scopes');
 
       var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
       var updateContext = js.create(this.commands, {
@@ -169,7 +171,8 @@ remove update context?
         loopItemScopes: {},
         loopItemTemplates: {}
       });
-      var baseScopeChain = this._buildScopeChain([scope] || [options.scope] || options.scopeChain, {type:'renderInputs', prefix:this._buildScopeChainFor(root)});
+      var scopes = scope ? [scope] : options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
+      var baseScopeChain = this._buildScopeChain(scopes, {type: 'renderInputs', prefix: this._buildScopeChainFor(root)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext);
 
       for(var i = 0; i < nodes.length; i++){

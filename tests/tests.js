@@ -400,9 +400,9 @@ test('anchored nodes re-render on object change', function(){
   var node1 = $('<div react="contain foo"></div>')[0];
   var node2 = $('<div react="contain bar"></div>')[0];
   react.anchor(node1, object);
-  react.update(node1, object);
+  react.update(node1);
   react.anchor(node2, object);
-  react.update(node2, object);
+  react.update(node2);
   object.foo = object.bar = 2;
   react.changed(object);
   same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
