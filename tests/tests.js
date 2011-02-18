@@ -408,6 +408,15 @@ test('anchored nodes re-render on object change', function(){
   same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
 });
 
+test('calling changed on anchored objects doesn\'t re-render properties on anchored nodes that are listening to other scopes', function(){
+  var object = {foo:'bar'};
+  var node = $('<div react="classIf foo foo"></div>')[0];
+  react.update(node, object, {anchor: true});
+  ok($(node).hasClass('bar'), 'node got correct first class');
+  react.set(object, 'foo', 'baz');
+  ok($(node).hasClass('baz'), 'node got correct second class');
+});
+
 // todo: test that calling changed on an object doesnt update all the sub properties
 
 /*

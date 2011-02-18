@@ -172,6 +172,10 @@ remove update context?
         loopItemTemplates: {}
       });
       var scopes = scope ? [scope] : options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
+      if(options.anchor){
+        this.anchor(root, null, {scopes:scopes});
+        scopes = undefined;
+      }
       var baseScopeChain = this._buildScopeChain(scopes, {type: 'renderInputs', prefix: this._buildScopeChainFor(root)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext);
 
@@ -301,12 +305,10 @@ remove update context?
       directives.anchored = ['anchored'];
       for(var i = 0; i < scopes.length; i++){
         var scopeKey = this.getObjectKey(scopes[i]);
-        this.scopes[scopeKey] = object;
+        this.scopes[scopeKey] = scopes[i];
         directives.anchored.push('\''+scopeKey+'\'');
       }
       this._setDirectives(node, directives);
-      object.anchors = object.anchors || {};
-      object.anchors[nodeKey] = true;
     },
 
     _Fallthrough: function(key){
