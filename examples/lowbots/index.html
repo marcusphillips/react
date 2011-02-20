@@ -9,14 +9,20 @@
     <script src="./ricochet.js"></script>
   </head>
 
-  <!--
-      the body tag of this document is both valid html and a valid react template.
+  <body>
+
+    <div id="explanation">
+      The body tag of this document is both valid html and a valid react template.
       It can be rendered as-is by the browser, and react can modify it in an update operation.
       Any such updates will be autmoatically repainted by the browser!
-      These 20 lines represent the entirety of the view code for this application, including
+      The follwing 20 lines of HTML lines represent the entirety of the view code for this application, including
       all the (implicit) node selection and modification that you would have had to manage manually in a non-reactive application.
-   -->
-  <body>
+      The game itself and all board dynamics were implemented independantly by my brother, <a href="https://github.com/sharksforcheap">Anthony Phillips</a>.
+    </div>
+
+    <hr/>
+
+    <!-- begin view code -->
     <div>Lowbots!!</div>
     <div react="showIf victorious">You win!!</div>
     <div react="contain move_count"></div>
@@ -37,8 +43,11 @@
         <div></div>
       </div>
     </div>
+    <!-- end view code -->
+
 
     <script>
+      <!-- bootstrapping -->
       var drawBoard = function(board){
         react.update($('body')[0], board);
       };

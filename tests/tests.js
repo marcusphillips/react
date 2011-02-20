@@ -131,7 +131,7 @@ test('conditional display', function(){
   react.update(node, {key:false});
   equal($(node).css('display'), 'none', 'node is hidden when key is false');
   react.update(node, {key:true});
-  equal($(node).css('display'), 'block', 'node is shown again when key is changed to true');
+  equal($(node).css('display') || 'block' /*chrome returns an empty string for default display value*/, 'block', 'node is shown again when key is changed to true');
 });
 
 test('conditional visibility', function(){
@@ -393,18 +393,24 @@ test('anchored nodes are prepended to scope chains on render', function(){
   equal($(inner).html(), 'bar', 'inner node had access to outter node\'s anchor object');
 });
 
-/*
+// todo: test support for anchoring to whole scope chains
 
-test('anchored nodes re-render on change', function(){
+test('anchored nodes re-render on object change', function(){
   var object = {foo:1, bar:1};
   var node1 = $('<div react="contain foo"></div>')[0];
   var node2 = $('<div react="contain bar"></div>')[0];
   react.anchor(node1, object);
+  react.update(node1, object);
   react.anchor(node2, object);
+  react.update(node2, object);
   object.foo = object.bar = 2;
   react.changed(object);
   same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
 });
+
+// todo: test that calling changed on an object doesnt update all the sub properties
+
+/*
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};
