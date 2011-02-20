@@ -131,7 +131,7 @@ test('conditional display', function(){
   react.update(node, {key:false});
   equal($(node).css('display'), 'none', 'node is hidden when key is false');
   react.update(node, {key:true});
-  equal($(node).css('display'), 'block', 'node is shown again when key is changed to true');
+  equal($(node).css('display') || 'block' /*chrome returns an empty string for default display value*/, 'block', 'node is shown again when key is changed to true');
 });
 
 test('conditional visibility', function(){

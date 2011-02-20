@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * http://github.com/marcusphillips/react
+ * Version 0.4, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
@@ -169,7 +169,7 @@ remove update context?
         loopItemScopes: {},
         loopItemTemplates: {}
       });
-      var baseScopeChain = this._buildScopeChain([scope] || [options.scope] || options.scopeChain, {type:'renderInputs', prefix:this._buildScopeChainFor(root)});
+      var baseScopeChain = this._buildScopeChain(scope ? [scope] : options.scope ? [options.scope] : options.scopes || [], {type:'renderInputs', prefix:this._buildScopeChainFor(root)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext);
 
       for(var i = 0; i < nodes.length; i++){
@@ -290,6 +290,7 @@ remove update context?
     },
 
     anchor: function(node, object, options){
+      options = options || {};
       var scopes = object ? [object] : options.scopes;
       var nodeKey = this.getNodeKey(node);
       this.nodes[nodeKey] = node;
@@ -366,6 +367,7 @@ remove update context?
       do {
         var object = scopeChain.scope;
         value = object[baseKey];
+
         if(scopeChain.anchorKey){
           // todo: add the .anchor property to scope chains
           this._observeScope(this.node, object, baseKey, this.directiveIndex, scopeChain.anchorKey, value !== undefined);
@@ -538,6 +540,10 @@ remove update context?
       } else {
         $(this.node).removeAttr(this.lookup(name));
       }
+    },
+
+    checkedIf: function(condition){
+      $(this.node).attr('checked', this.lookup(condition));
     }
 
   });
