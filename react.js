@@ -59,19 +59,29 @@ remove update context?
       }
       if(object.observers && object.observers[key]){
         for(var whichListener in object.observers[key]){
-          var listener = whichListener.split(' ');
-          var node = this.nodes[listener[0]];
-          var directiveIndex = listener[1];
-          var directiveContext = js.create(this.commands, {
-            node: node,
-            scopeChain: this._buildScopeChainFor(node, directiveIndex),
-            directiveIndex: directiveIndex
-          });
-          if(directiveContext.scopeChain.scope !== object){
+          var node = this.nodes[whichListener.split(' ')[0]];
+          var directiveIndex = whichListener.split(' ')[1];
+          var prefix = whichListener.split(' ')[2];
+          var directive = this._getDirectives(node)[directiveIndex];
+          var scopeChain = this._buildScopeChainFor(node, directiveIndex);
+
+          if(this.commands.lookup(prefix+key, {buildObjectList: true, scopeChain: scopeChain}) !== object){
             // this means the object is not found in the same path that lead to registration of a listener
             continue;
           }
-          this._followDirective(this._getDirectives(node)[directiveIndex], directiveContext);
+
+          if(js.among(['within', 'loop', 'atKey'], directive[0])){
+            // todo: atkey probably won't work, and maybe loop either
+            this._updateTree(node, null, {fromDirective: directiveIndex});
+            return;
+          }
+
+          var directiveContext = js.create(this.commands, {
+            node: node,
+            scopeChain: scopeChain,
+            directiveIndex: directiveIndex
+          });
+          this._followDirective(directive, directiveContext);
         }
       }
     },
@@ -176,7 +186,7 @@ remove update context?
         this.anchor(root, null, {scopes:scopes});
         scopes = undefined;
       }
-      var baseScopeChain = this._buildScopeChain(scopes, {type: 'renderInputs', prefix: this._buildScopeChainFor(root)});
+      var baseScopeChain = this._buildScopeChain(scopes, {type: 'renderInputs', prefix: this._buildScopeChainFor(root, options.firstDirective || 0)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext);
 
       for(var i = 0; i < nodes.length; i++){
@@ -311,6 +321,32 @@ remove update context?
       this._setDirectives(node, directives);
     },
 
+    _observeScope: function(node, object, prefix, key, directiveIndex, anchorKey, didMatch){
+      // todo: scoper observers per node-object anchoring, for easy cleanup of memory references
+      var nodeKey = this.getNodeKey(node);
+      this.nodes[nodeKey] = node;
+      var observations = node['directive ' + directiveIndex + ' observes'] = node['directive ' + directiveIndex + ' observes'] || [];
+      observations.push({object: object, key: key, didMatch: didMatch});
+      object.observers = object.observers || {};
+      object.observers[key] = object.observers[key] || {};
+      // todo: this ambiguates multiple observations between a single directive and a single key/object pair.  for example, the directive "attrIf foo foo foo" will result in all three observations being tied to the same single value 'true'
+      object.observers[key][nodeKey + ' ' + directiveIndex + ' ' + prefix] = true;
+    },
+
+    _disregardScope: function(node, directiveIndex){
+      // todo: check this, it might be jank
+      var nodeKey = this.getNodeKey(node);
+      var observations = node['directive ' + directiveIndex + ' observes'];
+      for(var whichObservation = 0; whichObservation <  observations.length; whichObservation++){
+        var observation = observations[whichObservation];
+        delete observation.object.observers[observation.key][nodeKey + ' ' + directiveIndex];
+      }
+      delete nodes.observing[directiveIndex];
+      if(!js.size(nodes.observing)){
+        delete this.nodes[nodeKey];
+      }
+    },
+
     _Fallthrough: function(key){
       this.key = key;
     }
@@ -350,10 +386,11 @@ remove update context?
    * }
    */
 
-    lookup: function(key){
+    // todo: factor lookup out into a library level helper called lookupInScopeChain that gets reinterfaced here
+    lookup: function(key, options){
+      options = options || {};
       var negate;
       var value;
-      var nodeKey = this.getNodeKey(this.node);
       if(key[0] === '!'){
         negate = true;
         key = key.slice(1);
@@ -366,14 +403,13 @@ remove update context?
 
       var keys = key.split('.');
       var baseKey = keys.shift();
-      var scopeChain = this.scopeChain;
+      var scopeChain = options.scopeChain ? options.scopeChain : this.scopeChain;
       // the search paths list holds a set of namespaces
       do {
         var object = scopeChain.scope;
         value = object[baseKey];
-        if(scopeChain.anchorKey){
-          // todo: add the .anchor property to scope chains
-          this._observeScope(this.node, object, baseKey, this.directiveIndex, scopeChain.anchorKey, value !== undefined);
+        if(scopeChain.anchorKey && !options.buildObjectList){
+          this._observeScope(this.node, object, '', baseKey, this.directiveIndex, scopeChain.anchorKey, value !== undefined);
         }
         if(value instanceof this._Fallthrough){
           baseKey = value.key;
@@ -382,44 +418,26 @@ remove update context?
         }
       }while((scopeChain = scopeChain.parent));
 
+      var prefix = baseKey + '.';
       // one for each segment of the dot acess
       while(keys.length){
         object = value;
-        js.errorIf(object === undefined || object === null, 'can\'t find keys '+keys.join('.')+' on an undefined object');
+        if(object === undefined || object === null){
+          return options.buildObjectList ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
+        }
+        prefix = prefix + keys[0] + '.';
         value = object[keys.shift()];
-        if(scopeChain.anchor){
-          this._observeScope(this.node, object, keys[0], scopeChain.anchorKey, this.directiveIndex, true);
+        if(scopeChain.anchorKey && !options.buildObjectList){
+          this._observeScope(this.node, object, prefix, keys[0], scopeChain.anchorKey, this.directiveIndex, true);
         }
       }
 
+      if(options.buildObjectList){
+        return object;
+      }
+
       if(typeof value === 'function'){ value = value.call(object); }
-
       return negate ? ! value : value;
-    },
-
-    _observeScope: function(node, object, key, directiveIndex, anchorKey, didMatch){
-      // todo: scoper observers per node-object anchoring, for easy cleanup of memory references
-      var nodeKey = this.getNodeKey(node);
-      this.nodes[nodeKey] = node;
-      var observations = node['directive ' + directiveIndex + ' observes'] = node['directive ' + directiveIndex + ' observes'] || [];
-      observations.push({object: object, key: key, didMatch: didMatch});
-      object.observers = object.observers || {};
-      object.observers[key] = object.observers[key] || {};
-      // todo: this ambiguates multiple observations between a single directive and a single key/object pair.  for example, the directive "attrIf foo foo foo" will result in all three observations being tied to the same single value 'true'
-      object.observers[key][nodeKey + ' ' + directiveIndex] = true;
-    },
-
-    _disregardScope: function(node, directiveIndex){
-      var nodeKey = this.getNodeKey(node);
-      var observations = nodes['directive ' + directiveIndex + ' observes'];
-      for(var whichObservation = 0; whichObservation <  observations.length; whichObservation++){
-        var observation = observations[whichObservation];
-        delete observation.object.observers[observation.key][nodeKey + ' ' + directiveIndex];
-      }
-      delete nodes.observing[directiveIndex];
-      if(!js.size(nodes.observing)){
-        delete this.nodes[nodeKey];
-      }
     },
 
     anchored: function(token){

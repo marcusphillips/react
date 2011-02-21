@@ -378,6 +378,8 @@ test('functions can be dot accessed', function(){
  * anchor
  */
 
+module('anchor');
+
 test('can name objects', function(){
   var obj = {};
   react.name('foo', obj);
@@ -408,13 +410,24 @@ test('anchored nodes re-render on object change', function(){
   same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
 });
 
-test('calling changed on anchored objects doesn\'t re-render properties on anchored nodes that are listening to other scopes', function(){
+test('changing values on an anchored object results in automatic change to the view', function(){
   var object = {foo:'bar'};
   var node = $('<div react="classIf foo foo"></div>')[0];
   react.update(node, object, {anchor: true});
   ok($(node).hasClass('bar'), 'node got correct first class');
   react.set(object, 'foo', 'baz');
+  ok(!$(node).hasClass('foo'), 'node does not have first class anymore');
   ok($(node).hasClass('baz'), 'node got correct second class');
+});
+
+test('calling changed on anchored objects doesn\'t re-render properties on anchored nodes that are listening to other scopes', function(){
+  var o1 = {foo:true}, o2 = {bar:true};
+  var node = $('<div react="classIf foo \'foo\', classIf bar \'bar\'"></div>')[0];
+  react.update(node, null, {scopes: [o1,o2], anchor: true});
+  same([$(node).hasClass('foo'), $(node).hasClass('bar')], [true, true], 'anchored nodes were initialized correctly');
+  o1.foo = o2.bar = false;
+  react.changed(o1);
+  same([$(node).hasClass('foo'), $(node).hasClass('bar')], [false, true], 'anchored nodes were updated when relevant object was changed, but not for properties on objects not notified of change');
 });
 
 // todo: test that calling changed on an object doesnt update all the sub properties
