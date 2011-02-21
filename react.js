@@ -9,6 +9,7 @@
 (function () {
 
 // todo: remove update context?
+// todo: change interface for update to be a single object hash
 // todo: add augment(object), for adding an id and a set method directly to the object
 
   var undefined;
