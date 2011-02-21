@@ -471,3 +471,41 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
 });
 
+test('changing object strucutre invalidates change propogation to the view', function(){
+  var object = {
+    foo: {
+      bar: 1
+    }
+  };
+  var node = $('<div react="within foo">\
+    <div react="contain bar"></div>\
+  </div>')[0];
+  react.update(node, object, {anchor: true});
+  var foo = object.foo;
+  object.foo = { bar: 'wrong' };
+  react.set(foo, 'bar', 'alsowrong');
+  same($(node).children().first().html(), '1', 'the property linked to the replaced object was not re-rendered');
+  object.foo = foo;
+  react.set(foo, 'bar', 'right');
+  same($(node).children().first().html(), 'right', 'the property linked to the replaced object was re-rendered after the object was put back');
+});
+
+test('changing dom strucutre invalidates change propogation to the view', function(){
+  var object = {
+    foo: {
+      bar: 1
+    }
+  };
+  var node = $('<div react="within foo">\
+    <div react="contain bar"></div>\
+  </div>')[0];
+  var $child = $(node).children();
+  react.update(node, object, {anchor: true});
+  $(node).html('');
+  react.set(object.foo, 'bar', 2);
+  same($child.html(), '1', 'the property linked to the replaced object was not re-rendered');
+  $(node).html($child);
+  react.set(object.foo, 'bar', 3);
+  same($child.html(), '3', 'the property linked to the replaced object was re-rendered after the object was put back');
+});
+

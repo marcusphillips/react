@@ -33,3 +33,5 @@ other features
     - so you can mix and match with other tools, jquery plugins, widgets, etc
     - use on just one widget
   - correct auto-escaping
+
+- a dom node is renderable and updatable

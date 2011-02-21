@@ -54,7 +54,7 @@
       if(object.observers && object.observers[key]){
         for(var whichListener in object.observers[key]){
           var node = this.nodes[whichListener.split(' ')[0]];
-          var directiveIndex = whichListener.split(' ')[1];
+          var directiveIndex = +whichListener.split(' ')[1];
           var prefix = whichListener.split(' ')[2];
           var directive = this._getDirectives(node)[directiveIndex];
           var scopeChain = this._buildScopeChainFor(node, directiveIndex);
@@ -97,29 +97,28 @@
         }
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
           var eachDirective = directives[whichDirective];
-          if(eachAncestor !== node || whichDirective < directiveIndex){
-            if(!lastLink){ continue; }
-            if(eachDirective[0] === 'within'){
-              lastLink = that._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]], {type:'within', key: eachDirective[1]});
-            }else if(eachDirective[0] === 'loop'){
-              if(eachDirective[1] === 'as'){
-                var loopAliases = {
-                  key: eachDirective.length === 3 ? eachDirective[1] : undefined,
-                  value: js.last(eachDirective)
-                };
+          if(eachAncestor === node && directiveIndex <= whichDirective){ break; }
+          if(!lastLink){ continue; }
+          if(eachDirective[0] === 'within'){
+            lastLink = that._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]], {type:'within', key: eachDirective[1]});
+          }else if(eachDirective[0] === 'loop'){
+            if(eachDirective[1] === 'as'){
+              var loopAliases = {
+                key: eachDirective.length === 3 ? eachDirective[1] : undefined,
+                value: js.last(eachDirective)
+              };
+            }
+          }else if(eachDirective[0] === 'atKey'){
+            if(loopAliases){
+              var loopItemScope = {};
+              if(loopAliases.key){
+                loopItemScope[loopAliases.key] = eachDirective[1];
               }
-            }else if(eachDirective[0] === 'atKey'){
-              if(loopAliases){
-                var loopItemScope = {};
-                if(loopAliases.key){
-                  loopItemScope[loopAliases.key] = eachDirective[1];
-                }
-                loopItemScope[loopAliases.value] = new that._Fallthrough(eachDirective[1]);
-                lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'atKey', key:eachDirective[1]});
-                delete loopAlias;
-              }else{
-                lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]]);
-              }
+              loopItemScope[loopAliases.value] = new that._Fallthrough(eachDirective[1]);
+              lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'atKey', key:eachDirective[1]});
+              delete loopAlias;
+            }else{
+              lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]]);
             }
           }
         }
@@ -346,6 +345,9 @@
     },
 
     _lookupInScopeChain: function(key, scopeChain, options){
+      if(!scopeChain){
+        return;
+      }
       options = options || {};
       var negate;
       var value;
