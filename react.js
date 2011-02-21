@@ -6,16 +6,11 @@
  * Dual licensed under the MIT or GPL Version 2 licenses.
  */
 
+(function () {
 
-/*
-anon functions holding scope
-remove update context?
-*/
-
+// todo: remove update context?
 // todo: add update(object, key) signature, for refreshing only from certain properties
 // todo: add augment(object), for adding an id and a set method directly to the object
-
-(function () {
 
   var undefined;
 
@@ -65,7 +60,7 @@ remove update context?
           var directive = this._getDirectives(node)[directiveIndex];
           var scopeChain = this._buildScopeChainFor(node, directiveIndex);
 
-          if(this.commands.lookup(prefix+key, {buildObjectList: true, scopeChain: scopeChain}) !== object){
+          if(this._lookupInScopeChain(prefix+key, scopeChain, {buildObjectList: true}) !== object){
             // this means the object is not found in the same path that lead to registration of a listener
             continue;
           }
@@ -322,7 +317,7 @@ remove update context?
       this._setDirectives(node, directives);
     },
 
-    _observeScope: function(node, object, prefix, key, directiveIndex, anchorKey, didMatch){
+    _observeScope: function(object, prefix, key, node, directiveIndex, anchorKey, didMatch){
       // todo: scoper observers per node-object anchoring, for easy cleanup of memory references
       var nodeKey = this.getNodeKey(node);
       this.nodes[nodeKey] = node;
@@ -350,6 +345,58 @@ remove update context?
 
     _Fallthrough: function(key){
       this.key = key;
+    },
+
+    _lookupInScopeChain: function(key, scopeChain, options){
+      options = options || {};
+      var negate;
+      var value;
+      if(key[0] === '!'){
+        negate = true;
+        key = key.slice(1);
+      }
+      if (this._matchers.isString.test(key)) {
+        return key.slice(1, key.length-1);
+      }
+
+      // todo: clean up any pre-existing observers
+
+      var keys = key.split('.');
+      var baseKey = keys.shift();
+      // the search paths list holds a set of namespaces
+      do {
+        var object = scopeChain.scope;
+        value = object[baseKey];
+        if(scopeChain.anchorKey && options.listener){
+          this._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, value !== undefined);
+        }
+        if(value instanceof this._Fallthrough){
+          baseKey = value.key;
+        }else if(value !== undefined){
+          break;
+        }
+      }while((scopeChain = scopeChain.parent));
+
+      var prefix = baseKey + '.';
+      // one for each segment of the dot acess
+      while(keys.length){
+        object = value;
+        if(object === undefined || object === null){
+          return options.buildObjectList ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
+        }
+        prefix = prefix + keys[0] + '.';
+        value = object[keys.shift()];
+        if(scopeChain.anchorKey && !options.buildObjectList){
+          this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
+        }
+      }
+
+      if(options.buildObjectList){
+        return object;
+      }
+
+      if(typeof value === 'function'){ value = value.call(object); }
+      return negate ? ! value : value;
     }
 
   };
@@ -390,55 +437,11 @@ remove update context?
     // todo: factor lookup out into a library level helper called lookupInScopeChain that gets reinterfaced here
     lookup: function(key, options){
       options = options || {};
-      var negate;
-      var value;
-      if(key[0] === '!'){
-        negate = true;
-        key = key.slice(1);
-      }
-      if (this._matchers.isString.test(key)) {
-        return key.slice(1, key.length-1);
-      }
-
-      // todo: clean up any pre-existing observers
-
-      var keys = key.split('.');
-      var baseKey = keys.shift();
-      var scopeChain = options.scopeChain ? options.scopeChain : this.scopeChain;
-      // the search paths list holds a set of namespaces
-      do {
-        var object = scopeChain.scope;
-        value = object[baseKey];
-        if(scopeChain.anchorKey && !options.buildObjectList){
-          this._observeScope(this.node, object, '', baseKey, this.directiveIndex, scopeChain.anchorKey, value !== undefined);
-        }
-        if(value instanceof this._Fallthrough){
-          baseKey = value.key;
-        }else if(value !== undefined){
-          break;
-        }
-      }while((scopeChain = scopeChain.parent));
-
-      var prefix = baseKey + '.';
-      // one for each segment of the dot acess
-      while(keys.length){
-        object = value;
-        if(object === undefined || object === null){
-          return options.buildObjectList ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
-        }
-        prefix = prefix + keys[0] + '.';
-        value = object[keys.shift()];
-        if(scopeChain.anchorKey && !options.buildObjectList){
-          this._observeScope(this.node, object, prefix, keys[0], scopeChain.anchorKey, this.directiveIndex, true);
-        }
-      }
-
-      if(options.buildObjectList){
-        return object;
-      }
-
-      if(typeof value === 'function'){ value = value.call(object); }
-      return negate ? ! value : value;
+      options.listener = {
+        node: this.node,
+        directiveIndex: this.directiveIndex
+      };
+      return this._lookupInScopeChain(key, this.scopeChain, options);
     },
 
     anchored: function(token){

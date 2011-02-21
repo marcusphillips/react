@@ -430,17 +430,13 @@ test('calling changed on anchored objects doesn\'t re-render properties on ancho
   same([$(node).hasClass('foo'), $(node).hasClass('bar')], [false, true], 'anchored nodes were updated when relevant object was changed, but not for properties on objects not notified of change');
 });
 
-// todo: test that calling changed on an object doesnt update all the sub properties
-
-/*
-
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};
   var node = $('<div>\
     <div react="contain foo"></div>\
     <div react="contain bar"></div>\
   </div>')[0];
-  react.anchor(node, object);
+  react.update(node, object, {anchor: true});
   object.bar = 2;
   react.set(object, 'foo', 2);
   same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
@@ -460,10 +456,6 @@ test('unanchored nodes can have properties set with no side effects', function()
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are alos not rerendered');
 });
 
-*/
-
-/*
-
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:{
     baz: 1
@@ -474,10 +466,8 @@ test('updating anchored nodes does not revisit all nodes', function(){
       <div react="contain baz"></div>\
     </div>\
   </div>')[0];
-  react.anchor(node, object);
+  react.update(node, object, {anchor: true});
   react.set(object.bar, 'baz', 2);
   same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
 });
 
-
-*/
