@@ -9,7 +9,6 @@
 (function () {
 
 // todo: remove update context?
-// todo: add update(object, key) signature, for refreshing only from certain properties
 // todo: add augment(object), for adding an id and a set method directly to the object
 
   var undefined;
@@ -60,7 +59,7 @@
           var directive = this._getDirectives(node)[directiveIndex];
           var scopeChain = this._buildScopeChainFor(node, directiveIndex);
 
-          if(this._lookupInScopeChain(prefix+key, scopeChain, {buildObjectList: true}) !== object){
+          if(this._lookupInScopeChain(prefix+key, scopeChain, {returnObject: true}) !== object){
             // this means the object is not found in the same path that lead to registration of a listener
             continue;
           }
@@ -92,8 +91,6 @@
         if(directives.anchored){
           for(var whichToken = 1; whichToken < directives.anchored.length; whichToken++){
             var scopeKey = directives.anchored[whichToken];
-            js.errorIf(!that._matchers.isString.test(scopeKey), 'not sure how, but this anchored directive got effed.  it\'s supposed to be auto-generated...');
-            scopeKey = scopeKey.slice(1,scopeKey.length-1);
             js.errorIf(!that.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
             lastLink = that._extendScopeChain(lastLink, that.scopes[scopeKey], {type:'anchor', key: scopeKey});
           }
@@ -155,6 +152,7 @@
       return this._updateTree.apply(this, arguments);
     },
 
+    // todo: add update(object, key) signature, for refreshing only from certain properties
     _updateTree: function(root, scope, options){
       options = options || {};
       //todo: test these
@@ -312,7 +310,7 @@
       for(var i = 0; i < scopes.length; i++){
         var scopeKey = this.getObjectKey(scopes[i]);
         this.scopes[scopeKey] = scopes[i];
-        directives.anchored.push('\''+scopeKey+'\'');
+        directives.anchored.push(scopeKey);
       }
       this._setDirectives(node, directives);
     },
@@ -382,16 +380,16 @@
       while(keys.length){
         object = value;
         if(object === undefined || object === null){
-          return options.buildObjectList ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
+          return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
         }
         prefix = prefix + keys[0] + '.';
         value = object[keys.shift()];
-        if(scopeChain.anchorKey && !options.buildObjectList){
+        if(scopeChain.anchorKey && !options.returnObject){
           this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
         }
       }
 
-      if(options.buildObjectList){
+      if(options.returnObject){
         return object;
       }
 
@@ -445,8 +443,6 @@
     },
 
     anchored: function(token){
-      js.errorIf(!this._matchers.isString.test(token), 'anchored directive requires a string');
-      token = token.slice(1, length-1);
       this.pushScope(this.scopes[token], {type:'anchor', key:token});
     },
 

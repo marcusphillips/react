@@ -387,7 +387,7 @@ test('can name objects', function(){
 });
 
 test('anchored nodes are prepended to scope chains on render', function(){
-  var outter = $('<div react="anchored \'obj\'"></div>')[0];
+  var outter = $('<div react="anchored obj"></div>')[0];
   var inner = $('<div react="contain foo"></div>')[0];
   $(outter).html(inner);
   react.name('obj', {foo:'bar'});
