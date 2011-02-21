@@ -1,4 +1,6 @@
+remove update context?
+change interface for update to be a single object hash
+
 write tests:
-  undoing things changes them
-  empty mv string doesnt break univers
+  empty react attribute string doesnt break univers
 
