@@ -8,10 +8,6 @@
 
 (function () {
 
-// todo: remove update context?
-// todo: change interface for update to be a single object hash
-// todo: add augment(object), for adding an id and a set method directly to the object
-
   var undefined;
 
   window.react = {
@@ -323,7 +319,6 @@
       observations.push({object: object, key: key, didMatch: didMatch});
       object.observers = object.observers || {};
       object.observers[key] = object.observers[key] || {};
-      // todo: this ambiguates multiple observations between a single directive and a single key/object pair.  for example, the directive "attrIf foo foo foo" will result in all three observations being tied to the same single value 'true'
       object.observers[key][nodeKey + ' ' + directiveIndex + ' ' + prefix] = true;
     },
 
@@ -435,7 +430,6 @@
    * }
    */
 
-    // todo: factor lookup out into a library level helper called lookupInScopeChain that gets reinterfaced here
     lookup: function(key, options){
       options = options || {};
       options.listener = {
