@@ -149,12 +149,21 @@
     },
 
     // todo: add update(object, key) signature, for refreshing only from certain properties
-    _updateTree: function(root, scope, options){
+    _updateTree: function(options){
       options = options || {};
+      if(options.nodeType){
+        options = {
+          node: arguments[0],
+          scope: arguments[1]
+        };
+      }
+
+      var root = options.node;
+
       //todo: test these
       //js.errorIf(!root, 'no root supplied to update()');
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
-      js.errorIf(scope && options.scope || scope && options.scopes || options.scope && options.scopes, 'you must supply only one set of scopes');
+      js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
       var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
       var updateContext = js.create(this.commands, {
@@ -170,9 +179,9 @@
         loopItemScopes: {},
         loopItemTemplates: {}
       });
-      var scopes = scope ? [scope] : options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
+      var scopes = options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
       if(options.anchor){
-        this.anchor(root, null, {scopes:scopes});
+        this.anchor({node: root, scopes:scopes});
         scopes = undefined;
       }
       var baseScopeChain = this._buildScopeChain(scopes, {type: 'renderInputs', prefix: this._buildScopeChainFor(root, options.firstDirective || 0)});
@@ -295,9 +304,17 @@
       this.commands[command].apply(context, directive);
     },
 
-    anchor: function(node, object, options){
+    anchor: function(options){
       options = options || {};
-      var scopes = object ? [object] : options.scopes;
+      if(options.nodeType){
+        options = {
+          node: arguments[0],
+          scope: arguments[1]
+        };
+      }
+      var node = options.node;
+      var scopes = options.scope ? [options.scope] : options.scopes;
+
       var nodeKey = this.getNodeKey(node);
       this.nodes[nodeKey] = node;
       var directives = this._getDirectives(node);

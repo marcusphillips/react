@@ -413,7 +413,7 @@ test('anchored nodes re-render on object change', function(){
 test('changing values on an anchored object results in automatic change to the view', function(){
   var object = {foo:'bar'};
   var node = $('<div react="classIf foo foo"></div>')[0];
-  react.update(node, object, {anchor: true});
+  react.update({node: node, scope: object, anchor: true});
   ok($(node).hasClass('bar'), 'node got correct first class');
   react.set(object, 'foo', 'baz');
   ok(!$(node).hasClass('foo'), 'node does not have first class anymore');
@@ -423,7 +423,7 @@ test('changing values on an anchored object results in automatic change to the v
 test('calling changed on anchored objects doesn\'t re-render properties on anchored nodes that are listening to other scopes', function(){
   var o1 = {foo:true}, o2 = {bar:true};
   var node = $('<div react="classIf foo \'foo\', classIf bar \'bar\'"></div>')[0];
-  react.update(node, null, {scopes: [o1,o2], anchor: true});
+  react.update({node: node, scopes: [o1,o2], anchor: true});
   same([$(node).hasClass('foo'), $(node).hasClass('bar')], [true, true], 'anchored nodes were initialized correctly');
   o1.foo = o2.bar = false;
   react.changed(o1);
@@ -436,7 +436,7 @@ test('updating anchored nodes does not revisit all nodes', function(){
     <div react="contain foo"></div>\
     <div react="contain bar"></div>\
   </div>')[0];
-  react.update(node, object, {anchor: true});
+  react.update({node: node, scope: object, anchor: true});
   object.bar = 2;
   react.set(object, 'foo', 2);
   same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
@@ -466,7 +466,7 @@ test('updating anchored nodes does not revisit all nodes', function(){
       <div react="contain baz"></div>\
     </div>\
   </div>')[0];
-  react.update(node, object, {anchor: true});
+  react.update({node: node, scope: object, anchor: true});
   react.set(object.bar, 'baz', 2);
   same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
 });
@@ -480,7 +480,7 @@ test('changing object strucutre invalidates change propogation to the view', fun
   var node = $('<div react="within foo">\
     <div react="contain bar"></div>\
   </div>')[0];
-  react.update(node, object, {anchor: true});
+  react.update({node: node, scope: object, anchor: true});
   var foo = object.foo;
   object.foo = { bar: 'wrong' };
   react.set(foo, 'bar', 'alsowrong');
@@ -500,7 +500,7 @@ test('changing dom strucutre invalidates change propogation to the view', functi
     <div react="contain bar"></div>\
   </div>')[0];
   var $child = $(node).children();
-  react.update(node, object, {anchor: true});
+  react.update({node: node, scope: object, anchor: true});
   $(node).html('');
   react.set(object.foo, 'bar', 2);
   same($child.html(), '1', 'the property linked to the replaced object was not re-rendered');
