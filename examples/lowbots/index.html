@@ -26,33 +26,31 @@
     <div>Lowbots!!</div>
     <div react="showIf victorious">You win!!</div>
     <div react="contain move_count"></div>
-    <div class="board">
-      <div react="loop">
-        <div class="row" react="loop">
-          <div class="square" react="classIf n_border 'n_border',
-                                     classIf s_border 's_border',
-                                     classIf e_border 'e_border',
-                                     classIf w_border 'w_border',
-                                     classIf no_target 'no_target',
-                                     classIf is_target 'is_target',
-                                     classIf robot_color robot_color">
-          </div>
-          <div></div>
-          <div class="clearfix"></div>
+    <div class="board" react="loop">
+      <div class="row" react="loop">
+        <div class="square" react="classIf n_border 'n_border',
+                                   classIf s_border 's_border',
+                                   classIf e_border 'e_border',
+                                   classIf w_border 'w_border',
+                                   classIf no_target 'no_target',
+                                   classIf is_target 'is_target',
+                                   classIf robot_color robot_color">
         </div>
-        <div></div>
+        <div class="rowLopResultsContainer"></div>
+        <div class="clearfix"></div>
       </div>
+      <div class="boardLoopResultsContainer"></div>
     </div>
     <!-- end view code -->
 
 
     <script>
-      <!-- bootstrapping -->
-      var drawBoard = function(board){
-        react.update($('body')[0], board);
-      };
-      react.anchor($('body')[0], board);
-      drawBoard(board);
+      <!-- Update parent node with the state object, and enable anchoring to watch for future changes on the object -->
+      react.update({
+        node: $('body')[0],
+        scope: board,
+        anchor: true
+      });
     </script>
 
   </body>
