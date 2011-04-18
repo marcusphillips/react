@@ -1,6 +1,7 @@
-remove update context?
-change interface for update to be a single object hash
+- remove update context?
+- change interface for update to be a single object hash
+- make contain statements html escape string substitutions
 
 write tests:
-  empty react attribute string doesnt break univers
+- empty react attribute string doesnt break univers
 
