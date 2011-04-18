@@ -109,31 +109,31 @@ Note: To improve speed and consistency, item nodes are not regenerated on subseq
 #### `loop as ([<string> indexAlias,] <*> valueAlias)`
 Operates the same as as a normal call to loop, but instead of pushing each item onto the scope chain, it adds an alias binding for the item value, and optionally, for the key.
 
-#### `displayIf(<bool> condition)`
+#### `displayIf(<bool> condition)`:
 Sets the CSS property `display` to `none` if `condition` is false, and back to the default if it is true
 
-#### `visIf(<bool> condition)`
+#### `visIf(<bool> condition)`:
 Sets the CSS property `visibility` to `hidden` if `condition` is false, and back to default if it is true
 
-#### `checkedIf(<bool> condition)`
+#### `checkedIf(<bool> condition)`:
 Sets checked to active on the current node if `condition` is true.  Otherwise, sets it to false.
 
-#### `class(<string> name)`
+#### `class(<string> name)`:
 Adds the class as specified by `name` to the operative node.
 
-#### `classIf(<bool> condition, <string> name)`
+#### `classIf(<bool> condition, <string> name)`:
 Adds the class specified by `name` to the operative node if `condition` is true.  Otherwise, removes the class.
 
-#### `attr(<string> attrName, <string/number> value)`
+#### `attr(<string> attrName, <string/number> value)`:
 Sets the attribute specified by `attrName` to the specified value.
 
-#### `attrIf(<bool> condition, <string> name, <string/number> value)`
+#### `attrIf(<bool> condition, <string> name, <string/number> value)`:
 Sets the attribute specified by `attrName` to the specified value if `condition` is true.  Otherwise, removes the attribute.
 
-#### `(not yet supported) style(<string> name, <string/number> value)`
+#### `(not yet supported) style(<string> name, <string/number> value)`:
 Sets the style property specified by `attrName` to the specified value.
 
-#### `(not yet supported) styleIf(<bool> condition, <string> name, <string/number> value)`
+#### `(not yet supported) styleIf(<bool> condition, <string> name, <string/number> value)`:
 Sets the style property specified by `attrName` to the specified value if `condition` is true.  Otherwise, removes the style.
 
 
