@@ -309,6 +309,25 @@ test('originally rendered nodes are preserved on rerender', function(){
   }
 });
 
+test('loop and within on the same tag', function(){
+       var node = $('\
+         <div react="within header.coreReports, loop as key val">\
+           <li><a href="" react="attr \'href\' val.link, contain val.title"></a></li>\
+           <ul class="core-report-list"> </ul>\
+         </div>\
+       ')[0];
+       
+       var app = {
+         header : { 
+           coreReports :  [
+             { title : "title 1", link : "#link1" }
+           ]
+         }
+       };
+         
+       react.anchor(node, app);
+       react.update(node);
+});
 
 /*
  * within
