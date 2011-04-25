@@ -206,6 +206,36 @@ test('can loop across values in an array', function(){
   equal($(itemTemplate).html(), '', 'item template was unchanged');
 });
 
+test('does not operate on loop item template node', function(){
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div id="item" react="contain item">stuff</div>\
+    <div id="container"></div></div>\
+  ')[0];
+  var itemTemplate = $(node).children()[0];
+  react.update(node, ['a','b','c']);
+  equal($(itemTemplate).html(), 'stuff', 'item template was unchanged');
+});
+
+test('does not operate on descendants of loop item template node', function(){
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div id="item"><div id="descendant" react="contain item">stuff</div></div>\
+    <div id="container"></div></div>\
+  ')[0];
+  var itemTemplate = $(node).children()[0];
+  react.update(node, ['a','b','c']);
+  equal($(itemTemplate).find('#descendant').html(), 'stuff', 'item template was unchanged');
+});
+
+test('does not operate on descendants of loop item template node, even when loop item template has no react attribute', function(){
+  react.update($('\
+    <div react="loop as val">\
+      <li><a react="attr \'href\' val"></a></li>\
+    <ul></ul></div>\
+  ')[0], ['foo']);
+});
+
 test('can loop across keys in an array', function(){
   var node = $('\
     <div react="loop as which item">\

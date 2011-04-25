@@ -203,7 +203,8 @@
         } else if (
           ancestor.getAttribute('react') ||
           updateContext.bequeathedScopeChains[this.getNodeKey(ancestor)] ||
-          updateContext.loopItemScopes[this.getNodeKey(ancestor)] // todo: change this to inheritedScopeChains
+          updateContext.loopItemScopes[this.getNodeKey(ancestor)] || // todo: change this to inheritedScopeChains
+          updateContext.loopItemTemplates[this.getNodeKey(ancestor)]
         ){
           return ancestor;
         }
@@ -215,7 +216,7 @@
     _updateNode: function(node, updateContext){
       //todo: test that you never revisit a node
       var nodeKey = this.getNodeKey(node);
-      if(updateContext.bequeathedScopeChains[nodeKey]){
+      if(typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined'){
         // node has already been visited
         return;
       }
@@ -224,15 +225,18 @@
       var parent = this._getParent(node, updateContext);
       // if processing the parent leads to this node having a new parent, repeat
       while(parent !== previousParent){
+        if(!parent){
+          updateContext.bequeathedScopeChains[nodeKey] = false;
+          return;
+        }
+        this._updateNode(parent, updateContext);
         if(
-          !parent ||
           updateContext.bequeathedScopeChains[this.getNodeKey(parent)] === false ||
           updateContext.loopItemTemplates[nodeKey] // todo: remove this by adding a completion flag during loop traversal
         ){
           updateContext.bequeathedScopeChains[nodeKey] = false;
           return;
         }
-        this._updateNode(parent, updateContext);
         previousParent = parent;
         parent = this._getParent(node, updateContext);
       }
