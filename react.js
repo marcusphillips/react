@@ -54,15 +54,15 @@
           var directiveIndex = +whichListener.split(' ')[1];
           var prefix = whichListener.split(' ')[2];
           var directive = this._getDirectives(node)[directiveIndex];
-          var scopeChain = this._buildScopeChainFor(node, directiveIndex);
+          var scopeChain = this._buildScopeChainForNode(node, directiveIndex);
 
           if(this._lookupInScopeChain(prefix+key, scopeChain, {returnObject: true}) !== object){
             // this means the object is not found in the same path that lead to registration of a listener
             continue;
           }
 
-          if(js.among(['within', 'loop', 'atKey'], directive[0])){
-            // todo: atkey probably won't work, and maybe loop either
+          if(js.among(['within', 'loop', 'loopKey'], directive[0])){
+            // todo: loopKey probably won't work, and maybe loop either
             this._updateTree(node, null, {fromDirective: directiveIndex});
             return;
           }
@@ -77,7 +77,7 @@
       }
     },
 
-    _buildScopeChainFor: function(node, directiveIndex, options){
+    _buildScopeChainForNode: function(node, directiveIndex, options){
       directiveIndex = directiveIndex || 0;
       var lastLink;
       var that = this;
@@ -105,14 +105,14 @@
                 value: js.last(eachDirective)
               };
             }
-          }else if(eachDirective[0] === 'atKey'){
+          }else if(eachDirective[0] === 'loopKey'){
             if(loopAliases){
               var loopItemScope = {};
               if(loopAliases.key){
                 loopItemScope[loopAliases.key] = eachDirective[1];
               }
               loopItemScope[loopAliases.value] = new that._Fallthrough(eachDirective[1]);
-              lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'atKey', key:eachDirective[1]});
+              lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:eachDirective[1]});
               delete loopAlias;
             }else{
               lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]]);
@@ -140,6 +140,7 @@
         parent: link,
         scope: additionalScope,
         type: options.type,
+        key: options.key,
         anchorKey: options.type === 'anchor' ? options.key : (link||{}).anchorKey
       };
     },
@@ -184,7 +185,7 @@
         this.anchor({node: root, scopes:scopes});
         scopes = undefined;
       }
-      var baseScopeChain = this._buildScopeChain(scopes, {type: 'renderInputs', prefix: this._buildScopeChainFor(root, options.firstDirective || 0)});
+      var baseScopeChain = this._buildScopeChain(scopes, {type: 'updateInputs', prefix: this._buildScopeChainForNode(root, options.firstDirective || 0)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext);
 
       for(var i = 0; i < nodes.length; i++){
@@ -232,7 +233,7 @@
         this._updateNode(parent, updateContext);
         if(
           updateContext.bequeathedScopeChains[this.getNodeKey(parent)] === false ||
-          updateContext.loopItemTemplates[nodeKey] // todo: remove this by adding a completion flag during loop traversal
+          updateContext.loopItemTemplates[this.getNodeKey(parent)]
         ){
           updateContext.bequeathedScopeChains[nodeKey] = false;
           return;
@@ -303,9 +304,30 @@
     },
 
     _followDirective: function(directive, context){
-      var command = directive.shift();
-      js.errorIf(!this.commands[command], command+' is not a valid react command');
-      this.commands[command].apply(context, directive);
+      try{
+        var command = directive.shift();
+        js.errorIf(!this.commands[command], command+' is not a valid react command');
+        this.commands[command].apply(context, directive);
+      }catch (error){
+        var directive = this._getDirectives(context.node)[context.directiveIndex];
+        js.log('Failure during React update: ', {
+          'original error': error,
+          'while processing node': context.node,
+          'index of failed directive': context.directiveIndex,
+          'directive call': directive[0]+'('+directive.slice(1).join(', ')+')',
+          'scope chain description': this._describeScopeChain(context.scopeChain),
+          '(internal scope chain object) ': context.scopeChain
+        });
+        throw error;
+      }
+    },
+
+    _describeScopeChain: function(link){
+      var scopeChainDescription = [];
+      do{
+        scopeChainDescription.push(['scope: ', link.scope, ', ' + 'type of scope shift: ' + link.type + (link.key ? '(key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
+      }while(link = link.parent);
+      return scopeChainDescription;
     },
 
     anchor: function(options){
@@ -330,6 +352,7 @@
         directives.anchored.push(scopeKey);
       }
       this._setDirectives(node, directives);
+      return options.node;
     },
 
     _observeScope: function(object, prefix, key, node, directiveIndex, anchorKey, didMatch){
@@ -503,7 +526,7 @@
       // todo: return here (and everywhere else) if collection is undefined.  test for this
 
       var $loopChildren = jQuery(this.node).children();
-      js.errorIf($loopChildren.length < 2, 'rv looping nodes must contain at least 2 children - one item template and one results container');
+      js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
       var $itemTemplate = $loopChildren.first();
       //js.errorIf(this._getDirectives($itemTemplate[0])[0].join(' ') !== 'item', 'the item template must declare itself with an item directive');
       this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
@@ -511,6 +534,7 @@
       var $resultsContents = $resultsContainer.children();
 
       var collection = this.scopeChain.scope;
+      js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
       var loopItemScope;
 
       var itemNodes = [];
@@ -533,7 +557,7 @@
           itemNode = $itemTemplate.clone()[0];
           // todo: implement bindings as key aliases
           js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys');
-          this._prependDirective(itemNode, ['atKey', i]);
+          this._prependDirective(itemNode, ['loopKey', i]);
           this.enqueueNodes([itemNode].concat(Array.prototype.slice.apply(itemNode.querySelectorAll('[react]'))));
         }
         this.loopItemScopes[this.getNodeKey(itemNode)] = loopItemScope;
@@ -546,9 +570,9 @@
       }
     },
 
-    atKey: function(key){
+    loopKey: function(key){
       if(this.loopItemScopes[this.getNodeKey(this.node)]){
-        this.pushScope(this.loopItemScopes[this.getNodeKey(this.node)], {type:'atKey', key:key});
+        this.pushScope(this.loopItemScopes[this.getNodeKey(this.node)], {type:'loopKey', key:key});
       }else{
         this.within(key);
       }
@@ -565,11 +589,15 @@
     attr: function(name, value){
       name = this.lookup(name);
       value = this.lookup(value);
-      js.errorIf(
-        !js.among(['string', 'number'], typeof name) ||
-        !js.among(['string', 'number'], typeof value),
-        'attr names and values must resolve to a string or number'
-      );
+
+      if(!js.among(['string', 'number'], typeof name)){
+        js.log('bad attr name: ', name);
+        js.error('expected attr name token ' + name + ' to resolve to a string or number, not ' + typeof name);
+      }else if(!js.among(['string', 'number'], typeof value)){
+        js.log('bad attr value: ', value);
+        js.error('expected attr value token ' + value + ' to resolve to a string or number not, not ' + typeof value);
+      }
+
       jQuery(this.node).attr(name, value);
     },
 

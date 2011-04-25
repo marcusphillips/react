@@ -193,8 +193,11 @@ test('requires at least an item template node and a contents node inside the loo
 });
 
 test('can loop across values in an array', function(){
-  var node = $('<div id="outter" react="loop as which item"><div id="item" react="contain item"></div><div id="container"></div></div>')[0];
-  var itemTemplate = $(node).children()[0];
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div id="item" react="contain item"></div>\
+    <div id="container"></div></div>\
+  ')[0];
   var resultsHolder = $(node).children()[1];
   react.update(node, ['a','b','c']);
   equal($(node).children().last().children().length, 3, 'results container node contains three child elements');
@@ -203,7 +206,6 @@ test('can loop across values in an array', function(){
     $($(resultsHolder).children()[1]).html(),
     $($(resultsHolder).children()[2]).html()
   ], ['a','b','c'], 'children\'s innerHTML is set to array items\' contents');
-  equal($(itemTemplate).html(), '', 'item template was unchanged');
 });
 
 test('does not operate on loop item template node', function(){
