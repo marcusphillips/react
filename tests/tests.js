@@ -492,6 +492,33 @@ test('test that within dose not break changed loop', function(){
   same(jQuery( '#bang', node)[0].innerHTML, '6', 'bang gets set');
 });
 
+
+test("test that event handlers don't dissapear", function(){
+  var object = {foo:1};
+  var node = $('<div><div id="foo" react="contain foo"></div><div>')[0];
+
+  jQuery( '#foo', node).bind( 'click', 
+    function ( event ) { 
+                         object.foo += 1; 
+                         react.changed( object ); 
+                         return false; 
+                              } );
+
+  react.update({node: node, scope: object, anchor: true});
+
+  same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
+
+  jQuery( '#foo', node).trigger( 'click' );
+  
+  same(jQuery( '#foo', node)[0].innerHTML, '2', 'foo got updated');
+
+  jQuery( '#foo', node).trigger( 'click' );
+
+  same(jQuery( '#foo', node)[0].innerHTML, '3', 'foo got updated after changed');
+});
+
+
+
 test('test that we cat change values at different nesting depths', function(){
        var object = {value:-1, one:{ value:-1, two:{ value:-1, three:{ value:-1 }}}};
   var node = $('<div>\
