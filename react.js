@@ -333,7 +333,7 @@
     },
 
     _observeScope: function(object, prefix, key, node, directiveIndex, anchorKey, didMatch){
-      // todo: scoper observers per node-object anchoring, for easy cleanup of memory references
+      // todo: scope observers per node-object anchoring, for easy cleanup of memory references
       var nodeKey = this.getNodeKey(node);
       this.nodes[nodeKey] = node;
       var observations = node['directive ' + directiveIndex + ' observes'] = node['directive ' + directiveIndex + ' observes'] || [];
@@ -401,11 +401,11 @@
         if(object === undefined || object === null){
           return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
         }
-        prefix = prefix + keys[0] + '.';
-        value = object[keys.shift()];
         if(scopeChain.anchorKey && !options.returnObject){
           this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
         }
+        prefix = prefix + keys[0] + '.';
+        value = object[keys.shift()];
       }
 
       if(options.returnObject){
