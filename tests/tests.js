@@ -619,3 +619,24 @@ test('regression test - values at various depths are correctly bound and updated
   same(jQuery('#three', node)[0].innerHTML, '3', 'depth three got set');
 });
 
+test('regression test - within directive doesn\'t halt updates to the changed loop', function(){
+  // https://github.com/marcusphillips/react/issues/3
+  var object = {bar:{prop:'original'}};
+  var node = $('<div>\
+    <div react="within bar">\
+      <div id="foo" react="contain prop"></div>\
+    </div>\
+    <div react="within bar">\
+      <div id="bar" react="contain prop"></div>\
+    </div>\
+    <div react="within bar">\
+      <div id="baz" react="contain prop">\
+    </div>\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  object.bar.prop = 'changed';
+  react.changed(object);
+  same(jQuery('#foo', node)[0].innerHTML, 'changed', 'foo gets set');
+  same(jQuery('#bar', node)[0].innerHTML, 'changed', 'bar gets set');
+  same(jQuery('#baz', node)[0].innerHTML, 'changed', 'baz gets set');
+});

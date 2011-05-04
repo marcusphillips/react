@@ -64,7 +64,7 @@
           if(js.among(['within', 'loop', 'atKey'], directive[0])){
             // todo: atkey probably won't work, and maybe loop either
             this._updateTree(node, null, {fromDirective: directiveIndex});
-            return;
+            continue;
           }
 
           var directiveContext = js.create(this.commands, {
