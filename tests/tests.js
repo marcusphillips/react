@@ -473,6 +473,79 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
 });
 
+test('test that within dose not break changed loop', function(){
+  var object = {bar:{ baz:2 }, foo:1, bang:3 };
+  var node = $('<div>\
+    <div id="foo" react="contain foo"></div>\
+    <div react="within bar">\
+      <div id="baz" react="contain baz"></div>\
+    </div>\
+    <div id="bang" react="contain bang">\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  object.foo = 4;
+  object.baz = 5;
+  object.bang = 6;
+  react.changed(object);
+  same(jQuery( '#foo', node)[0].innerHTML, '4', 'foo gets set');
+  same(jQuery( '#baz', node)[0].innerHTML, '5', 'baz gets set');
+  same(jQuery( '#bang', node)[0].innerHTML, '6', 'bang gets set');
+});
+
+
+test("test that event handlers don't dissapear", function(){
+  var object = {foo:1};
+  var node = $('<div><div id="foo" react="contain foo"></div><div>')[0];
+
+  jQuery( '#foo', node).bind( 'click', 
+    function ( event ) { 
+                         object.foo += 1; 
+                         react.changed( object ); 
+                         return false; 
+                              } );
+
+  react.update({node: node, scope: object, anchor: true});
+
+  same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
+
+  jQuery( '#foo', node).trigger( 'click' );
+  
+  same(jQuery( '#foo', node)[0].innerHTML, '2', 'foo got updated');
+
+  jQuery( '#foo', node).trigger( 'click' );
+
+  same(jQuery( '#foo', node)[0].innerHTML, '3', 'foo got updated after changed');
+});
+
+
+
+test('test that we cat change values at different nesting depths', function(){
+       var object = {value:-1, one:{ value:-1, two:{ value:-1, three:{ value:-1 }}}};
+  var node = $('<div>\
+    <div id="zero" react="contain value"></div>\
+    <div id="one" react="contain one.value"></div>\
+    <div id="two" react="contain one.two.value"></div>\
+    <div id="three" react="contain one.two.three.value">\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+
+  object.value = 0;
+  react.changed( object, 'value' );
+  same(jQuery( '#zero', node)[0].innerHTML, '0', 'depth zero got set');
+
+  object.one.value = 1;
+  react.changed( object.one, 'value' );
+  same(jQuery( '#one', node)[0].innerHTML, '1', 'depth one got set');
+
+  object.one.two.value = 2;
+  react.changed( object.one.two, 'value' );
+  same(jQuery( '#two', node)[0].innerHTML, '2', 'depth two got set');
+
+  object.one.two.three.value = 3;
+  react.changed( object.one.two.three, 'value' );
+  same(jQuery( '#three', node)[0].innerHTML, '3', 'depth three got set');
+});
+
 test('unanchored nodes can have properties set with no side effects', function(){
   var object = {foo:1, bar:1};
   var node = $('<div>\
