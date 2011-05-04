@@ -494,33 +494,32 @@ test('test that within dose not break changed loop', function(){
 
 
 test("test that event handlers don't dissapear", function(){
-  var subNode = $('<div><span react="contain do"></span>increment</div>')[0];
-  var subObject = { do:"do: "};
-  react.anchor( subNode, subObject );
-  react.update( subObject );
-  
-  var object = {foo:1, subNode:subNode};
 
-  jQuery( '#foo', subNode).bind( 'click', 
+  var subNode = $('<div><div id="clicker">increment</div></div>')[0];
+  var object  = {foo:1, 'subNode':subNode};
+   
+  jQuery( '#clicker', subNode).bind( 'click', 
     function ( event ) { 
+                         console.log( "cliecke" );
                          object.foo += 1; 
                          react.changed( object ); 
                          return false; 
                               } );
-
-  var node = $('<div><div id="foo" react="contain foo"></div><div react="contain subNode"></div></div>');
-
-  //react.update({node: node, scope: object, anchor: true});
-
-  //same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
-
-  //jQuery( '#foo', subNode).trigger( 'click' );
   
-  //same(jQuery( '#foo', node)[0].innerHTML, '2', 'foo got updated');
+  var node = $('<div><div id="foo" react="contain foo"></div><div react="contain subNode"></div></div>')[0];
 
-  //jQuery( '#foo', subNode).trigger( 'click' );
+  react.update({node: node, scope: object, anchor: true});
 
-  //same(jQuery( '#foo', node)[0].innerHTML, '3', 'foo got updated after changed');
+  same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
+
+  jQuery( '#clicker', subNode).trigger( 'click' );
+  
+  same(jQuery( '#foo', node)[0].innerHTML, '2', 'foo got updated');
+
+  jQuery( '#clicker', subNode).trigger( 'click' );
+
+  same(jQuery( '#foo', node)[0].innerHTML, '3', 'foo got updated after changed');
+
 });
 
 
