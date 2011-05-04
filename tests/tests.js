@@ -185,10 +185,10 @@ test('works with a missing key alias', function(){/*...*/});
 
 test('requires at least an item template node and a contents node inside the loop node', function(){
   throws(function(){
-    react.update($('<div react="loop as item">'
-                + '<span class="exampleTemplate"></span>'
-                + '<!-- to prevent debeloper surprise, the missing container tag here is required -->'
-              + '</div>')[0], []);
+    react.update($('<div react="loop as item">\
+      <span class="exampleTemplate"></span>\
+      <!-- to prevent debeloper surprise, the missing container tag here is required -->\
+    </div>')[0], []);
   }, 'omitting second loop child is not allowed');
 });
 

@@ -222,6 +222,10 @@
         return;
       }
 
+      if(updateContext.loopItemTemplates[this.getNodeKey(node)]){
+        updateContext.bequeathedScopeChains[nodeKey] = false;
+        return;
+      }
       var previousParent = 'unmatchable';
       var parent = this._getParent(node, updateContext);
       // if processing the parent leads to this node having a new parent, repeat
@@ -231,10 +235,7 @@
           return;
         }
         this._updateNode(parent, updateContext);
-        if(
-          updateContext.bequeathedScopeChains[this.getNodeKey(parent)] === false ||
-          updateContext.loopItemTemplates[this.getNodeKey(parent)]
-        ){
+        if(updateContext.bequeathedScopeChains[this.getNodeKey(parent)] === false){
           updateContext.bequeathedScopeChains[nodeKey] = false;
           return;
         }
@@ -498,7 +499,7 @@
       this.node.innerHTML = '';
       var insertion = this.lookup(key);
       // if the insertion is a node, use the dom appending method, but insert other items as text
-      jQuery(this.node)[insertion.nodeType ? 'append' : 'text'](insertion);
+      jQuery(this.node)[insertion && insertion.nodeType ? 'append' : 'text'](insertion);
     },
 
     classIf: function(conditionKey, nameKey){
