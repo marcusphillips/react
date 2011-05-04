@@ -475,6 +475,31 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
 });
 
+
+/*
+ * changed
+ */
+
+test("event handlers don't dissapear on call to changed()", function(){
+  var subNode = $('<div><div id="clicker">increment</div></div>')[0];
+  var object  = {foo:1, 'subNode':subNode};
+  jQuery( '#clicker', subNode).bind('click', function(){
+    object.foo += 1;
+    react.changed(object);
+  });
+
+  var node = $('<div>\
+    <div id="foo" react="contain foo"></div>\
+    <div react="contain subNode"></div>\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
+  $('#clicker', subNode).trigger( 'click' );
+  same(jQuery( '#foo', node).html(), '2', 'foo got updated');
+  $('#clicker', subNode).trigger( 'click' );
+  same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
+});
+
 test('unanchored nodes can have properties set with no side effects', function(){
   var object = {foo:1, bar:1};
   var node = $('<div>\

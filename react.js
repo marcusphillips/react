@@ -494,7 +494,11 @@
     },
 
     contain: function(key){
-      jQuery(this.node).html(this.lookup(key));
+      // using innerHTML to clear the node because the jQuery convenience functions unbind event handlers. This would be an unexpected side effect for most React user consumption cases.
+      this.node.innerHTML = '';
+      var insertion = this.lookup(key);
+      // if the insertion is a node, use the dom appending method, but insert other items as text
+      jQuery(this.node)[insertion.nodeType ? 'append' : 'text'](insertion);
     },
 
     classIf: function(conditionKey, nameKey){
