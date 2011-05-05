@@ -494,7 +494,6 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
 });
 
-
 /*
  * changed
  */
