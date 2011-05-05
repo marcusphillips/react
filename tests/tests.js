@@ -6,7 +6,7 @@ var throws = function(block, description){
   var didThrow = false;
   try{
     block();
-  } catch (x) {
+  } catch (error) {
     didThrow = true;
   }
   ok(didThrow, description);
@@ -185,16 +185,19 @@ test('works with a missing key alias', function(){/*...*/});
 
 test('requires at least an item template node and a contents node inside the loop node', function(){
   throws(function(){
-    react.update($('<div react="loop as item">'
-                + '<span class="exampleTemplate"></span>'
-                + '<!-- to prevent debeloper surprise, the missing container tag here is required -->'
-              + '</div>')[0], []);
+    react.update($('<div react="loop as item">\
+      <span class="exampleTemplate"></span>\
+      <!-- to prevent debeloper surprise, the missing container tag here is required -->\
+    </div>')[0], []);
   }, 'omitting second loop child is not allowed');
 });
 
 test('can loop across values in an array', function(){
-  var node = $('<div id="outter" react="loop as which item"><div id="item" react="contain item"></div><div id="container"></div></div>')[0];
-  var itemTemplate = $(node).children()[0];
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div id="item" react="contain item"></div>\
+    <div id="container"></div></div>\
+  ')[0];
   var resultsHolder = $(node).children()[1];
   react.update(node, ['a','b','c']);
   equal($(node).children().last().children().length, 3, 'results container node contains three child elements');
@@ -203,7 +206,36 @@ test('can loop across values in an array', function(){
     $($(resultsHolder).children()[1]).html(),
     $($(resultsHolder).children()[2]).html()
   ], ['a','b','c'], 'children\'s innerHTML is set to array items\' contents');
-  equal($(itemTemplate).html(), '', 'item template was unchanged');
+});
+
+test('does not operate on loop item template node', function(){
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div id="item" react="contain item">stuff</div>\
+    <div id="container"></div></div>\
+  ')[0];
+  var itemTemplate = $(node).children()[0];
+  react.update(node, ['a','b','c']);
+  equal($(itemTemplate).html(), 'stuff', 'item template was unchanged');
+});
+
+test('does not operate on descendants of loop item template node', function(){
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div id="item"><div id="descendant" react="contain item">stuff</div></div>\
+    <div id="container"></div></div>\
+  ')[0];
+  var itemTemplate = $(node).children()[0];
+  react.update(node, ['a','b','c']);
+  equal($(itemTemplate).find('#descendant').html(), 'stuff', 'item template was unchanged');
+});
+
+test('does not operate on descendants of loop item template node, even when loop item template has no react attribute', function(){
+  react.update($('\
+    <div react="loop as val">\
+      <li><a react="attr \'href\' val"></a></li>\
+    <ul></ul></div>\
+  ')[0], ['foo']);
 });
 
 test('can loop across keys in an array', function(){
@@ -462,6 +494,31 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
 });
 
+
+/*
+ * changed
+ */
+
+test("event handlers don't dissapear on call to changed()", function(){
+  var subNode = $('<div><div id="clicker">increment</div></div>')[0];
+  var object  = {foo:1, 'subNode':subNode};
+  jQuery( '#clicker', subNode).bind('click', function(){
+    object.foo += 1;
+    react.changed(object);
+  });
+
+  var node = $('<div>\
+    <div id="foo" react="contain foo"></div>\
+    <div react="contain subNode"></div>\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
+  $('#clicker', subNode).trigger( 'click' );
+  same(jQuery( '#foo', node).html(), '2', 'foo got updated');
+  $('#clicker', subNode).trigger( 'click' );
+  same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
+});
+
 test('unanchored nodes can have properties set with no side effects', function(){
   var object = {foo:1, bar:1};
   var node = $('<div>\
@@ -528,3 +585,104 @@ test('changing dom strucutre invalidates change propogation to the view', functi
   same($child.html(), '3', 'the property linked to the replaced object was re-rendered after the object was put back');
 });
 
+
+/*
+ * changed
+ *
+ */
+
+test('within directive works well with changed method', function(){
+  var object = {
+    first: 1,
+    subobject:{
+      second: 2
+    },
+    third: 3
+  };
+  var node = $('<div>\
+    <div id="foo" react="contain first"></div>\
+    <div react="within subobject">\
+      <div id="bar" react="contain second"></div>\
+    </div>\
+    <div id="baz" react="contain third">\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($( '#foo', node)[0].innerHTML, '1', 'foo gets set');
+  same($( '#bar', node)[0].innerHTML, '2', 'baz gets set');
+  same($( '#baz', node)[0].innerHTML, '3', 'bang gets set');
+
+  object.first = 4;
+  object.second = 5;
+  object.third = 6;
+  react.changed(object);
+  same($( '#foo', node)[0].innerHTML, '4', 'foo goes higher');
+  same($( '#bar', node)[0].innerHTML, '2', 'bar stays the same because it\'s looking within .subobject');
+  same($( '#baz', node)[0].innerHTML, '6', 'baz goes higher');
+
+  object.subobject.second = 1000;
+  react.changed(object);
+  same($( '#foo', node)[0].innerHTML, '4', 'foo remains higher');
+  same($( '#bar', node)[0].innerHTML, '1000', 'bar gets really high');
+  same($( '#baz', node)[0].innerHTML, '6', 'baz remains higher');
+});
+
+test('regression test - values at various depths are correctly bound and updated when dot syntax was used', function(){
+  // https://github.com/marcusphillips/react/issues/2
+  var object = {
+    value: null,
+    one:{
+      value: null,
+      two:{
+        value: null,
+        three:{
+          value: null
+        }
+      }
+    }
+  };
+  var node = $('<div>\
+    <div id="zero" react="contain value"></div>\
+    <div id="one" react="contain one.value"></div>\
+    <div id="two" react="contain one.two.value"></div>\
+    <div id="three" react="contain one.two.three.value">\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+
+  object.value = 0;
+  react.changed(object, 'value');
+  same(jQuery( '#zero', node)[0].innerHTML, '0', 'depth zero got set');
+
+  object.one.value = 1;
+  react.changed(object.one, 'value');
+  same(jQuery( '#one', node)[0].innerHTML, '1', 'depth one got set');
+
+  object.one.two.value = 2;
+  react.changed(object.one.two, 'value');
+  same(jQuery('#two', node)[0].innerHTML, '2', 'depth two got set');
+
+  object.one.two.three.value = 3;
+  react.changed(object.one.two.three, 'value');
+  same(jQuery('#three', node)[0].innerHTML, '3', 'depth three got set');
+});
+
+test('regression test - within directive doesn\'t halt updates to the changed loop', function(){
+  // https://github.com/marcusphillips/react/issues/3
+  var object = {bar:{prop:'original'}};
+  var node = $('<div>\
+    <div react="within bar">\
+      <div id="foo" react="contain prop"></div>\
+    </div>\
+    <div react="within bar">\
+      <div id="bar" react="contain prop"></div>\
+    </div>\
+    <div react="within bar">\
+      <div id="baz" react="contain prop">\
+    </div>\
+  </div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  object.bar.prop = 'changed';
+  react.changed(object);
+  same(jQuery('#foo', node)[0].innerHTML, 'changed', 'foo gets set');
+  same(jQuery('#bar', node)[0].innerHTML, 'changed', 'bar gets set');
+  same(jQuery('#baz', node)[0].innerHTML, 'changed', 'baz gets set');
+});
