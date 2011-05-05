@@ -560,6 +560,7 @@
           itemNode = $resultsContents[i];
         } else {
           itemNode = $itemTemplate.clone()[0];
+          $( itemNode ).show();
           // todo: implement bindings as key aliases
           js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys');
           this._prependDirective(itemNode, ['loopKey', i]);
