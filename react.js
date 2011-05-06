@@ -106,43 +106,49 @@
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
         var eachAncestor = ancestors[whichAncestor];
         var directives = this._getDirectives(eachAncestor);
-        var lastLink = this._buildScopeChainFromAnchorNames(directives, lastLink);
+        var lastLink = this._buildScopeChainFromAnchorNames(directives.anchored, lastLink);
 
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
-          var eachDirective = directives[whichDirective];
           if(eachAncestor === node && (directiveIndex||0) <= whichDirective){ break; }
-          if(!lastLink){ continue; }
-          if(eachDirective[0] === 'within'){
-            lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]], {type:'within', key: eachDirective[1]});
-          }else if(eachDirective[0] === 'loop'){
-            if(eachDirective[1] === 'as'){
-              var loopAliases = {
-                key: eachDirective.length === 3 ? eachDirective[1] : undefined,
-                value: js.last(eachDirective)
-              };
-            }
-          }else if(eachDirective[0] === 'loopKey'){
-            if(loopAliases){
-              var loopItemScope = {};
-              if(loopAliases.key){
-                loopItemScope[loopAliases.key] = eachDirective[1];
-              }
-              loopItemScope[loopAliases.value] = new this._Fallthrough(eachDirective[1]);
-              lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:eachDirective[1]});
-              delete loopAlias;
-            }else{
-              lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]]);
-            }
-          }
+          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective]);
         }
       }
       return lastLink;
     },
 
-    _buildScopeChainFromAnchorNames: function(directives, lastLink){
-      if(directives.anchored){
-        for(var whichToken = 1; whichToken < directives.anchored.length; whichToken++){
-          var scopeKey = directives.anchored[whichToken];
+    // given a scope chain and a directive, extends the scope chain if necessary
+    // does not operate on anchor directives
+    _extendScopeChainBasedOnDirective: function(lastLink, eachDirective){
+      if(!lastLink){ return; }
+      if(eachDirective[0] === 'within'){
+        lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]], {type:'within', key: eachDirective[1]});
+      }else if(eachDirective[0] === 'loop'){
+        if(eachDirective[1] === 'as'){
+          var loopAliases = {
+            key: eachDirective.length === 3 ? eachDirective[1] : undefined,
+            value: js.last(eachDirective)
+          };
+        }
+      }else if(eachDirective[0] === 'loopKey'){
+        if(loopAliases){
+          var loopItemScope = {};
+          if(loopAliases.key){
+            loopItemScope[loopAliases.key] = eachDirective[1];
+          }
+          loopItemScope[loopAliases.value] = new this._Fallthrough(eachDirective[1]);
+          lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:eachDirective[1]});
+          delete loopAlias;
+        }else{
+          lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]]);
+        }
+      }
+      return lastLink;
+    },
+
+    _buildScopeChainFromAnchorNames: function(names, lastLink){
+      if(names){
+        for(var whichToken = 1; whichToken < names.length; whichToken++){
+          var scopeKey = names[whichToken];
           js.errorIf(!this.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
           lastLink = this._extendScopeChain(lastLink, this.scopes[scopeKey], {type:'anchor', key: scopeKey});
         }
