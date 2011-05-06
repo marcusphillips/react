@@ -55,39 +55,35 @@
       }
 
       // if there is no observer for the supplied key, do nothing
-      if(!object || !object.observers || !object.observers[key]){
+      if(!object || !object.observers || !object.observers[key]){ return; }
+
+      for(var listenerString in object.observers[key]){
+        this._checkListener(object, key, listenerString);
+      }
+    },
+
+    _checkListener: function(object, key, listenerString){
+      listener = this._interpretListenerString(listenerString);
+
+      if(!this._listenerIsStillValid(listener, object, key)){ return; }
+
+      if(js.among(['within', 'loop', 'loopKey'], listener.directive[0])){
+        // todo: loopKey probably won't work, and maybe loop either
+        this._updateTree({
+          node: listener.node,
+          fromDirective: listener.directiveIndex
+        });
         return;
       }
 
-      for(var whichListener in object.observers[key]){
-        listener = this._interpretListener(whichListener);
-
-        if(!this._listenerIsStillValid(listener, object, key)){ continue; }
-
-        if(js.among(['within', 'loop', 'loopKey'], listener.directive[0])){
-          // todo: loopKey probably won't work, and maybe loop either
-          this._updateTree({
-            node: listener.node,
-            fromDirective: listener.directiveIndex
-          });
-          continue;
-        }
-
-        var directiveContext = js.create(this.commands, {
-          node: listener.node,
-          scopeChain: listener.scopeChain,
-          directiveIndex: listener.directiveIndex
-        });
-        this._followDirective(listener.directive, directiveContext);
-      }
+      this._followDirective(listener.directive, js.create(this.commands, {
+        node: listener.node,
+        scopeChain: listener.scopeChain,
+        directiveIndex: listener.directiveIndex
+      }));
     },
 
-    _listenerIsStillValid: function(listener, object, key){
-      // ignore the object if it's not in the same path that lead to registration of a listener
-      return object === this._lookupInScopeChain(listener.prefix+key, listener.scopeChain, {returnObject: true});
-    },
-
-    _interpretListener: function(listenerString){
+    _interpretListenerString: function(listenerString){
       listener = listenerString.split(' ');
       var node = this.nodes[listener[0]];
       var directiveIndex = +listener[1];
@@ -98,6 +94,11 @@
         directive: this._getDirectives(node)[directiveIndex],
         scopeChain: this._buildScopeChainForNode(node, directiveIndex)
       };
+    },
+
+    _listenerIsStillValid: function(listener, object, key){
+      // ignore the object if it's not in the same path that lead to registration of a listener
+      return object === this._lookupInScopeChain(listener.prefix+key, listener.scopeChain, {returnObject: true});
     },
 
     _buildScopeChainForNode: function(node, directiveIndex, options){
