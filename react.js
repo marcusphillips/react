@@ -32,8 +32,12 @@
       return (node.reactKey = node.reactKey || js.util.unique('reactNode'));
     },
 
-    getObjectKey: function(object){
+    getScopeKey: function(object){
       return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
+    },
+
+    getObjectKey: function(){
+      throw new Error('This method is deprecated - please use getScopeKey() instead');
     },
 
     set: function(object, key, value){
@@ -42,39 +46,55 @@
     },
 
     changed: function(object, key){
+      // if no key us supplied, check every key
       if(arguments.length < 2){
         for(key in object){
           this.changed(object, key);
         }
         return;
       }
-      if(object.observers && object.observers[key]){
-        for(var whichListener in object.observers[key]){
-          var node = this.nodes[whichListener.split(' ')[0]];
-          var directiveIndex = +whichListener.split(' ')[1];
-          var prefix = whichListener.split(' ')[2];
-          var directive = this._getDirectives(node)[directiveIndex];
-          var scopeChain = this._buildScopeChainForNode(node, directiveIndex);
 
-          if(this._lookupInScopeChain(prefix+key, scopeChain, {returnObject: true}) !== object){
-            // this means the object is not found in the same path that lead to registration of a listener
-            continue;
-          }
-
-          if(js.among(['within', 'loop', 'loopKey'], directive[0])){
-            // todo: loopKey probably won't work, and maybe loop either
-            this._updateTree(node, null, {fromDirective: directiveIndex});
-            continue;
-          }
-
-          var directiveContext = js.create(this.commands, {
-            node: node,
-            scopeChain: scopeChain,
-            directiveIndex: directiveIndex
-          });
-          this._followDirective(directive, directiveContext);
-        }
+      // if there is no observer for the supplied key, do nothing
+      if(!object || !object.observers || !object.observers[key]){
+        return;
       }
+
+      for(var whichListener in object.observers[key]){
+        listener = this._interpretListener(whichListener);
+
+        if(!this._listenerIsStillValid(listener, object, key)){ continue; }
+
+        if(js.among(['within', 'loop', 'loopKey'], listener.directive[0])){
+          // todo: loopKey probably won't work, and maybe loop either
+          this._updateTree(listener.node, null, {fromDirective: listener.directiveIndex});
+          continue;
+        }
+
+        var directiveContext = js.create(this.commands, {
+          node: listener.node,
+          scopeChain: listener.scopeChain,
+          directiveIndex: listener.directiveIndex
+        });
+        this._followDirective(listener.directive, directiveContext);
+      }
+    },
+
+    _listenerIsStillValid: function(listener, object, key){
+      // ignore the object if it's not in the same path that lead to registration of a listener
+      return object === this._lookupInScopeChain(listener.prefix+key, listener.scopeChain, {returnObject: true});
+    },
+
+    _interpretListener: function(listenerString){
+      listener = listenerString.split(' ');
+      var node = this.nodes[listener[0]];
+      var directiveIndex = +listener[1];
+      return{
+        node: node,
+        directiveIndex: directiveIndex,
+        prefix: listener[2],
+        directive: this._getDirectives(node)[directiveIndex],
+        scopeChain: this._buildScopeChainForNode(node, directiveIndex)
+      };
     },
 
     _buildScopeChainForNode: function(node, directiveIndex, options){
@@ -153,6 +173,7 @@
     _updateTree: function(options){
       options = options || {};
       if(options.nodeType){
+        // detect argument signature of (node, scope)
         options = {
           node: arguments[0],
           scope: arguments[1]
@@ -348,7 +369,7 @@
       // todo: clean up after any existing anchor
       directives.anchored = ['anchored'];
       for(var i = 0; i < scopes.length; i++){
-        var scopeKey = this.getObjectKey(scopes[i]);
+        var scopeKey = this.getScopeKey(scopes[i]);
         this.scopes[scopeKey] = scopes[i];
         directives.anchored.push(scopeKey);
       }
