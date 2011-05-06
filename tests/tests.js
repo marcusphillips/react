@@ -498,15 +498,14 @@ test('calling changed on anchored objects doesn\'t re-render properties on ancho
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};
-  var node = $('<div>\
-    <div react="contain foo"></div>\
-    <div react="contain bar"></div>\
-  </div>')[0];
+  var node = $('<div react="attr \'foo\' foo, attr \'bar\' bar"></div>')[0];
   react.update({node: node, scope: object, anchor: true});
+  same($(node).attr('foo'), '1', 'foo starts out at 1');
+  same($(node).attr('bar'), '1', 'bar starts out at 1');
   object.bar = 2;
   react.set(object, 'foo', 2);
-  same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
-  same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
+  same($(node).attr('foo'), '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
+  same($(node).attr('bar'), '1', 'properties changed manually are not rerendered');
 });
 
 
