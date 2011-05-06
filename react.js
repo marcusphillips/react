@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 0.8.1, http://github.com/marcusphillips/react
+ * Version 0.8.2, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
@@ -560,6 +560,7 @@
           itemNode = $resultsContents[i];
         } else {
           itemNode = $itemTemplate.clone()[0];
+          $(itemNode).removeClass('reactItemTemplate');
           // todo: implement bindings as key aliases
           js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys');
           this._prependDirective(itemNode, ['loopKey', i]);
@@ -567,9 +568,8 @@
         }
         this.loopItemScopes[this.getNodeKey(itemNode)] = loopItemScope;
         itemNodes.push(itemNode);
-
       }
-      $itemTemplate.hide();
+      $itemTemplate.addClass('reactItemTemplate');
       if(collection.length !== $resultsContents.length){
         $resultsContainer.html(itemNodes);
       }

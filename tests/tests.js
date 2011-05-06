@@ -192,6 +192,18 @@ test('requires at least an item template node and a contents node inside the loo
   }, 'omitting second loop child is not allowed');
 });
 
+test('template node is not visible after render', function(){
+  var node = $('\
+    <div id="outter" react="loop as which item">\
+      <div react="contain item"></div>\
+    <div id="container"></div></div>\
+  ')[0];
+  var $itemTemplate = $(node).children().first();
+  $itemTemplate.is(':visible');
+  react.update(node, ['a','b','c']);
+  $itemTemplate.is(':not(:visible)');
+});
+
 test('can loop across values in an array', function(){
   var node = $('\
     <div id="outter" react="loop as which item">\
