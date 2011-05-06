@@ -66,7 +66,10 @@
 
         if(js.among(['within', 'loop', 'loopKey'], listener.directive[0])){
           // todo: loopKey probably won't work, and maybe loop either
-          this._updateTree(listener.node, null, {fromDirective: listener.directiveIndex});
+          this._updateTree({
+            node: listener.node,
+            fromDirective: listener.directiveIndex
+          });
           continue;
         }
 
@@ -206,8 +209,8 @@
         this.anchor({node: root, scopes:scopes});
         scopes = undefined;
       }
-      var baseScopeChain = this._buildScopeChain(scopes, {type: 'updateInputs', prefix: this._buildScopeChainForNode(root, options.firstDirective || 0)});
-      updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext);
+      var baseScopeChain = this._buildScopeChain(scopes, {type: 'updateInputs', prefix: this._buildScopeChainForNode(root, options.fromDirective || 0)});
+      updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext, options.fromDirective);
 
       for(var i = 0; i < nodes.length; i++){
         this._updateNode(nodes[i], updateContext);
@@ -268,7 +271,7 @@
       updateContext.bequeathedScopeChains[nodeKey] = this._updateNodeGivenScopeChain(node, scopeChain, updateContext);
     },
 
-    _updateNodeGivenScopeChain: function(node, scopeChain, updateContext){
+    _updateNodeGivenScopeChain: function(node, scopeChain, updateContext, fromDirective){
       var nodeKey = this.getNodeKey(node);
       var directives = this._getDirectives(node);
 
@@ -276,7 +279,7 @@
         scopeChain = this._extendScopeChain(scopeChain, scope, options);
       };
 
-      for(var i = 0; i < directives.length; i++){
+      for(var i = fromDirective || 0; i < directives.length; i++){
         this._followDirective(directives[i], js.create(updateContext, {
           node: node,
           directiveIndex: i,
@@ -613,6 +616,8 @@
     },
 
     attr: function(name, value){
+      js.errorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
+
       name = this.lookup(name);
       value = this.lookup(value);
 

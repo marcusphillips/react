@@ -250,6 +250,28 @@ test('does not operate on descendants of loop item template node, even when loop
   ')[0], ['foo']);
 });
 
+test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
+  var node = $('<div react="attr \'thing\' outterProp, within subobject, within innerProp, contain val"></div>')[0];
+  var scope = {
+    outterProp: 'outter',
+    subobject: {
+      innerProp: {val:'inner'}
+    }
+  };
+  react.update({
+    node: node,
+    scope: scope,
+    anchor: true
+  });
+  same($(node).attr('thing'), 'outter', 'attr came from outter prop');
+  same(node.innerHTML, 'inner', 'contents came from inner prop');
+  scope.outterProp = 'newOutter';
+  scope.subobject.innerProp = {val:'newInner'};
+  react.changed(scope.subobject, 'innerProp');
+  same($(node).attr('thing'), 'outter', 'attr was not changed');
+  same(node.innerHTML, 'newInner', 'contents got updated');
+});
+
 test('can loop across keys in an array', function(){
   var node = $('\
     <div react="loop as which item">\
