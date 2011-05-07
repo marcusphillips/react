@@ -348,12 +348,11 @@ test('nested loops', function(){
 });
 
 test('results are put in second dom node', function(){
-  var node = $('<div react="loop as which item">'
-               + '<div react="contain item">'
-               + '</div>'
-               + '<div id="intended_destination"></div>'
-               + '<div></div>'
-             + '</div>')[0];
+  var node = $('<div react="loop as which item">\
+    <div react="contain item"></div>\
+    <div id="intended_destination"></div>\
+    <div id="decoy"></div>\
+  </div>')[0];
   var resultsHolder = $(node).find('#intended_destination');
   react.update(node, ['a']);
   same($($(resultsHolder).children()[0]).html(), 'a', 'child\'s innerHTML is set to array elemnt\'s value');
@@ -513,7 +512,74 @@ test('updating anchored nodes does not revisit all nodes', function(){
  * changed
  */
 
-test("event handlers don't dissapear on call to changed()", function(){
+test('calling changed on an array updates associated list items', function(){
+  var object = ['foo'];
+  var node = $('\
+    <div react="loop as which item">\
+      <div class="item" react="contain item"></div>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($('#container .item', node).first().html(), 'foo', 'item substitution starts out as foo');
+  react.set(object, 0, 'baz');
+  same($('#container .item', node).first().html(), 'baz', 'item substitution got changed');
+});
+
+test('regression test: index key binding is still available at change response time', function(){
+  var object = [{}, {}];
+  var node = $('<div react="loop as which item">\
+      <div class="item" react="within item, contain which"></div>\
+  <span id="container"></span></div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), '1', 'which is available after an update operation');
+  react.set(object, 1, {});
+  same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
+});
+
+test('regression test: a loop inside a loop as will not get duplicate bindings', function(){
+  var object = [[{prop:'a'}, {prop:'b'}]];
+  var node = $('\
+    <div react="loop as which item">\
+      <div class="item" react="within item, loop">\
+        <span class="innerTemplate" react="contain which"></span>\
+        <span class="innerContainer"></span>\
+      </div>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'there is only one element in the outter array, so index substitution (binding to the key "which") should always be 0');
+  react.set(object, 0, [{prop:'c'}, {prop:'d'}]);
+  // before the bug fix, the binding instruction from the outter 'loop as' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal loop style scope change into a property
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'index substitution is still set to 0');
+  react.set(object, 0, [{which:'foo'}, {which:'bar'}]);
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), 'bar', 'index substitution changes to the masking property');
+});
+
+test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){
+//  ok(false, 'not yet written');
+});
+
+test('recomputes all subnodes when changing the value stored at some index of an observed array that was looped over', function(){
+//  ok(false, 'not yet written');
+});
+
+///*
+test('loop items get bound to their indices', function(){
+  var object = ['a', 'b'];
+  var node = $('\
+    <div react="loop as which item">\
+      <div class="item" react="contain item"></div>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), 'b', 'substitution starts out as b');
+  react.set(object, 1, 'bPrime');
+  same($($('#container .item', node)[1]).html(), 'bPrime', 'substitution gets set to b prime');
+});
+//*/
+
+test('event handlers don\'t dissapear on call to changed()', function(){
   var subNode = $('<div><div id="clicker">increment</div></div>')[0];
   var object  = {foo:1, 'subNode':subNode};
   jQuery( '#clicker', subNode).bind('click', function(){

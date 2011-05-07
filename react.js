@@ -63,7 +63,7 @@
     },
 
     _checkListener: function(object, key, listenerString){
-      listener = this._interpretListenerString(listenerString);
+      var listener = this._interpretListenerString(listenerString);
 
       if(!this._listenerIsStillValid(listener, object, key)){ return; }
 
@@ -84,7 +84,7 @@
     },
 
     _interpretListenerString: function(listenerString){
-      listener = listenerString.split(' ');
+      var listener = listenerString.split(' ');
       var node = this.nodes[listener[0]];
       var directiveIndex = +listener[1];
       return{
@@ -103,14 +103,17 @@
 
     _buildScopeChainForNode: function(node, directiveIndex){
       var ancestors = $(Array.prototype.reverse.apply($(node).parents())).add(node);
+      var memory = {};
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
         var eachAncestor = ancestors[whichAncestor];
         var directives = this._getDirectives(eachAncestor);
         var lastLink = this._buildScopeChainFromAnchorNames(directives.anchored, lastLink);
 
+        // todo: factor out memory variable. instead, store loop type in the loopKey directive
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
           if(eachAncestor === node && (directiveIndex||0) <= whichDirective){ break; }
-          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective]);
+          if(!lastLink){ continue; }
+          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective], memory);
         }
       }
       return lastLink;
@@ -118,29 +121,40 @@
 
     // given a scope chain and a directive, extends the scope chain if necessary
     // does not operate on anchor directives
-    _extendScopeChainBasedOnDirective: function(lastLink, eachDirective){
-      if(!lastLink){ return; }
-      if(eachDirective[0] === 'within'){
-        lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]], {type:'within', key: eachDirective[1]});
-      }else if(eachDirective[0] === 'loop'){
-        if(eachDirective[1] === 'as'){
-          var loopAliases = {
-            key: eachDirective.length === 3 ? eachDirective[1] : undefined,
-            value: js.last(eachDirective)
-          };
-        }
-      }else if(eachDirective[0] === 'loopKey'){
-        if(loopAliases){
-          var loopItemScope = {};
-          if(loopAliases.key){
-            loopItemScope[loopAliases.key] = eachDirective[1];
+    _extendScopeChainBasedOnDirective: function(lastLink, directive, memory){
+      // todo: turn these into named methods rather than a switch statement
+      switch(directive[0]){
+        case 'within':
+//todo: test that this isn't broken - it used to not do a lookup, only checked the last scope
+//todo: deprecate the suppressObservers flag
+          return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}), {type:'within', key: directive[1]});
+        break;
+//todo: finish refactoring from here. asdf;
+        //todo: change loop to withinEach, and loop as to each
+        case 'loop':
+          if(directive[1] === 'as'){
+            memory.loopAliases = {
+              key: directive.length === 4 ? directive[2] : undefined,
+              value: js.last(directive)
+            };
           }
-          loopItemScope[loopAliases.value] = new this._Fallthrough(eachDirective[1]);
-          lastLink = this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:eachDirective[1]});
-          delete loopAlias;
-        }else{
-          lastLink = this._extendScopeChain(lastLink, lastLink.scope[eachDirective[1]]);
-        }
+          return lastLink;
+        break;
+        case 'loopKey':
+          if(memory.loopAliases){
+            var loopItemScope = {};
+            if(memory.loopAliases.key){
+              loopItemScope[memory.loopAliases.key] = directive[1];
+            }
+            loopItemScope[memory.loopAliases.value] = new this._Fallthrough(directive[1]);
+            // todo: there's a typo here (loopAliasES), test for it
+            delete memory.loopAlias;
+            return this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:directive[1]});
+          }else{
+// todo: was also broken, test this for when it says "lastLink.scope[directive[1]]"
+            return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}));
+          }
+        break;
       }
       return lastLink;
     },
@@ -442,7 +456,7 @@
       do {
         var object = scopeChain.scope;
         value = object[baseKey];
-        if(scopeChain.anchorKey && options.listener){
+        if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
           this._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, value !== undefined);
         }
         if(value instanceof this._Fallthrough){
@@ -459,7 +473,7 @@
         if(object === undefined || object === null){
           return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
         }
-        if(scopeChain.anchorKey && !options.returnObject){
+        if(scopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
           this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
         }
         prefix = prefix + keys[0] + '.';
@@ -572,7 +586,9 @@
       var $resultsContainer = $($loopChildren[1]);
       var $resultsContents = $resultsContainer.children();
 
+      // todo: ignore binding scopes when looking for scope to iterate over
       var collection = this.scopeChain.scope;
+      // todo: don't allow looping over static native objects (like strings - this is almost certainly an error)
       js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
       var loopItemScope;
 
