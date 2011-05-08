@@ -105,21 +105,31 @@
 
     _buildScopeChainForNode: function(node, directiveIndex){
       var ancestors = $(Array.prototype.reverse.apply($(node).parents())).add(node);
+      var scopeBuildingContext = js.create(react.commands, {
+        //todo: deprecate the suppressObservers flag
+        suppressObservers: true
+      });
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
-        var eachAncestor = ancestors[whichAncestor];
-        var directives = this._getDirectives(eachAncestor);
-        var lastLink = this._buildScopeChainFromAnchorNames(directives.anchored, lastLink);
+        scopeBuildingContext.node = ancestors[whichAncestor];
+        var directives = this._getDirectives(scopeBuildingContext.node);
+        scopeBuildingContext.scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeBuildingContext.scopeChain);
+
+        var pushScope = function(scope, options){
+          scopeBuildingContext.scopeChain = this._extendScopeChain(scopeBuildingContext.scopeChain, scope, options);
+        };
 
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
-          if(eachAncestor === node && (directiveIndex||0) <= whichDirective){ break; }
-          if(!lastLink){ continue; }
-          var directiveName = directives[whichDirective].shift();
-          if(this._extendScopeChainBasedOnDirective[directiveName]){
-            lastLink = this._extendScopeChainBasedOnDirective[directiveName](lastLink, directives[whichDirective]);
+          if(scopeBuildingContext.node === node && (directiveIndex||0) <= whichDirective){ break; }
+          if(!scopeBuildingContext.scopeChain){ continue; }
+          if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective][0])){
+            this._followDirective(directives[whichDirective], js.create(scopeBuildingContext,{
+              directiveIndex: whichDirective,
+              pushScope: pushScope
+            }));
           }
         }
       }
-      return lastLink;
+      return scopeBuildingContext.scopeChain;
     },
 
     _buildScopeChainFromAnchorNames: function(names, lastLink){
@@ -318,6 +328,7 @@
         js.errorIf(!this.commands[command], command+' is not a valid react command');
         this.commands[command].apply(context, directive);
       }catch (error){
+        js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
         var directive = this._getDirectives(context.node)[context.directiveIndex];
         js.log('Failure during React update: ', {
           'original error': error,
@@ -333,9 +344,10 @@
 
     _describeScopeChain: function(link){
       var scopeChainDescription = [];
-      do{
+      while(link){
         scopeChainDescription.push(['scope: ', link.scope, ', ' + 'type of scope shift: ' + link.type + (link.key ? '(key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-      }while(link = link.parent);
+        link = link.parent;
+      }
       return scopeChainDescription;
     },
 
@@ -416,7 +428,8 @@
       do {
         var object = scopeChain.scope;
         value = object[baseKey];
-        if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
+        // todo: write a test to verify that responses to change events don't result in new observers
+        if(scopeChain.anchorKey && options.listener && !this.suppressObservers){
           this._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, value !== undefined);
         }
         if(value instanceof this._Fallthrough){
@@ -433,7 +446,7 @@
         if(object === undefined || object === null){
           return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
         }
-        if(scopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
+        if(scopeChain.anchorKey && !options.returnObject && !this.suppressObservers){
           this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
         }
         prefix = prefix + keys[0] + '.';
@@ -458,28 +471,6 @@
     }
   };
 
-
-    // given a scope chain and a directive, extends the scope chain if necessary
-    // does not operate on anchor directives
-    react._extendScopeChainBasedOnDirective = js.create(react, {
-      within: function(lastLink, args){
-        //todo: test that this isn't broken - it used to not do a lookup, only checked the last scope
-        //todo: deprecate the suppressObservers flag
-        return this._extendScopeChain(lastLink, this._lookupInScopeChain(args[0], lastLink, {suppressObservers: true}), {type:'within', key: args[0]});
-      },
-      withinItem: function(lastLink, args){
-        // todo: write a test this for inadvertent fallthrough, as if it still said this._lookupInScopeChain(args[0], lastLink, {suppressObservers: true})
-        return this._extendScopeChain(lastLink, this.scopeChain.scope[args[0]], {type:'withinItem', key: args[0]}); //todo: changed from type:'within' - will that break anything?
-      },
-      bindItem: function(lastLink, args){
-        var itemBindings = {};
-        if(args.length === 3){
-          itemBindings[args[1]] = args[0];
-        }
-        itemBindings[js.last(args)] = new this._Fallthrough(args[0]);
-        return this._extendScopeChain(lastLink, itemBindings, {type:'itemBindings', key:args[0]});
-      }
-    }),
 
   react.commands = js.create(react, {
 

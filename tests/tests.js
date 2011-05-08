@@ -542,6 +542,10 @@ test('regression test: index key binding is still available at change response t
   same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
 });
 
+test('', function(){
+// todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)
+});
+
 test('regression test: a withinEach inside a for will not get duplicate bindings', function(){
   var object = [[{prop:'a'}, {prop:'b'}]];
   var node = $('\
