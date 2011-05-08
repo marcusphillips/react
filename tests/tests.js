@@ -250,6 +250,28 @@ test('does not operate on descendants of loop item template node, even when loop
   ')[0], ['foo']);
 });
 
+test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
+  var node = $('<div react="attr \'thing\' outterProp, within subobject, within innerProp, contain val"></div>')[0];
+  var scope = {
+    outterProp: 'outter',
+    subobject: {
+      innerProp: {val:'inner'}
+    }
+  };
+  react.update({
+    node: node,
+    scope: scope,
+    anchor: true
+  });
+  same($(node).attr('thing'), 'outter', 'attr came from outter prop');
+  same(node.innerHTML, 'inner', 'contents came from inner prop');
+  scope.outterProp = 'newOutter';
+  scope.subobject.innerProp = {val:'newInner'};
+  react.changed(scope.subobject, 'innerProp');
+  same($(node).attr('thing'), 'outter', 'attr was not changed');
+  same(node.innerHTML, 'newInner', 'contents got updated');
+});
+
 test('can loop across keys in an array', function(){
   var node = $('\
     <div react="loop as which item">\
@@ -326,12 +348,11 @@ test('nested loops', function(){
 });
 
 test('results are put in second dom node', function(){
-  var node = $('<div react="loop as which item">'
-               + '<div react="contain item">'
-               + '</div>'
-               + '<div id="intended_destination"></div>'
-               + '<div></div>'
-             + '</div>')[0];
+  var node = $('<div react="loop as which item">\
+    <div react="contain item"></div>\
+    <div id="intended_destination"></div>\
+    <div id="decoy"></div>\
+  </div>')[0];
   var resultsHolder = $(node).find('#intended_destination');
   react.update(node, ['a']);
   same($($(resultsHolder).children()[0]).html(), 'a', 'child\'s innerHTML is set to array elemnt\'s value');
@@ -476,15 +497,14 @@ test('calling changed on anchored objects doesn\'t re-render properties on ancho
 
 test('updating anchored nodes does not revisit all nodes', function(){
   var object = {foo:1, bar:1};
-  var node = $('<div>\
-    <div react="contain foo"></div>\
-    <div react="contain bar"></div>\
-  </div>')[0];
+  var node = $('<div react="attr \'foo\' foo, attr \'bar\' bar"></div>')[0];
   react.update({node: node, scope: object, anchor: true});
+  same($(node).attr('foo'), '1', 'foo starts out at 1');
+  same($(node).attr('bar'), '1', 'bar starts out at 1');
   object.bar = 2;
   react.set(object, 'foo', 2);
-  same($(node).children()[0].innerHTML, '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
-  same($(node).children()[1].innerHTML, '1', 'properties changed manually are not rerendered');
+  same($(node).attr('foo'), '2', 'for anchored nodes, properties that are set using react.set() get autmatically updated');
+  same($(node).attr('bar'), '1', 'properties changed manually are not rerendered');
 });
 
 
@@ -492,7 +512,103 @@ test('updating anchored nodes does not revisit all nodes', function(){
  * changed
  */
 
-test("event handlers don't dissapear on call to changed()", function(){
+test('calling changed on an array updates associated list items', function(){
+  var object = ['foo'];
+  var node = $('\
+    <div react="loop as which item">\
+      <div class="item" react="contain item"></div>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($('#container .item', node).first().html(), 'foo', 'item substitution starts out as foo');
+  react.set(object, 0, 'baz');
+  same($('#container .item', node).first().html(), 'baz', 'item substitution got changed');
+});
+
+test('regression test: index key binding is still available at change response time', function(){
+  var object = [{}, {}];
+  var node = $('<div react="loop as which item">\
+      <div class="item" react="within item, contain which"></div>\
+  <span id="container"></span></div>')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), '1', 'which is available after an update operation');
+  react.set(object, 1, {});
+  same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
+});
+
+test('regression test: a loop inside a loop as will not get duplicate bindings', function(){
+  var object = [[{prop:'a'}, {prop:'b'}]];
+  var node = $('\
+    <div react="loop as which item">\
+      <div class="item" react="within item, loop">\
+        <span class="innerTemplate" react="contain which"></span>\
+        <span class="innerContainer"></span>\
+      </div>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'there is only one element in the outter array, so index substitution (binding to the key "which") should always be 0');
+  react.set(object, 0, [{prop:'c'}, {prop:'d'}]);
+  // before the bug fix, the binding instruction from the outter 'loop as' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal loop style scope change into a property
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'index substitution is still set to 0');
+  react.set(object, 0, [{which:'foo'}, {which:'bar'}]);
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), 'bar', 'index substitution changes to the masking property');
+});
+
+test('when a list item is removed, associated loop item nodes disappear', function(){
+/* todo
+  var object = ['a', 'b'];
+  var node = $('\
+    <div react="loop as which item">\
+      <span class="item" react="contain item"></span>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), 'b', 'second item got set');
+  object.slice(0,1);
+  react.changed(object, 1);
+  // before the bug fix, the binding instruction from the outter 'loop as' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal loop style scope change into a property
+  same($('#container .item', node).length, 1, 'redundant node got deleted');
+*/
+});
+
+test('increasing the length property of a list appends extra nodes', function(){
+});
+
+test('reducing the length property of a list deletes extra nodes', function(){
+
+});
+
+test('lookups to loop items don\'t fall through past the top scope if that item holds undefined', function(){
+  // not yet tested
+});
+
+test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){
+//  ok(false, 'not yet written');
+});
+
+test('recomputes all subnodes when changing the value stored at some index of an observed array that was looped over', function(){
+//  ok(false, 'not yet written');
+});
+
+///*
+test('loop items get bound to their indices', function(){
+  var object = ['a', 'b'];
+  var node = $('\
+    <div react="loop as which item">\
+      <div class="item" react="contain item"></div>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), 'b', 'substitution starts out as b');
+  react.set(object, 1, 'bPrime');
+  same($($('#container .item', node)[1]).html(), 'bPrime', 'substitution gets set to b prime');
+});
+//*/
+
+test('event handlers don\'t dissapear on call to changed()', function(){
   var subNode = $('<div><div id="clicker">increment</div></div>')[0];
   var object  = {foo:1, 'subNode':subNode};
   jQuery( '#clicker', subNode).bind('click', function(){

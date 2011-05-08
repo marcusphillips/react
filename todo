@@ -1,6 +1,6 @@
+- Make a changed event on any numeric property of an array result in a changed event on the associated loop directives
+- make every node in a loop listen to it's associated key
 - remove update context?
-- change interface for update to be a single object hash
-- make contain statements html escape string substitutions
 
 write tests:
 - empty react attribute string doesnt break univers
