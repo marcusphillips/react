@@ -67,8 +67,10 @@
 
       if(!this._listenerIsStillValid(listener, object, key)){ return; }
 
-      if(js.among(['within', 'loop', 'loopKey'], listener.directive[0])){
-        // todo: loopKey probably won't work, and maybe loop either
+      // todo: bindItem is needed here but won't work until the registration is made on the array element it's bound to. something like
+      js.errorIf(listener.directive[0] === 'bindItem', 'you need recalculations for bindItem (when the key was an itemAlias), but those aren\'t implemented yet');
+      if(js.among(['within', 'withinEach', 'withinItem', 'for'], listener.directive[0])){
+        // todo: loopKey probably won't work, and maybe withinEach either
         this._updateTree({
           node: listener.node,
           fromDirective: listener.directiveIndex
@@ -103,17 +105,15 @@
 
     _buildScopeChainForNode: function(node, directiveIndex){
       var ancestors = $(Array.prototype.reverse.apply($(node).parents())).add(node);
-      var memory = {};
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
         var eachAncestor = ancestors[whichAncestor];
         var directives = this._getDirectives(eachAncestor);
         var lastLink = this._buildScopeChainFromAnchorNames(directives.anchored, lastLink);
 
-        // todo: factor out memory variable. instead, store loop type in the loopKey directive
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
           if(eachAncestor === node && (directiveIndex||0) <= whichDirective){ break; }
           if(!lastLink){ continue; }
-          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective], memory);
+          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective]);
         }
       }
       return lastLink;
@@ -121,7 +121,7 @@
 
     // given a scope chain and a directive, extends the scope chain if necessary
     // does not operate on anchor directives
-    _extendScopeChainBasedOnDirective: function(lastLink, directive, memory){
+    _extendScopeChainBasedOnDirective: function(lastLink, directive){
       // todo: turn these into named methods rather than a switch statement
       switch(directive[0]){
         case 'within':
@@ -130,34 +130,22 @@
           return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}), {type:'within', key: directive[1]});
         break;
 //todo: finish refactoring from here. asdf;
-        //todo: change loop to withinEach, and loop as to each
-        case 'loop':
-          if(directive[1] === 'as'){
-            memory.loopAliases = {
-              key: directive.length === 4 ? directive[2] : undefined,
-              value: js.last(directive)
-            };
+        case 'withinItem':
+// todo: write a test this for inadvertent fallthrough, as if it still said this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true})
+          return this._extendScopeChain(lastLink, this.scopeChain.scope[directive[1]], {type:'withinItem', key: directive[1]}); //todo: changed from type:'within' - will that break anything?
+        break;
+        case 'bindItem':
+          var itemBindings = {};
+          if(directive.length === 4){
+            itemBindings[directive[2]] = directive[1];
           }
+          itemBindings[js.last(directive)] = new this._Fallthrough(directive[1]);
+          return this._extendScopeChain(lastLink, itemBindings, {type:'itemBindings', key:directive[1]});
+        break;
+        default:
           return lastLink;
         break;
-        case 'loopKey':
-          if(memory.loopAliases){
-            var loopItemScope = {};
-            if(memory.loopAliases.key){
-              loopItemScope[memory.loopAliases.key] = directive[1];
-            }
-            loopItemScope[memory.loopAliases.value] = new this._Fallthrough(directive[1]);
-            // todo: there's a typo here (loopAliasES), test for it
-            delete memory.loopAlias;
-            return this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:directive[1]});
-          }else{
-// todo: is currently broken, should only get value from the list at the end of the scope chain (though not the keybindings, if any exists at the end of the scope chain)
-// test this for inadvertent fallthrough
-            return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}));
-          }
-        break;
       }
-      return lastLink;
     },
 
     _buildScopeChainFromAnchorNames: function(names, lastLink){
@@ -221,12 +209,10 @@
           nodes = nodes.concat(newNodes);
           for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
             delete updateContext.bequeathedScopeChains[this.getNodeKey(newNodes[whichNode])];
-            delete updateContext.loopItemScopes[this.getNodeKey(newNodes[whichNode])];
             delete updateContext.loopItemTemplates[this.getNodeKey(newNodes[whichNode])];
           }
         },
         bequeathedScopeChains: {},
-        loopItemScopes: {},
         loopItemTemplates: {}
       });
       var scopes = options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
@@ -252,9 +238,8 @@
           return false;
         } else if (
           ancestor.getAttribute('react') ||
-          updateContext.bequeathedScopeChains[this.getNodeKey(ancestor)] ||
-          updateContext.loopItemScopes[this.getNodeKey(ancestor)] || // todo: change this to inheritedScopeChains
-          updateContext.loopItemTemplates[this.getNodeKey(ancestor)]
+          updateContext.bequeathedScopeChains[this.getNodeKey(ancestor)] || // todo: what's this cover?
+          updateContext.loopItemTemplates[this.getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
         ){
           return ancestor;
         }
@@ -271,7 +256,7 @@
         return;
       }
 
-      if(updateContext.loopItemTemplates[this.getNodeKey(node)]){
+      if(updateContext.loopItemTemplates[this.getNodeKey(node)]){ // todo: get rid of all these references to 'loop item templates', use custom class instead
         updateContext.bequeathedScopeChains[nodeKey] = false;
         return;
       }
@@ -571,18 +556,12 @@
       }
     },
 
-    loop: function(as, keyAlias, valueAlias){
-      if(valueAlias === undefined){
-        valueAlias = keyAlias;
-        keyAlias = undefined;
-      }
-
-      // todo: return here (and everywhere else) if collection is undefined.  test for this
-
+    _createItemNodes: function(makeDirective){
       var $loopChildren = jQuery(this.node).children();
       js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
       var $itemTemplate = $loopChildren.first();
-      //js.errorIf(this._getDirectives($itemTemplate[0])[0].join(' ') !== 'item', 'the item template must declare itself with an item directive');
+      //js.errorIf(this._getDirectives($itemTemplate[0])[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
+      $itemTemplate.addClass('reactItemTemplate');
       this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
       var $resultsContainer = $($loopChildren[1]);
       var $resultsContents = $resultsContainer.children();
@@ -591,47 +570,67 @@
       var collection = this.scopeChain.scope;
       // todo: don't allow looping over static native objects (like strings - this is almost certainly an error)
       js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
-      var loopItemScope;
 
       var itemNodes = [];
-      var itemNode;
       // todo: support hash collections
       for(var i = 0; i < collection.length; i++){
-        // set up a loop item scope to be applied for each item
-        if(as){
-          // a new scope will be created with bindings for valueAlias and optionally for keyAlias
-          loopItemScope = {};
-          if(keyAlias !== undefined){
-            loopItemScope[keyAlias] = i;
-          }
-          loopItemScope[valueAlias] = new this._Fallthrough(i);
-        }
-
-        if($resultsContents[i]){
-          itemNode = $resultsContents[i];
-        } else {
-          itemNode = $itemTemplate.clone()[0];
-          $(itemNode).removeClass('reactItemTemplate');
+        var itemNode = $resultsContents[i];
+        if(!itemNode){
+          itemNode = $itemTemplate.clone().removeClass('reactItemTemplate')[0];
           // todo: implement bindings as key aliases
-          js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys');
-          this._prependDirective(itemNode, ['loopKey', i]);
+          js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
+          var itemDirective = makeDirective(i);
+          this._prependDirective(itemNode, itemDirective);
           this.enqueueNodes([itemNode].concat(Array.prototype.slice.apply(itemNode.querySelectorAll('[react]'))));
         }
-        this.loopItemScopes[this.getNodeKey(itemNode)] = loopItemScope;
         itemNodes.push(itemNode);
       }
-      $itemTemplate.addClass('reactItemTemplate');
       if(collection.length !== $resultsContents.length){
         $resultsContainer.html(itemNodes);
       }
     },
 
-    loopKey: function(key){
-      if(this.loopItemScopes[this.getNodeKey(this.node)]){
-        this.pushScope(this.loopItemScopes[this.getNodeKey(this.node)], {type:'loopKey', key:key});
-      }else{
-        this.within(key);
+    withinEach: function(){
+      // todo: return here (and everywhere else) if collection is undefined.  test for this
+      this._createItemNodes(function(index){
+        return ['withinItem', index];
+      });
+    },
+
+    withinItem: function(key){
+      // todo: add a rule to only allow getting items from last scope (check if key < scope.length?)
+      // todo: add a rule to make sure the last scope object is an array
+      js.errorIf(this.scopeChain.scope.length-1 < +key, 'Tried to re-render a node for an index the no longer exists');
+      // todo: want to raise an error including link to this.scopeChain.scope - write an error helper
+      js.errorIf(!this.scopeChain.scope[key], 'Could not find anything at key '+key+' on the scope object');
+      // todo: might be a problem that using the within() as a helper will give the scope a type of 'within'
+      this.within(key);
+    },
+
+    'for': function(keyAlias, valueAlias){
+      var aliases = arguments;
+      // todo: return here (and everywhere else) if collection is undefined.  test for this
+      this._createItemNodes(function(index){
+        return ['bindItem', index].concat(Array.prototype.slice.call(aliases));
+      });
+    },
+
+    bindItem: function(key, keyAlias, valueAlias){
+      if(valueAlias === undefined){
+        valueAlias = keyAlias;
+        keyAlias = undefined;
       }
+
+      // set up an item scope to be applied for each item
+      // a new scope will be created with bindings for valueAlias and optionally for keyAlias
+      var itemBindings = {};
+      if(keyAlias !== undefined){
+        itemBindings[keyAlias] = key;
+      }
+      // todo: don't make this a fallthrough - create an explicit binding to the previous array scope object
+      itemBindings[valueAlias] = new this._Fallthrough(key);
+
+      this.pushScope(itemBindings, {type:'bindItem', key:key});
     },
 
     showIf: function(condition){

@@ -176,16 +176,16 @@ test('conditions can be negated', function(){
 
 
 /*
- * loops
+ * withinEach
  */
 
-module("loop");
+module("withinEach");
 
 test('works with a missing key alias', function(){/*...*/});
 
 test('requires at least an item template node and a contents node inside the loop node', function(){
   throws(function(){
-    react.update($('<div react="loop as item">\
+    react.update($('<div react="for item">\
       <span class="exampleTemplate"></span>\
       <!-- to prevent debeloper surprise, the missing container tag here is required -->\
     </div>')[0], []);
@@ -194,7 +194,7 @@ test('requires at least an item template node and a contents node inside the loo
 
 test('template node is not visible after render', function(){
   var node = $('\
-    <div id="outter" react="loop as which item">\
+    <div id="outter" react="for which item">\
       <div react="contain item"></div>\
     <div id="container"></div></div>\
   ')[0];
@@ -206,7 +206,7 @@ test('template node is not visible after render', function(){
 
 test('can loop across values in an array', function(){
   var node = $('\
-    <div id="outter" react="loop as which item">\
+    <div id="outter" react="for which item">\
       <div id="item" react="contain item"></div>\
     <div id="container"></div></div>\
   ')[0];
@@ -222,7 +222,7 @@ test('can loop across values in an array', function(){
 
 test('does not operate on loop item template node', function(){
   var node = $('\
-    <div id="outter" react="loop as which item">\
+    <div id="outter" react="for which item">\
       <div id="item" react="contain item">stuff</div>\
     <div id="container"></div></div>\
   ')[0];
@@ -233,7 +233,7 @@ test('does not operate on loop item template node', function(){
 
 test('does not operate on descendants of loop item template node', function(){
   var node = $('\
-    <div id="outter" react="loop as which item">\
+    <div id="outter" react="for which item">\
       <div id="item"><div id="descendant" react="contain item">stuff</div></div>\
     <div id="container"></div></div>\
   ')[0];
@@ -244,7 +244,7 @@ test('does not operate on descendants of loop item template node', function(){
 
 test('does not operate on descendants of loop item template node, even when loop item template has no react attribute', function(){
   react.update($('\
-    <div react="loop as val">\
+    <div react="for val">\
       <li><a react="attr \'href\' val"></a></li>\
     <ul></ul></div>\
   ')[0], ['foo']);
@@ -274,7 +274,7 @@ test('calling changed on a subobject that\'s associated with a within directive 
 
 test('can loop across keys in an array', function(){
   var node = $('\
-    <div react="loop as which item">\
+    <div react="for which item">\
       <div react="contain which"></div>\
     <div></div></div>\
   ')[0];
@@ -289,7 +289,7 @@ test('can loop across keys in an array', function(){
 
 test('functions bound at loop time evaluate in correct context', function(){
   var node = $('\
-    <div react="loop as which item">\
+    <div react="for which item">\
       <div react="contain item"></div>\
     <div></div></div>\
   ')[0];
@@ -302,53 +302,8 @@ test('functions bound at loop time evaluate in correct context', function(){
   ], ['a','b','b'], 'children\'s innerHTML is set to array key\'s contents');
 });
 
-test('looping several times on different sized arrays results in different amounts of result contents nodes', function(){
-  var node = $('\
-    <div react="loop">\
-      <div react="contain foo"></div>\
-    <span></span></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
-  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
-  same($(resultsHolder).children().length, 3, '3 children for inital render');
-  react.update(node, [{foo:'a'}, {foo:'b'}]);
-  same($(resultsHolder).children().length, 2, '2 children for inital render');
-  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}, {foo:'d'}]);
-  same($(resultsHolder).children().length, 4, '4 children for inital render');
-});
-
-test('looping without an as clause implies a within statement', function(){
-  var node = $('\
-    <div react="loop">\
-      <div react="contain foo"></div>\
-    <span></span></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
-  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
-  same([
-    $($(resultsHolder).children()[0]).html(),
-    $($(resultsHolder).children()[1]).html(),
-    $($(resultsHolder).children()[2]).html()
-  ], ['a','b','c'], 'children took their values from item objects\' foo properties');
-});
-
-test('nested loops', function(){
-  var $node = $('\
-    <div react="loop">\
-      <div react="loop">\
-        <div react="contain foo"></div>\
-      <span></span></div>\
-    <span></span></div>\
-  ');
-  react.update($node[0], [[{foo:'a'}]]);
-  var $outterResultsHolder = $node.children().last();
-  var $innerLoop = $outterResultsHolder.children().first();
-  var $innerResultsHolder = $innerLoop.children().last();
-  same($innerResultsHolder.children().first().html(), 'a', 'doubly nested children took their values from item objects\' foo properties');
-});
-
 test('results are put in second dom node', function(){
-  var node = $('<div react="loop as which item">\
+  var node = $('<div react="for which item">\
     <div react="contain item"></div>\
     <div id="intended_destination"></div>\
     <div id="decoy"></div>\
@@ -360,7 +315,7 @@ test('results are put in second dom node', function(){
 
 test('originally rendered nodes are preserved on rerender', function(){
   var node = $('\
-    <div react="loop as which item">\
+    <div react="for which item">\
       <div react="contain item"></div>\
     <span></span></div>\
   ')[0];
@@ -374,6 +329,57 @@ test('originally rendered nodes are preserved on rerender', function(){
   }
 });
 
+
+/*
+ * withinEach
+ */
+
+module("withinEach");
+
+test('looping several times on different sized arrays results in different amounts of result contents nodes', function(){
+  var node = $('\
+    <div react="withinEach">\
+      <div react="contain foo"></div>\
+    <span></span></div>\
+  ')[0];
+  var resultsHolder = $(node).children()[1];
+  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
+  same($(resultsHolder).children().length, 3, '3 children for inital render');
+  react.update(node, [{foo:'a'}, {foo:'b'}]);
+  same($(resultsHolder).children().length, 2, '2 children for inital render');
+  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}, {foo:'d'}]);
+  same($(resultsHolder).children().length, 4, '4 children for inital render');
+});
+
+test('withinEach implies a within statement on item nodes', function(){
+  var node = $('\
+    <div react="withinEach">\
+      <div react="contain foo"></div>\
+    <span></span></div>\
+  ')[0];
+  var resultsHolder = $(node).children()[1];
+  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
+  same([
+    $($(resultsHolder).children()[0]).html(),
+    $($(resultsHolder).children()[1]).html(),
+    $($(resultsHolder).children()[2]).html()
+  ], ['a','b','c'], 'children took their values from item objects\' foo properties');
+});
+
+test('nested withinEachs', function(){
+  var $node = $('\
+    <div react="withinEach">\
+      <div react="withinEach">\
+        <div react="contain foo"></div>\
+      <span></span></div>\
+    <span></span></div>\
+  ');
+  react.update($node[0], [[{foo:'a'}]]);
+  var $outterResultsHolder = $node.children().last();
+  var $innerLoop = $outterResultsHolder.children().first();
+  var $innerResultsHolder = $innerLoop.children().last();
+  same($innerResultsHolder.children().first().html(), 'a', 'doubly nested children took their values from item objects\' foo properties');
+});
 
 /*
  * within
@@ -515,7 +521,7 @@ test('updating anchored nodes does not revisit all nodes', function(){
 test('calling changed on an array updates associated list items', function(){
   var object = ['foo'];
   var node = $('\
-    <div react="loop as which item">\
+    <div react="for which item">\
       <div class="item" react="contain item"></div>\
     <span id="container"></span></div>\
   ')[0];
@@ -527,7 +533,7 @@ test('calling changed on an array updates associated list items', function(){
 
 test('regression test: index key binding is still available at change response time', function(){
   var object = [{}, {}];
-  var node = $('<div react="loop as which item">\
+  var node = $('<div react="for which item">\
       <div class="item" react="within item, contain which"></div>\
   <span id="container"></span></div>')[0];
   react.update({node: node, scope: object, anchor: true});
@@ -536,11 +542,11 @@ test('regression test: index key binding is still available at change response t
   same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
 });
 
-test('regression test: a loop inside a loop as will not get duplicate bindings', function(){
+test('regression test: a withinEach inside a for will not get duplicate bindings', function(){
   var object = [[{prop:'a'}, {prop:'b'}]];
   var node = $('\
-    <div react="loop as which item">\
-      <div class="item" react="within item, loop">\
+    <div react="for which item">\
+      <div class="item" react="within item, withinEach">\
         <span class="innerTemplate" react="contain which"></span>\
         <span class="innerContainer"></span>\
       </div>\
@@ -549,8 +555,8 @@ test('regression test: a loop inside a loop as will not get duplicate bindings',
   react.update({node: node, scope: object, anchor: true});
   same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'there is only one element in the outter array, so index substitution (binding to the key "which") should always be 0');
   react.set(object, 0, [{prop:'c'}, {prop:'d'}]);
-  // before the bug fix, the binding instruction from the outter 'loop as' directive never got blown away as the scope chain got built up
-  // thus, there would have been an extra key binding scope, instead of the normal loop style scope change into a property
+  // before the bug fix, the binding instruction from the outter 'for' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
   same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'index substitution is still set to 0');
   react.set(object, 0, [{which:'foo'}, {which:'bar'}]);
   same($($('#container .innerContainer .innerTemplate', node)[1]).html(), 'bar', 'index substitution changes to the masking property');
@@ -560,7 +566,7 @@ test('when a list item is removed, associated loop item nodes disappear', functi
 /* todo
   var object = ['a', 'b'];
   var node = $('\
-    <div react="loop as which item">\
+    <div react="for which item">\
       <span class="item" react="contain item"></span>\
     <span id="container"></span></div>\
   ')[0];
@@ -568,8 +574,8 @@ test('when a list item is removed, associated loop item nodes disappear', functi
   same($($('#container .item', node)[1]).html(), 'b', 'second item got set');
   object.slice(0,1);
   react.changed(object, 1);
-  // before the bug fix, the binding instruction from the outter 'loop as' directive never got blown away as the scope chain got built up
-  // thus, there would have been an extra key binding scope, instead of the normal loop style scope change into a property
+  // before the bug fix, the binding instruction from the outter 'for' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
   same($('#container .item', node).length, 1, 'redundant node got deleted');
 */
 });
@@ -597,7 +603,7 @@ test('recomputes all subnodes when changing the value stored at some index of an
 test('loop items get bound to their indices', function(){
   var object = ['a', 'b'];
   var node = $('\
-    <div react="loop as which item">\
+    <div react="for which item">\
       <div class="item" react="contain item"></div>\
     <span id="container"></span></div>\
   ')[0];
