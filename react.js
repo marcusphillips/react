@@ -10,7 +10,7 @@
 
   var undefined;
 
-  window.react = {
+  var react = {
 
     nodes: {},
 
@@ -113,39 +113,13 @@
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
           if(eachAncestor === node && (directiveIndex||0) <= whichDirective){ break; }
           if(!lastLink){ continue; }
-          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective]);
+          var directiveName = directives[whichDirective].shift();
+          if(this._extendScopeChainBasedOnDirective[directiveName]){
+            lastLink = this._extendScopeChainBasedOnDirective[directiveName](lastLink, directives[whichDirective]);
+          }
         }
       }
       return lastLink;
-    },
-
-    // given a scope chain and a directive, extends the scope chain if necessary
-    // does not operate on anchor directives
-    _extendScopeChainBasedOnDirective: function(lastLink, directive){
-      // todo: turn these into named methods rather than a switch statement
-      switch(directive[0]){
-        case 'within':
-//todo: test that this isn't broken - it used to not do a lookup, only checked the last scope
-//todo: deprecate the suppressObservers flag
-          return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}), {type:'within', key: directive[1]});
-        break;
-//todo: finish refactoring from here. asdf;
-        case 'withinItem':
-// todo: write a test this for inadvertent fallthrough, as if it still said this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true})
-          return this._extendScopeChain(lastLink, this.scopeChain.scope[directive[1]], {type:'withinItem', key: directive[1]}); //todo: changed from type:'within' - will that break anything?
-        break;
-        case 'bindItem':
-          var itemBindings = {};
-          if(directive.length === 4){
-            itemBindings[directive[2]] = directive[1];
-          }
-          itemBindings[js.last(directive)] = new this._Fallthrough(directive[1]);
-          return this._extendScopeChain(lastLink, itemBindings, {type:'itemBindings', key:directive[1]});
-        break;
-        default:
-          return lastLink;
-        break;
-      }
     },
 
     _buildScopeChainFromAnchorNames: function(names, lastLink){
@@ -485,6 +459,28 @@
   };
 
 
+    // given a scope chain and a directive, extends the scope chain if necessary
+    // does not operate on anchor directives
+    react._extendScopeChainBasedOnDirective = js.create(react, {
+      within: function(lastLink, args){
+        //todo: test that this isn't broken - it used to not do a lookup, only checked the last scope
+        //todo: deprecate the suppressObservers flag
+        return this._extendScopeChain(lastLink, this._lookupInScopeChain(args[0], lastLink, {suppressObservers: true}), {type:'within', key: args[0]});
+      },
+      withinItem: function(lastLink, args){
+        // todo: write a test this for inadvertent fallthrough, as if it still said this._lookupInScopeChain(args[0], lastLink, {suppressObservers: true})
+        return this._extendScopeChain(lastLink, this.scopeChain.scope[args[0]], {type:'withinItem', key: args[0]}); //todo: changed from type:'within' - will that break anything?
+      },
+      bindItem: function(lastLink, args){
+        var itemBindings = {};
+        if(args.length === 3){
+          itemBindings[args[1]] = args[0];
+        }
+        itemBindings[js.last(args)] = new this._Fallthrough(args[0]);
+        return this._extendScopeChain(lastLink, itemBindings, {type:'itemBindings', key:args[0]});
+      }
+    }),
+
   react.commands = js.create(react, {
 
   /*
@@ -671,5 +667,7 @@
     }
 
   });
+
+  window.react = react;
 
 }());
