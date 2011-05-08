@@ -151,7 +151,8 @@
             delete memory.loopAlias;
             return this._extendScopeChain(lastLink, loopItemScope, {type:'loopKey', key:directive[1]});
           }else{
-// todo: was also broken, test this for when it says "lastLink.scope[directive[1]]"
+// todo: is currently broken, should only get value from the list at the end of the scope chain (though not the keybindings, if any exists at the end of the scope chain)
+// test this for inadvertent fallthrough
             return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}));
           }
         break;

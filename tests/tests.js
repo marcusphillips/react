@@ -556,6 +556,35 @@ test('regression test: a loop inside a loop as will not get duplicate bindings',
   same($($('#container .innerContainer .innerTemplate', node)[1]).html(), 'bar', 'index substitution changes to the masking property');
 });
 
+test('when a list item is removed, associated loop item nodes disappear', function(){
+/* todo
+  var object = ['a', 'b'];
+  var node = $('\
+    <div react="loop as which item">\
+      <span class="item" react="contain item"></span>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), 'b', 'second item got set');
+  object.slice(0,1);
+  react.changed(object, 1);
+  // before the bug fix, the binding instruction from the outter 'loop as' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal loop style scope change into a property
+  same($('#container .item', node).length, 1, 'redundant node got deleted');
+*/
+});
+
+test('increasing the length property of a list appends extra nodes', function(){
+});
+
+test('reducing the length property of a list deletes extra nodes', function(){
+
+});
+
+test('lookups to loop items don\'t fall through past the top scope if that item holds undefined', function(){
+  // not yet tested
+});
+
 test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){
 //  ok(false, 'not yet written');
 });
