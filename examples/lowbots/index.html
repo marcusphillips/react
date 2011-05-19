@@ -3,6 +3,7 @@
     <link href="./lowbots.css" type="text/css" rel="stylesheet"/>
     <script type="text/javascript" src="../../lib/jquery/jquery-1.4.2.js"></script>
     <script type="text/javascript" src="../../lib/js_dot_standin/js.js"></script>
+    <link rel="stylesheet" type="text/css" href="../../react.css" />
     <script type="text/javascript" src="../../react.js"></script>
     <script src="./lowbots.js"></script>
     <script src="./keybindings.js"></script>
@@ -26,8 +27,8 @@
     <div>Lowbots!!</div>
     <div react="showIf victorious">You win!!</div>
     <div react="contain move_count"></div>
-    <div class="board" react="loop">
-      <div class="row" react="loop">
+    <div class="board" react="withinEach">
+      <div class="row" react="withinEach">
         <div class="square" react="classIf n_border 'n_border',
                                    classIf s_border 's_border',
                                    classIf e_border 'e_border',
