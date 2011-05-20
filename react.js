@@ -84,6 +84,7 @@
 
       var nodesToUpdate = [];
       var updateContext = js.create(this.commands, {
+        root: listener.node, // todo: is this right? root seems meaningless in this case. only added root to the updateNode method so I could allow updating of whole branch at once
         node: listener.node,
         nodesToUpdate: nodesToUpdate,
         scopeChain: listener.scopeChain,
@@ -204,6 +205,7 @@
       js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
       var updateContext = js.create(this.commands, {
+        root: root,
         nodesToUpdate: Array.prototype.slice.apply(root.querySelectorAll('[react]')),
         bequeathedScopeChains: {},
         loopItemTemplates: {}
@@ -243,6 +245,7 @@
         if(!ancestor || ancestor === document){
           return false;
         } else if (
+          ancestor === updateContext.root ||
           ancestor.getAttribute('react') ||
           updateContext.bequeathedScopeChains[this.getNodeKey(ancestor)] || // todo: what's this cover?
           updateContext.loopItemTemplates[this.getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
@@ -257,7 +260,10 @@
     _updateNode: function(node, updateContext){
       //todo: test that you never revisit a node
       var nodeKey = this.getNodeKey(node);
-      if(typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined'){
+      if(
+        typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined' ||
+        node === updateContext.root // this is to prevent an undefined scope chain for the root getting overwritten with false. don't like it.
+      ){
         // node has already been visited
         return;
       }
@@ -290,6 +296,10 @@
     _updateNodeGivenScopeChain: function(node, scopeChain, updateContext, fromDirective){
       var nodeKey = this.getNodeKey(node);
       var directives = this._getDirectives(node);
+
+      if(directives.anchored){
+        scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeChain);
+      }
 
       var pushScope = function(scope, options){
         scopeChain = this._extendScopeChain(scopeChain, scope, options);
