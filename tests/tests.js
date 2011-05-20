@@ -672,6 +672,58 @@ test('event handlers don\'t dissapear on call to changed()', function(){
   same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
 });
 
+test('event handlers don\'t get lost on loops', function(){
+
+  function makeClickerNode ( id ) {
+    var subNode = $('<div><div react="attr \'id\' id, contain count"></div></div>')[0];
+
+    var data = { count : 0, id : id };
+
+    react.anchor( subNode, data );
+    react.update( subNode );
+
+    jQuery( '#' + id, subNode).bind('click', function(){
+      data.count += 1;
+      react.changed( data, 'count' );
+    });
+
+    return subNode;
+  }
+
+  function tryClick ( node, maxId ) {
+    
+    for ( var i = 0 ; i < maxId ; i++ ) {
+      var id = "#"+i;
+      var current = +(jQuery( id, node ).html());
+      $( id, node ).trigger( 'click' );
+      var next = +(jQuery( id, node ).html());
+      same( next, current + 1, "incrmented value" );
+    }
+
+  }
+
+  var data  = []
+  var maxId = 0;
+
+  data.push( makeClickerNode( maxId++ ) );
+
+  var node = $('<div react="for item">\
+    <div react="contain item"></div>\
+    <div></div>\
+  </div>')[0];
+  
+  react.anchor( node, data );
+  react.update( node );
+
+  tryClick( node, maxId );
+
+  data.push( makeClickerNode( maxId++ ) );
+
+  react.changed( data );
+
+  tryClick( node, maxId );
+});
+
 test('anchors are followed even for child nodes of the input node', function(){
   var subNode = $('<span react="contain foo"></span>')[0];
   react.anchor(subNode, {foo: 'bar'});
@@ -685,6 +737,26 @@ test('anchored nodes within root get operated on, even if root does not', functi
   react.update($('<div></div>').html(subNode)[0]);
   same(subNode.innerHTML, 'bar', 'foo did not get updated');
 });
+
+
+test('nodes can be anchored after the there parents', function(){
+  var subNode = $('<span id="foo" react="contain foo.bar"></span>')[0];
+  var node    = $('<span react="contain subNode"></span>')[0];
+
+  var data    = { subNode : subNode };
+  var subData = { foo : { bar :"bar" } };
+
+  react.anchor( node, data );
+  react.update( node );
+
+  react.anchor( subNode, subData );
+  react.update( subNode );
+
+  react.update( node );
+
+  same(jQuery( '#foo', node).html(), 'bar', 'foo did not get updated');
+});
+
 
 test('unanchored nodes can have properties set with no side effects', function(){
   var object = {foo:1, bar:1};
