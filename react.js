@@ -78,11 +78,22 @@
         return;
       }
 
-      this._followDirective(listener.directive, js.create(this.commands, {
+      var nodesToUpdate = [];
+      var updateContext = js.create(this.commands, {
         node: listener.node,
+        nodesToUpdate: nodesToUpdate,
         scopeChain: listener.scopeChain,
-        directiveIndex: listener.directiveIndex
-      }));
+// todo: this probably needs a pushscope method
+// todo: consolidate all these updateContext object creations
+// todo: these last two probably don't belong here. they were added to keep .enqueueNodes() from erroring.
+        bequeathedScopeChains: {},
+        loopItemTemplates: {}
+      });
+      var directiveContext = js.create(updateContext, {
+        directiveIndex: listener.directiveIndex,
+      });
+      this._followDirective(listener.directive, directiveContext);
+      this._updateNodes(nodesToUpdate, updateContext);
     },
 
     _interpretListenerString: function(listenerString){
@@ -122,10 +133,11 @@
           if(scopeBuildingContext.node === node && (directiveIndex||0) <= whichDirective){ break; }
           if(!scopeBuildingContext.scopeChain){ continue; }
           if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective][0])){
-            this._followDirective(directives[whichDirective], js.create(scopeBuildingContext,{
+            var directiveContext = js.create(scopeBuildingContext, {
               directiveIndex: whichDirective,
               pushScope: pushScope
-            }));
+            });
+            this._followDirective(directives[whichDirective], directiveContext);
           }
         }
       }
@@ -187,15 +199,8 @@
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
       js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
-      var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
       var updateContext = js.create(this.commands, {
-        enqueueNodes: function(newNodes){
-          nodes = nodes.concat(newNodes);
-          for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-            delete updateContext.bequeathedScopeChains[this.getNodeKey(newNodes[whichNode])];
-            delete updateContext.loopItemTemplates[this.getNodeKey(newNodes[whichNode])];
-          }
-        },
+        nodesToUpdate: Array.prototype.slice.apply(root.querySelectorAll('[react]')),
         bequeathedScopeChains: {},
         loopItemTemplates: {}
       });
@@ -207,11 +212,24 @@
       var baseScopeChain = this._buildScopeChain(scopes, {type: 'updateInputs', prefix: this._buildScopeChainForNode(root, options.fromDirective || 0)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext, options.fromDirective);
 
+      this._updateNodes(updateContext.nodesToUpdate, updateContext);
+
+      return root;
+    },
+
+    _updateNodes: function(nodes, updateContext){
       for(var i = 0; i < nodes.length; i++){
         this._updateNode(nodes[i], updateContext);
       }
+    },
 
-      return root;
+    _enqueueNodes: function(newNodes){
+      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
+      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
+        var nodeKey = this.getNodeKey(newNodes[whichNode]);
+        delete this.bequeathedScopeChains[nodeKey];
+        delete this.loopItemTemplates[nodeKey];
+      }
     },
 
     _getParent: function(node, updateContext){
@@ -274,12 +292,13 @@
       };
 
       for(var i = fromDirective || 0; i < directives.length; i++){
-        this._followDirective(directives[i], js.create(updateContext, {
+        var directiveContext = js.create(updateContext, {
           node: node,
           directiveIndex: i,
           scopeChain: scopeChain,
           pushScope: pushScope
-        }));
+        });
+        this._followDirective(directives[i], directiveContext);
       }
 
       return scopeChain;
@@ -520,7 +539,16 @@
       this.node.innerHTML = '';
       var insertion = this.lookup(key);
       // if the insertion is a node, use the dom appending method, but insert other items as text
-      jQuery(this.node)[insertion && insertion.nodeType ? 'append' : 'text'](insertion);
+      if(insertion && insertion.nodeType){
+        jQuery(this.node).append(insertion);
+        this._enqueueNodes(this._getReactNodes(insertion));
+      } else {
+        jQuery(this.node).text(insertion);
+      }
+    },
+
+    _getReactNodes: function(root){
+      return [root].concat(Array.prototype.slice.apply(root.querySelectorAll('[react]')));
     },
 
     classIf: function(conditionKey, nameKey){
@@ -568,7 +596,7 @@
           js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
           var itemDirective = makeDirective(i);
           this._prependDirective(itemNode, itemDirective);
-          this.enqueueNodes([itemNode].concat(Array.prototype.slice.apply(itemNode.querySelectorAll('[react]'))));
+          this._enqueueNodes(this._getReactNodes(itemNode));
         }
         itemNodes.push(itemNode);
       }

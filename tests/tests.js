@@ -78,6 +78,13 @@ test('containing node variables', function(){
   equal($(node).children()[0], child, 'contain directive inserted a node variable');
 });
 
+test('containing react nodes', function(){
+  var node = $('<div react="contain child"></div>')[0];
+  var child = $('<div react="contain foo"></div>')[0];
+  react.update(node, {child:child, foo:'bar'});
+  equal($(node).children().html(), 'bar', 'react directive of contained node was followed');
+});
+
 
 /*
  * attributes
