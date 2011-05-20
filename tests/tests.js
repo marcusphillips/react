@@ -336,6 +336,33 @@ test('originally rendered nodes are preserved on rerender', function(){
   }
 });
 
+test('loops can be changed()', function(){
+  var node = $('\
+    <div react="for which item">\
+      <div react="contain item"></div>\
+    <span></span></div>\
+  ')[0];
+
+  function testItems ( node, data ) {
+    var resultsHolder = $(node).children()[1];
+    var children =  $(resultsHolder).children();
+    for(var i = 0; i < data.length; i++){
+      equal($(children[i]).html(), data[i], 'dom node '+i+' dose not match expected value');
+    }
+  }
+
+  var data = ['a'];
+  react.anchor( node, data );
+  react.update( node );
+  testItems( node, data );
+  data.push('b');
+  //react.update( node );
+  react.changed( data );
+  testItems( node, data );
+  data.push('c');
+  react.changed( data, data.length - 1 );
+  testItems( node, data );
+});
 
 /*
  * withinEach
@@ -643,6 +670,24 @@ test('event handlers don\'t dissapear on call to changed()', function(){
   same(jQuery( '#foo', node).html(), '2', 'foo got updated');
   $('#clicker', subNode).trigger( 'click' );
   same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
+});
+
+test('nodes can be anchored after the there parents', function(){
+  var subNode = $('<span id="foo" react="contain foo.bar"></span>')[0];
+  var node    = $('<span react="contain subNode"></span>')[0];
+
+  var data    = { subNode : subNode };
+  var subData = { foo : { bar :"bar" } };
+
+  react.anchor( node, data );
+  react.update( node );
+
+  react.anchor( subNode, subData );
+  react.update( subNode );
+
+  react.update( node );
+
+  same(jQuery( '#foo', node).html(), 'bar', 'foo did not get updated');
 });
 
 test('unanchored nodes can have properties set with no side effects', function(){
