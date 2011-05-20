@@ -337,32 +337,32 @@ test('originally rendered nodes are preserved on rerender', function(){
 });
 
 test('loops can be changed()', function(){
-  var node = $('\
-    <div react="for which item">\
-      <div react="contain item"></div>\
-    <span></span></div>\
-  ')[0];
+  var node = $('<div react="for which item">\
+    <div react="contain item"></div>\
+  <span class="resultsHolder"></span></div>')[0];
 
-  function testItems ( node, data ) {
+  var testItems = function(node, data){
     var resultsHolder = $(node).children()[1];
     var children =  $(resultsHolder).children();
     for(var i = 0; i < data.length; i++){
-      equal($(children[i]).html(), data[i], 'dom node '+i+' dose not match expected value');
+      equal($(children[i]).html(), data[i], 'dom node '+i+' contains expected value');
     }
-  }
+    equal(children.length, data.length, 'list item length is the same as dom node count');
+  };
 
-  var data = ['a'];
+  var data = ['a', 'b'];
   react.anchor( node, data );
   react.update( node );
-  testItems( node, data );
-  data.push('b');
-  //react.update( node );
-  react.changed( data );
-  testItems( node, data );
+  testItems(node, data);
   data.push('c');
-  react.changed( data, data.length - 1 );
-  testItems( node, data );
+  react.changed(data);
+  testItems(node, data);
+  data.pop();
+  data.pop();
+  react.changed(data);
+  testItems(node, data);
 });
+
 
 /*
  * withinEach

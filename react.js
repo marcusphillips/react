@@ -51,6 +51,10 @@
         for(key in object){
           this.changed(object, key);
         }
+        // todo: this still won't work for arguments lists
+        if(Object.prototype.toString.call(object) === '[object Array]'){
+          this.changed(object, 'length');
+        }
         return;
       }
 
@@ -585,9 +589,12 @@
       var collection = this.scopeChain.scope;
       // todo: don't allow looping over static native objects (like strings - this is almost certainly an error)
       js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
+      if(this.scopeChain.anchorKey && !this.suppressObservers){
+        // todo: optimize. this is a shortcut - it simply puts a listener on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
+        this._observeScope(collection, '', 'length', this.node, this.directiveIndex, this.scopeChain.anchorKey, true);
+      }
 
       var itemNodes = [];
-      // todo: support hash collections
       for(var i = 0; i < collection.length; i++){
         var itemNode = $resultsContents[i];
         if(!itemNode){
