@@ -661,6 +661,24 @@ test('event handlers don\'t dissapear on call to changed()', function(){
   same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
 });
 
+test('nodes can be anchored after the there parents', function(){
+  var subNode = $('<span id="foo" react="contain foo.bar"></span>')[0];
+  var node    = $('<span react="contain subNode"></span>')[0];
+
+  var data    = { subNode : subNode };
+  var subData = { foo : { bar :"bar" } };
+
+  react.anchor( node, data );
+  react.update( node );
+
+  react.anchor( subNode, subData );
+  react.update( subNode );
+
+  react.update( node );
+
+  same(jQuery( '#foo', node).html(), 'bar', 'foo did not get updated');
+});
+
 test('unanchored nodes can have properties set with no side effects', function(){
   var object = {foo:1, bar:1};
   var node = $('<div>\
