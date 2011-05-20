@@ -10,7 +10,7 @@
 
   var undefined;
 
-  window.react = {
+  var react = {
 
     nodes: {},
 
@@ -51,6 +51,10 @@
         for(key in object){
           this.changed(object, key);
         }
+        // todo: this still won't work for arguments lists
+        if(Object.prototype.toString.call(object) === '[object Array]'){
+          this.changed(object, 'length');
+        }
         return;
       }
 
@@ -78,11 +82,23 @@
         return;
       }
 
-      this._followDirective(listener.directive, js.create(this.commands, {
+      var nodesToUpdate = [];
+      var updateContext = js.create(this.commands, {
+        root: listener.node, // todo: is this right? root seems meaningless in this case. only added root to the updateNode method so I could allow updating of whole branch at once
         node: listener.node,
+        nodesToUpdate: nodesToUpdate,
         scopeChain: listener.scopeChain,
-        directiveIndex: listener.directiveIndex
-      }));
+// todo: this probably needs a pushscope method
+// todo: consolidate all these updateContext object creations
+// todo: these last two probably don't belong here. they were added to keep .enqueueNodes() from erroring.
+        bequeathedScopeChains: {},
+        loopItemTemplates: {}
+      });
+      var directiveContext = js.create(updateContext, {
+        directiveIndex: listener.directiveIndex,
+      });
+      this._followDirective(listener.directive, directiveContext);
+      this._updateNodes(nodesToUpdate, updateContext);
     },
 
     _interpretListenerString: function(listenerString){
@@ -105,47 +121,32 @@
 
     _buildScopeChainForNode: function(node, directiveIndex){
       var ancestors = $(Array.prototype.reverse.apply($(node).parents())).add(node);
+      var scopeBuildingContext = js.create(react.commands, {
+        //todo: deprecate the suppressObservers flag
+        suppressObservers: true
+      });
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
-        var eachAncestor = ancestors[whichAncestor];
-        var directives = this._getDirectives(eachAncestor);
-        var lastLink = this._buildScopeChainFromAnchorNames(directives.anchored, lastLink);
+        scopeBuildingContext.node = ancestors[whichAncestor];
+        var directives = this._getDirectives(scopeBuildingContext.node);
+        scopeBuildingContext.scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeBuildingContext.scopeChain);
+
+        var pushScope = function(scope, options){
+          scopeBuildingContext.scopeChain = this._extendScopeChain(scopeBuildingContext.scopeChain, scope, options);
+        };
 
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
-          if(eachAncestor === node && (directiveIndex||0) <= whichDirective){ break; }
-          if(!lastLink){ continue; }
-          lastLink = this._extendScopeChainBasedOnDirective(lastLink, directives[whichDirective]);
+          if(scopeBuildingContext.node === node && (directiveIndex||0) <= whichDirective){ break; }
+          if(!scopeBuildingContext.scopeChain){ continue; }
+          if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective][0])){
+            var directiveContext = js.create(scopeBuildingContext, {
+              directiveIndex: whichDirective,
+              pushScope: pushScope
+            });
+            this._followDirective(directives[whichDirective], directiveContext);
+          }
         }
       }
-      return lastLink;
-    },
-
-    // given a scope chain and a directive, extends the scope chain if necessary
-    // does not operate on anchor directives
-    _extendScopeChainBasedOnDirective: function(lastLink, directive){
-      // todo: turn these into named methods rather than a switch statement
-      switch(directive[0]){
-        case 'within':
-//todo: test that this isn't broken - it used to not do a lookup, only checked the last scope
-//todo: deprecate the suppressObservers flag
-          return this._extendScopeChain(lastLink, this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true}), {type:'within', key: directive[1]});
-        break;
-//todo: finish refactoring from here. asdf;
-        case 'withinItem':
-// todo: write a test this for inadvertent fallthrough, as if it still said this._lookupInScopeChain(directive[1], lastLink, {suppressObservers: true})
-          return this._extendScopeChain(lastLink, this.scopeChain.scope[directive[1]], {type:'withinItem', key: directive[1]}); //todo: changed from type:'within' - will that break anything?
-        break;
-        case 'bindItem':
-          var itemBindings = {};
-          if(directive.length === 4){
-            itemBindings[directive[2]] = directive[1];
-          }
-          itemBindings[js.last(directive)] = new this._Fallthrough(directive[1]);
-          return this._extendScopeChain(lastLink, itemBindings, {type:'itemBindings', key:directive[1]});
-        break;
-        default:
-          return lastLink;
-        break;
-      }
+      return scopeBuildingContext.scopeChain;
     },
 
     _buildScopeChainFromAnchorNames: function(names, lastLink){
@@ -203,15 +204,9 @@
       //js.errorIf(this.isNode(root), 'first argument supplied to react.update() must be a dom node');
       js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
-      var nodes = Array.prototype.slice.apply(root.querySelectorAll('[react]'));
       var updateContext = js.create(this.commands, {
-        enqueueNodes: function(newNodes){
-          nodes = nodes.concat(newNodes);
-          for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-            delete updateContext.bequeathedScopeChains[this.getNodeKey(newNodes[whichNode])];
-            delete updateContext.loopItemTemplates[this.getNodeKey(newNodes[whichNode])];
-          }
-        },
+        root: root,
+        nodesToUpdate: Array.prototype.slice.apply(root.querySelectorAll('[react]')),
         bequeathedScopeChains: {},
         loopItemTemplates: {}
       });
@@ -223,11 +218,24 @@
       var baseScopeChain = this._buildScopeChain(scopes, {type: 'updateInputs', prefix: this._buildScopeChainForNode(root, options.fromDirective || 0)});
       updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext, options.fromDirective);
 
+      this._updateNodes(updateContext.nodesToUpdate, updateContext);
+
+      return root;
+    },
+
+    _updateNodes: function(nodes, updateContext){
       for(var i = 0; i < nodes.length; i++){
         this._updateNode(nodes[i], updateContext);
       }
+    },
 
-      return root;
+    _enqueueNodes: function(newNodes){
+      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
+      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
+        var nodeKey = this.getNodeKey(newNodes[whichNode]);
+        delete this.bequeathedScopeChains[nodeKey];
+        delete this.loopItemTemplates[nodeKey];
+      }
     },
 
     _getParent: function(node, updateContext){
@@ -237,6 +245,7 @@
         if(!ancestor || ancestor === document){
           return false;
         } else if (
+          ancestor === updateContext.root ||
           ancestor.getAttribute('react') ||
           updateContext.bequeathedScopeChains[this.getNodeKey(ancestor)] || // todo: what's this cover?
           updateContext.loopItemTemplates[this.getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
@@ -251,7 +260,10 @@
     _updateNode: function(node, updateContext){
       //todo: test that you never revisit a node
       var nodeKey = this.getNodeKey(node);
-      if(typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined'){
+      if(
+        typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined' ||
+        node === updateContext.root // this is to prevent an undefined scope chain for the root getting overwritten with false. don't like it.
+      ){
         // node has already been visited
         return;
       }
@@ -285,17 +297,22 @@
       var nodeKey = this.getNodeKey(node);
       var directives = this._getDirectives(node);
 
+      if(directives.anchored){
+        scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeChain);
+      }
+
       var pushScope = function(scope, options){
         scopeChain = this._extendScopeChain(scopeChain, scope, options);
       };
 
       for(var i = fromDirective || 0; i < directives.length; i++){
-        this._followDirective(directives[i], js.create(updateContext, {
+        var directiveContext = js.create(updateContext, {
           node: node,
           directiveIndex: i,
           scopeChain: scopeChain,
           pushScope: pushScope
-        }));
+        });
+        this._followDirective(directives[i], directiveContext);
       }
 
       return scopeChain;
@@ -344,6 +361,7 @@
         js.errorIf(!this.commands[command], command+' is not a valid react command');
         this.commands[command].apply(context, directive);
       }catch (error){
+        js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
         var directive = this._getDirectives(context.node)[context.directiveIndex];
         js.log('Failure during React update: ', {
           'original error': error,
@@ -359,9 +377,10 @@
 
     _describeScopeChain: function(link){
       var scopeChainDescription = [];
-      do{
+      while(link){
         scopeChainDescription.push(['scope: ', link.scope, ', ' + 'type of scope shift: ' + link.type + (link.key ? '(key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-      }while(link = link.parent);
+        link = link.parent;
+      }
       return scopeChainDescription;
     },
 
@@ -442,7 +461,8 @@
       do {
         var object = scopeChain.scope;
         value = object[baseKey];
-        if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
+        // todo: write a test to verify that responses to change events don't result in new observers
+        if(scopeChain.anchorKey && options.listener && !this.suppressObservers){
           this._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, value !== undefined);
         }
         if(value instanceof this._Fallthrough){
@@ -459,7 +479,7 @@
         if(object === undefined || object === null){
           return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
         }
-        if(scopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
+        if(scopeChain.anchorKey && !options.returnObject && !this.suppressObservers){
           this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
         }
         prefix = prefix + keys[0] + '.';
@@ -533,7 +553,16 @@
       this.node.innerHTML = '';
       var insertion = this.lookup(key);
       // if the insertion is a node, use the dom appending method, but insert other items as text
-      jQuery(this.node)[insertion && insertion.nodeType ? 'append' : 'text'](insertion);
+      if(insertion && insertion.nodeType){
+        jQuery(this.node).append(insertion);
+        this._enqueueNodes(this._getReactNodes(insertion));
+      } else {
+        jQuery(this.node).text(insertion);
+      }
+    },
+
+    _getReactNodes: function(root){
+      return [root].concat(Array.prototype.slice.apply(root.querySelectorAll('[react]')));
     },
 
     classIf: function(conditionKey, nameKey){
@@ -570,9 +599,12 @@
       var collection = this.scopeChain.scope;
       // todo: don't allow looping over static native objects (like strings - this is almost certainly an error)
       js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
+      if(this.scopeChain.anchorKey && !this.suppressObservers){
+        // todo: optimize. this is a shortcut - it simply puts a listener on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
+        this._observeScope(collection, '', 'length', this.node, this.directiveIndex, this.scopeChain.anchorKey, true);
+      }
 
       var itemNodes = [];
-      // todo: support hash collections
       for(var i = 0; i < collection.length; i++){
         var itemNode = $resultsContents[i];
         if(!itemNode){
@@ -581,7 +613,7 @@
           js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
           var itemDirective = makeDirective(i);
           this._prependDirective(itemNode, itemDirective);
-          this.enqueueNodes([itemNode].concat(Array.prototype.slice.apply(itemNode.querySelectorAll('[react]'))));
+          this._enqueueNodes(this._getReactNodes(itemNode));
         }
         itemNodes.push(itemNode);
       }
@@ -671,5 +703,7 @@
     }
 
   });
+
+  window.react = react;
 
 }());

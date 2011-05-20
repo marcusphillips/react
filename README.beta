@@ -1,5 +1,9 @@
 additional documentation to be added
 
+--- internals ---
+each scope object contains two things - the scope and the parent
+a lookup first checks the .scope object to see if the key is there
+if it fails, it moves on to the .parent object (which is itself a scope object, containing a .scope property) and does the same thing
 
 --------
 

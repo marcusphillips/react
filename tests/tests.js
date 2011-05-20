@@ -78,6 +78,13 @@ test('containing node variables', function(){
   equal($(node).children()[0], child, 'contain directive inserted a node variable');
 });
 
+test('containing react nodes', function(){
+  var node = $('<div react="contain child"></div>')[0];
+  var child = $('<div react="contain foo"></div>')[0];
+  react.update(node, {child:child, foo:'bar'});
+  equal($(node).children().html(), 'bar', 'react directive of contained node was followed');
+});
+
 
 /*
  * attributes
@@ -330,32 +337,32 @@ test('originally rendered nodes are preserved on rerender', function(){
 });
 
 test('loops can be changed()', function(){
-  var node = $('\
-    <div react="for which item">\
-      <div react="contain item"></div>\
-    <span></span></div>\
-  ')[0];
+  var node = $('<div react="for which item">\
+    <div react="contain item"></div>\
+  <span class="resultsHolder"></span></div>')[0];
 
-  function testItems ( node, data ) {
+  var testItems = function(node, data){
     var resultsHolder = $(node).children()[1];
     var children =  $(resultsHolder).children();
     for(var i = 0; i < data.length; i++){
-      equal($(children[i]).html(), data[i], 'dom node '+i+' dose not match expected value');
+      equal($(children[i]).html(), data[i], 'dom node '+i+' contains expected value');
     }
-  }
+    equal(children.length, data.length, 'list item length is the same as dom node count');
+  };
 
-  var data = ['a'];
+  var data = ['a', 'b'];
   react.anchor( node, data );
   react.update( node );
-  testItems( node, data );
-  data.push('b');
-  //react.update( node );
-  react.changed( data );
-  testItems( node, data );
+  testItems(node, data);
   data.push('c');
-  react.changed( data, data.length - 1 );
-  testItems( node, data );
+  react.changed(data);
+  testItems(node, data);
+  data.pop();
+  data.pop();
+  react.changed(data);
+  testItems(node, data);
 });
+
 
 /*
  * withinEach
@@ -569,6 +576,10 @@ test('regression test: index key binding is still available at change response t
   same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
 });
 
+test('', function(){
+// todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)
+});
+
 test('regression test: a withinEach inside a for will not get duplicate bindings', function(){
   var object = [[{prop:'a'}, {prop:'b'}]];
   var node = $('\
@@ -661,22 +672,18 @@ test('event handlers don\'t dissapear on call to changed()', function(){
   same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
 });
 
-test('nodes can be anchored after the there parents', function(){
-  var subNode = $('<span id="foo" react="contain foo.bar"></span>')[0];
-  var node    = $('<span react="contain subNode"></span>')[0];
+test('anchors are followed even for child nodes of the input node', function(){
+  var subNode = $('<span react="contain foo"></span>')[0];
+  react.anchor(subNode, {foo: 'bar'});
+  react.update($('<span react="contain subNode"></span>')[0], {subNode: subNode});
+  same(subNode.innerHTML, 'bar', 'foo did not get updated');
+});
 
-  var data    = { subNode : subNode };
-  var subData = { foo : { bar :"bar" } };
-
-  react.anchor( node, data );
-  react.update( node );
-
-  react.anchor( subNode, subData );
-  react.update( subNode );
-
-  react.update( node );
-
-  same(jQuery( '#foo', node).html(), 'bar', 'foo did not get updated');
+test('anchored nodes within root get operated on, even if root does not', function(){
+  var subNode = $('<span react="contain foo"></span>')[0];
+  react.anchor(subNode, {foo: 'bar'});
+  react.update($('<div></div>').html(subNode)[0]);
+  same(subNode.innerHTML, 'bar', 'foo did not get updated');
 });
 
 test('unanchored nodes can have properties set with no side effects', function(){
