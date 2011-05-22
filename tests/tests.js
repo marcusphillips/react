@@ -672,56 +672,47 @@ test('event handlers don\'t dissapear on call to changed()', function(){
   same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
 });
 
-test('event handlers don\'t get lost on loops', function(){
+test('can anchor in update operation with three arguments', function(){
+  var object = {foo:'bar'};
+  var node = react.update($('<div react="contain foo"></div>')[0], object, {anchor: true});
+  object.foo = 'baz';
+  react.update(node);
+  same(node.innerHTML, 'baz', 'node got the new value from the anchored object');
+});
 
-  function makeClickerNode ( id ) {
-    var subNode = $('<div><div react="attr \'id\' id, contain count"></div></div>')[0];
-
-    var data = { count : 0, id : id };
-
-    react.anchor( subNode, data );
-    react.update( subNode );
-
-    jQuery( '#' + id, subNode).bind('click', function(){
-      data.count += 1;
-      react.changed( data, 'count' );
-    });
-
-    return subNode;
-  }
-
-  function tryClick ( node, maxId ) {
-    
-    for ( var i = 0 ; i < maxId ; i++ ) {
-      var id = "#"+i;
-      var current = +(jQuery( id, node ).html());
-      $( id, node ).trigger( 'click' );
-      var next = +(jQuery( id, node ).html());
-      same( next, current + 1, "incrmented value" );
-    }
-
-  }
-
-  var data  = []
-  var maxId = 0;
-
-  data.push( makeClickerNode( maxId++ ) );
-
-  var node = $('<div react="for item">\
+test('event handlers don\'t get lost by loop insertion', function(){
+  var wasClicked;
+  var insertion = $('<div></div>').click(function(){
+    wasClicked = true;
+  })[0];
+  var node = react.update($('<div react="for item">\
     <div react="contain item"></div>\
     <div></div>\
-  </div>')[0];
-  
-  react.anchor( node, data );
-  react.update( node );
+  </div>')[0], [insertion]);
 
-  tryClick( node, maxId );
+  $(insertion).click();
+  ok(wasClicked, 'click was noticed, even though node was inserted by a looping construct');
+});
 
-  data.push( makeClickerNode( maxId++ ) );
+test('event handlers don\'t get lost by loop item creation', function(){
+  var wasClicked;
+  var insertion = $('<div class="insertion"></div>').click(function(){
+    wasClicked = true;
+  })[0];
+  var insertions = [insertion];
+  var node = react.update($('<div react="for item">\
+    <div react="contain item"></div>\
+    <div></div>\
+  </div>')[0], insertions, {anchor: true});
 
-  react.changed( data );
+  $(node).find('.insertion').click();
+  ok(wasClicked, 'click was noticed, even though node was inserted by a looping construct');
+  insertions.push($(insertion).clone()[0]);
+  wasClicked = false;
 
-  tryClick( node, maxId );
+  react.changed(insertions);
+  $(node).find('.insertion').click();
+  ok(wasClicked, 'click was noticed after list changed and contents of loop results node were updated');
 });
 
 test('anchors are followed even for child nodes of the input node', function(){
@@ -737,26 +728,6 @@ test('anchored nodes within root get operated on, even if root does not', functi
   react.update($('<div></div>').html(subNode)[0]);
   same(subNode.innerHTML, 'bar', 'foo did not get updated');
 });
-
-
-test('nodes can be anchored after the there parents', function(){
-  var subNode = $('<span id="foo" react="contain foo.bar"></span>')[0];
-  var node    = $('<span react="contain subNode"></span>')[0];
-
-  var data    = { subNode : subNode };
-  var subData = { foo : { bar :"bar" } };
-
-  react.anchor( node, data );
-  react.update( node );
-
-  react.anchor( subNode, subData );
-  react.update( subNode );
-
-  react.update( node );
-
-  same(jQuery( '#foo', node).html(), 'bar', 'foo did not get updated');
-});
-
 
 test('unanchored nodes can have properties set with no side effects', function(){
   var object = {foo:1, bar:1};

@@ -182,12 +182,7 @@
       };
     },
 
-    update: function(){
-      return this._updateTree.apply(this, arguments);
-    },
-
-    // todo: add update(object, key) signature, for refreshing only from certain properties
-    _updateTree: function(options){
+    update: function(/*[node, scope],*/ options){
       options = options || {};
       if(options.nodeType){
         // detect argument signature of (node, scope)
@@ -195,8 +190,12 @@
           node: arguments[0],
           scope: arguments[1]
         };
+        js.merge(options, arguments[2] || {});
       }
+      return this._updateTree(options);
+    },
 
+    _updateTree: function(options){
       var root = options.node;
 
       //todo: test these
@@ -378,7 +377,7 @@
     _describeScopeChain: function(link){
       var scopeChainDescription = [];
       while(link){
-        scopeChainDescription.push(['scope: ', link.scope, ', ' + 'type of scope shift: ' + link.type + (link.key ? '(key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
+        scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
         link = link.parent;
       }
       return scopeChainDescription;
@@ -618,6 +617,8 @@
         itemNodes.push(itemNode);
       }
       if(collection.length !== $resultsContents.length){
+        // we set innerHTML here to prevent jQuery fron detaching all event handlers (automatic in an .html() call)
+        $resultsContainer[0].innerHTML = '';
         $resultsContainer.html(itemNodes);
       }
     },
