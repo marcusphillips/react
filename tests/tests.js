@@ -896,3 +896,34 @@ test('regression test - within directive doesn\'t halt updates to the changed lo
   same(jQuery('#bar', node)[0].innerHTML, 'changed', 'bar gets set');
   same(jQuery('#baz', node)[0].innerHTML, 'changed', 'baz gets set');
 });
+
+test('templates are not rerendered when inserted in to the dom', function () {
+  var node    = $('<div react="contain other"></div>')[0];
+  var subNode = $('<div id="other" react="contain foo"></div>')[0];
+
+  var data    = { other : "" };
+  var subData = { foo : raster };
+
+  var i = 0;
+
+  function raster () {
+    i++;
+    return "foo";
+  }
+
+  react.anchor( node, data );
+  react.update( node );
+
+  react.anchor( subNode, subData );
+  react.update( subNode );
+
+  var expected = i;
+
+  data.other = subNode;
+  react.changed( data, 'other' );
+
+  same( jQuery('#other', node)[0].innerHTML, 'foo', 'inner node set' );
+  same( expected, i, "i not incrmented" );
+
+});
+
