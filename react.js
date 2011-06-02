@@ -1,12 +1,14 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 1.0.1, http://github.com/marcusphillips/react
+ * Version 1.1, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
  */
 
 (function () {
+
+   var doNotRecurse = {};
 
   var undefined;
 
@@ -73,7 +75,7 @@
 
       // todo: bindItem is needed here but won't work until the registration is made on the array element it's bound to. something like
       js.errorIf(listener.directive[0] === 'bindItem', 'you need recalculations for bindItem (when the key was an itemAlias), but those aren\'t implemented yet');
-      if(js.among(['within', 'withinEach', 'withinItem', 'for'], listener.directive[0])){
+      if(js.among(['within', 'withinEach', 'withinItem', 'for', 'if'], listener.directive[0])){
         // todo: loopKey probably won't work, and maybe withinEach either
         this._updateTree({
           node: listener.node,
@@ -356,6 +358,9 @@
 
     _followDirective: function(directive, context){
       try{
+        if(context.scopeChain.scope === doNotRecurse){
+          return doNotRecurse;
+        }
         var command = directive.shift();
         js.errorIf(!this.commands[command], command+' is not a valid react command');
         this.commands[command].apply(context, directive);
@@ -666,8 +671,25 @@
       this.pushScope(itemBindings, {type:'bindItem', key:key});
     },
 
+    _conditionalShow: function(conditional){
+      jQuery(this.node)[conditional ? 'show' : 'hide']();
+    },
+
+    'if': function(condition){
+      var conditional = this.lookup(condition);
+      // this is technical debt, but will go away in the refactor. the suppressObservers flag happens to be useful in this case to detect when we are only building a scope chain.  when that happens, we also don't want to have these side effects on the classes either
+      if(!this.suppressObservers){
+        $(this.node)[conditional ? 'removeClass' : 'addClass']('reactConditionallyHidden');
+      }
+      if(!conditional){
+        this.pushScope(doNotRecurse);
+      }
+      this._conditionalShow(conditional);
+    },
+
     showIf: function(condition){
-      jQuery(this.node)[this.lookup(condition) ? 'show' : 'hide']();
+      var conditional = this.lookup(condition);
+      this._conditionalShow(conditional);
     },
 
     visIf: function(condition){
