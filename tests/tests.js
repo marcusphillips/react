@@ -181,6 +181,34 @@ test('conditions can be negated', function(){
   equal($(node).attr('foo'), 'bar', 'with a space, attribute was added when negated condition is false');
 });
 
+test('if directives turn off recursion in subsequent directives of the same node', function(){
+  var node = $('<div react="if condition \'foo\', contain bar">original</div>')[0];
+  react.update(node, {condition: true, bar: 'new'});
+  equal($(node).html(), 'new', 'contents get set when condition is false');
+
+  var scope = {condition:false, bar:'newer'};
+  react.update(node, scope, {anchor: true});
+  equal($(node).html(), 'new', 'contents went unchanged when condition is false');
+
+  react.set(scope, 'condition', true);
+  equal($(node).html(), 'newer', 'contents changed when property was updated to true');
+});
+
+test('if directives turn off recursion in child nodes', function(){
+  var node = $('<div react="if condition \'foo\'">\
+    <div react="contain bar">original</div>\
+  ')[0];
+  react.update(node, {condition: true, bar: 'new'});
+  equal($(node).children().first().html(), 'new', 'contents get set when condition is false');
+
+  var scope = {condition:false, bar:'newer'};
+  react.update(node, scope, {anchor: true});
+  equal($(node).children().first().html(), 'new', 'contents went unchanged when condition is false');
+
+  react.set(scope, 'condition', true);
+  equal($(node).children().first().html(), 'newer', 'contents changed when property was updated to true');
+});
+
 
 /*
  * withinEach
