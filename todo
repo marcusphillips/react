@@ -1,3 +1,4 @@
+- Make lookups fail when property isn't defined on the object ('prop' in obj), rather than when it has a value of undefined
 - Make a changed event on any numeric property of an array result in a changed event on the associated loop directives
 - make every node in a loop listen to it's associated key
 - remove update context?
