@@ -12,19 +12,19 @@
 
   var undefined;
 
+  var matchers = {
+    directiveDelimiter: /\s*,\s*/,
+    space: /\s+/,
+    isString: /(^'.*'$)|(^".*"$)/,
+    negation: /!\s*/,
+    isNumber: /\d+/
+  };
+
   var react = {
 
     nodes: {},
 
     scopes: {},
-
-    _matchers: {
-      directiveDelimiter: /\s*,\s*/,
-      space: /\s+/,
-      isString: /(^'.*'$)|(^".*"$)/,
-      negation: /!\s*/,
-      isNumber: /\d+/
-    },
 
     name: function(name, object){
       this.scopes[name] = object;
@@ -105,14 +105,14 @@
 
     _interpretListenerString: function(listenerString){
       var listener = listenerString.split(' ');
-      var node = this.nodes[listener[0]];
+      var rNode = makeRNode(this.nodes[listener[0]]);
       var directiveIndex = +listener[1];
       return{
-        node: node,
+        node: rNode.node,
         directiveIndex: directiveIndex,
         prefix: listener[2],
-        directive: this._getDirectives(node)[directiveIndex],
-        scopeChain: this._buildScopeChainForNode(node, directiveIndex)
+        directive: rNode.directives[directiveIndex],
+        scopeChain: this._buildScopeChainForNode(rNode.node, directiveIndex)
       };
     },
 
@@ -129,7 +129,7 @@
       });
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
         scopeBuildingContext.node = ancestors[whichAncestor];
-        var directives = this._getDirectives(scopeBuildingContext.node);
+        var directives = makeRNode(scopeBuildingContext.node).directives;
         scopeBuildingContext.scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeBuildingContext.scopeChain);
 
         var pushScope = function(scope, options){
@@ -192,7 +192,7 @@
           node: arguments[0],
           scope: arguments[1]
         };
-        js.merge(options, arguments[2] || {});
+        js.extend(options, arguments[2] || {});
       }
       return this._updateTree(options);
     },
@@ -296,7 +296,7 @@
 
     _updateNodeGivenScopeChain: function(node, scopeChain, updateContext, fromDirective){
       var nodeKey = this.getNodeKey(node);
-      var directives = this._getDirectives(node);
+      var directives = makeRNode(node).directives;
 
       if(directives.anchored){
         scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeChain);
@@ -319,22 +319,6 @@
       return scopeChain;
     },
 
-    _getDirectives: function(node){
-      var directiveStrings = (node.getAttribute('react')||'').split(this._matchers.directiveDelimiter);
-      var that = this;
-      var directives = js.map(directiveStrings, function(which, string){
-        return js.trim(string).replace(that._matchers.negation, '!').split(that._matchers.space);
-      });
-      if(directives[0] && directives[0][0] === 'anchored'){
-        var anchored = directives.shift();
-      }
-      directives = js.filter(directives, function(directive){
-        return !!directive[0];
-      });
-      directives.anchored = anchored;
-      return directives;
-    },
-
     _setDirectives: function(node, directives){
       var anchored = directives.anchored;
       directives = js.filter(directives, function(directive){
@@ -351,7 +335,7 @@
     },
 
     _prependDirective: function(node, directive){
-      var directives = this._getDirectives(node);
+      var directives = makeRNode(node).directives;
       directives.unshift(directive);
       this._setDirectives(node, directives);
     },
@@ -366,7 +350,7 @@
         this.commands[command].apply(context, directive);
       }catch (error){
         js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
-        var directive = this._getDirectives(context.node)[context.directiveIndex];
+        var directive = makeRNode(context.node).directives[context.directiveIndex];
         js.log('Failure during React update: ', {
           'original error': error,
           'while processing node': context.node,
@@ -401,7 +385,7 @@
 
       var nodeKey = this.getNodeKey(node);
       this.nodes[nodeKey] = node;
-      var directives = this._getDirectives(node);
+      var directives = makeRNode(node).directives;
       // todo: clean up after any existing anchor
       directives.anchored = ['anchored'];
       for(var i = 0; i < scopes.length; i++){
@@ -453,7 +437,7 @@
         negate = true;
         key = key.slice(1);
       }
-      if (this._matchers.isString.test(key)) {
+      if (matchers.isString.test(key)) {
         return key.slice(1, key.length-1);
       }
 
@@ -593,7 +577,7 @@
       var $loopChildren = jQuery(this.node).children();
       js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
       var $itemTemplate = $loopChildren.first();
-      //js.errorIf(this._getDirectives($itemTemplate[0])[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
+      //js.errorIf(makeRNode($itemTemplate[0]).directives[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
       $itemTemplate.addClass('reactItemTemplate');
       this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
       var $resultsContainer = $($loopChildren[1]);
@@ -614,7 +598,7 @@
         if(!itemNode){
           itemNode = $itemTemplate.clone().removeClass('reactItemTemplate')[0];
           // todo: implement bindings as key aliases
-          js.errorIf(this._matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
+          js.errorIf(matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
           var itemDirective = makeDirective(i);
           this._prependDirective(itemNode, itemDirective);
           this._enqueueNodes(this._getReactNodes(itemNode));
@@ -726,6 +710,27 @@
     }
 
   });
+
+  var makeRNode = function(node){
+    var result = {
+      node: node
+    };
+
+    var directiveStrings = (node.getAttribute('react')||'').split(matchers.directiveDelimiter);
+    result.directives = js.map(directiveStrings, function(which, string){
+      return js.extend(js.trim(string).replace(matchers.negation, '!').split(matchers.space), {rnode: result});
+    });
+    if(result.directives[0] && result.directives[0][0] === 'anchored'){
+      var anchored = result.directives.shift();
+    }
+    result.directives = js.filter(result.directives, function(directive){
+      return !!directive[0];
+    });
+    result.directives.anchored = anchored;
+
+
+    return result;
+  };
 
   window.react = react;
 
