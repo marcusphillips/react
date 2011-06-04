@@ -8,7 +8,7 @@
 
 (function () {
 
-   var doNotRecurse = {};
+  var doNotRecurse = {};
 
   var undefined;
 
@@ -20,26 +20,21 @@
     isNumber: /\d+/
   };
 
+  var getNodeKey = function(node){
+    return (node.reactKey = node.reactKey || js.util.unique('reactNode'));
+  };
+
+  var getScopeKey = function(object){
+    return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
+  };
+
   var react = {
 
     nodes: {},
-
     scopes: {},
 
     name: function(name, object){
       this.scopes[name] = object;
-    },
-
-    getNodeKey: function(node){
-      return (node.reactKey = node.reactKey || js.util.unique('reactNode'));
-    },
-
-    getScopeKey: function(object){
-      return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
-    },
-
-    getObjectKey: function(){
-      throw new Error('This method is deprecated - please use getScopeKey() instead');
     },
 
     set: function(object, key, value){
@@ -105,14 +100,14 @@
 
     _interpretListenerString: function(listenerString){
       var listener = listenerString.split(' ');
-      var rNode = makeRNode(this.nodes[listener[0]]);
+      var rnode = makeRnode(this.nodes[listener[0]]);
       var directiveIndex = +listener[1];
       return{
-        node: rNode.node,
+        node: rnode.node,
         directiveIndex: directiveIndex,
         prefix: listener[2],
-        directive: rNode.directives[directiveIndex],
-        scopeChain: this._buildScopeChainForNode(rNode.node, directiveIndex)
+        directive: rnode.directives[directiveIndex],
+        scopeChain: this._buildScopeChainForNode(rnode.node, directiveIndex)
       };
     },
 
@@ -129,7 +124,7 @@
       });
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
         scopeBuildingContext.node = ancestors[whichAncestor];
-        var directives = makeRNode(scopeBuildingContext.node).directives;
+        var directives = makeRnode(scopeBuildingContext.node).directives;
         scopeBuildingContext.scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeBuildingContext.scopeChain);
 
         var pushScope = function(scope, options){
@@ -217,7 +212,7 @@
         scopes = undefined;
       }
       var baseScopeChain = this._buildScopeChain(scopes, {type: 'updateInputs', prefix: this._buildScopeChainForNode(root, options.fromDirective || 0)});
-      updateContext.bequeathedScopeChains[this.getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext, options.fromDirective);
+      updateContext.bequeathedScopeChains[getNodeKey(root)] = this._updateNodeGivenScopeChain(root, baseScopeChain, updateContext, options.fromDirective);
 
       this._updateNodes(updateContext.nodesToUpdate, updateContext);
 
@@ -233,7 +228,7 @@
     _enqueueNodes: function(newNodes){
       this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
       for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-        var nodeKey = this.getNodeKey(newNodes[whichNode]);
+        var nodeKey = getNodeKey(newNodes[whichNode]);
         delete this.bequeathedScopeChains[nodeKey];
         delete this.loopItemTemplates[nodeKey];
       }
@@ -248,8 +243,8 @@
         } else if (
           ancestor === updateContext.root ||
           ancestor.getAttribute('react') ||
-          updateContext.bequeathedScopeChains[this.getNodeKey(ancestor)] || // todo: what's this cover?
-          updateContext.loopItemTemplates[this.getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
+          updateContext.bequeathedScopeChains[getNodeKey(ancestor)] || // todo: what's this cover?
+          updateContext.loopItemTemplates[getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
         ){
           return ancestor;
         }
@@ -260,7 +255,7 @@
 
     _updateNode: function(node, updateContext){
       //todo: test that you never revisit a node
-      var nodeKey = this.getNodeKey(node);
+      var nodeKey = getNodeKey(node);
       if(
         typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined' ||
         node === updateContext.root // this is to prevent an undefined scope chain for the root getting overwritten with false. don't like it.
@@ -269,7 +264,7 @@
         return;
       }
 
-      if(updateContext.loopItemTemplates[this.getNodeKey(node)]){ // todo: get rid of all these references to 'loop item templates', use custom class instead
+      if(updateContext.loopItemTemplates[getNodeKey(node)]){ // todo: get rid of all these references to 'loop item templates', use custom class instead
         updateContext.bequeathedScopeChains[nodeKey] = false;
         return;
       }
@@ -282,7 +277,7 @@
           return;
         }
         this._updateNode(parent, updateContext);
-        if(updateContext.bequeathedScopeChains[this.getNodeKey(parent)] === false){
+        if(updateContext.bequeathedScopeChains[getNodeKey(parent)] === false){
           updateContext.bequeathedScopeChains[nodeKey] = false;
           return;
         }
@@ -290,13 +285,13 @@
         parent = this._getParent(node, updateContext);
       }
 
-      var scopeChain = updateContext.bequeathedScopeChains[this.getNodeKey(parent)];
+      var scopeChain = updateContext.bequeathedScopeChains[getNodeKey(parent)];
       updateContext.bequeathedScopeChains[nodeKey] = this._updateNodeGivenScopeChain(node, scopeChain, updateContext);
     },
 
     _updateNodeGivenScopeChain: function(node, scopeChain, updateContext, fromDirective){
-      var nodeKey = this.getNodeKey(node);
-      var directives = makeRNode(node).directives;
+      var nodeKey = getNodeKey(node);
+      var directives = makeRnode(node).directives;
 
       if(directives.anchored){
         scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeChain);
@@ -319,27 +314,6 @@
       return scopeChain;
     },
 
-    _setDirectives: function(node, directives){
-      var anchored = directives.anchored;
-      directives = js.filter(directives, function(directive){
-        return !!directive[0];
-      });
-      directives.anchored = anchored;
-      if(directives.anchored){
-        directives.unshift(directives.anchored);
-      }
-      var directiveStrings = js.map(directives, function(which, directive){
-        return directive.join(' ');
-      });
-      node.setAttribute('react', directiveStrings.join(', '));
-    },
-
-    _prependDirective: function(node, directive){
-      var directives = makeRNode(node).directives;
-      directives.unshift(directive);
-      this._setDirectives(node, directives);
-    },
-
     _followDirective: function(directive, context){
       try{
         if(context.scopeChain.scope === doNotRecurse){
@@ -350,7 +324,7 @@
         this.commands[command].apply(context, directive);
       }catch (error){
         js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
-        var directive = makeRNode(context.node).directives[context.directiveIndex];
+        var directive = makeRnode(context.node).directives[context.directiveIndex];
         js.log('Failure during React update: ', {
           'original error': error,
           'while processing node': context.node,
@@ -383,23 +357,19 @@
       var node = options.node;
       var scopes = options.scope ? [options.scope] : options.scopes;
 
-      var nodeKey = this.getNodeKey(node);
-      this.nodes[nodeKey] = node;
-      var directives = makeRNode(node).directives;
-      // todo: clean up after any existing anchor
-      directives.anchored = ['anchored'];
-      for(var i = 0; i < scopes.length; i++){
-        var scopeKey = this.getScopeKey(scopes[i]);
-        this.scopes[scopeKey] = scopes[i];
-        directives.anchored.push(scopeKey);
-      }
-      this._setDirectives(node, directives);
+      this.nodes[getNodeKey(node)] = node;
+      // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
+      makeRnode(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
+        var scopeKey = getScopeKey(scopes[i]);
+        react.scopes[scopeKey] = scopes[i];
+        return scopeKey;
+      })));
       return options.node;
     },
 
     _observeScope: function(object, prefix, key, node, directiveIndex, anchorKey, didMatch){
       // todo: scope observers per node-object anchoring, for easy cleanup of memory references
-      var nodeKey = this.getNodeKey(node);
+      var nodeKey = getNodeKey(node);
       this.nodes[nodeKey] = node;
       var observations = node['directive ' + directiveIndex + ' observes'] = node['directive ' + directiveIndex + ' observes'] || [];
       observations.push({object: object, key: key, didMatch: didMatch});
@@ -410,7 +380,7 @@
 
     _disregardScope: function(node, directiveIndex){
       // todo: check this, it might be jank
-      var nodeKey = this.getNodeKey(node);
+      var nodeKey = getNodeKey(node);
       var observations = node['directive ' + directiveIndex + ' observes'];
       for(var whichObservation = 0; whichObservation <  observations.length; whichObservation++){
         var observation = observations[whichObservation];
@@ -577,9 +547,9 @@
       var $loopChildren = jQuery(this.node).children();
       js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
       var $itemTemplate = $loopChildren.first();
-      //js.errorIf(makeRNode($itemTemplate[0]).directives[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
+      //js.errorIf(makeRnode($itemTemplate[0]).directives[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
       $itemTemplate.addClass('reactItemTemplate');
-      this.loopItemTemplates[this.getNodeKey($itemTemplate[0])] = $itemTemplate[0];
+      this.loopItemTemplates[getNodeKey($itemTemplate[0])] = $itemTemplate[0];
       var $resultsContainer = $($loopChildren[1]);
       var $resultsContents = $resultsContainer.children();
 
@@ -600,7 +570,7 @@
           // todo: implement bindings as key aliases
           js.errorIf(matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
           var itemDirective = makeDirective(i);
-          this._prependDirective(itemNode, itemDirective);
+          makeRnode(itemNode).directives.prepend(itemDirective);
           this._enqueueNodes(this._getReactNodes(itemNode));
         }
         itemNodes.push(itemNode);
@@ -711,7 +681,7 @@
 
   });
 
-  var makeRNode = function(node){
+  var makeRnode = function(node){
     var result = {
       node: node
     };
@@ -723,11 +693,45 @@
     if(result.directives[0] && result.directives[0][0] === 'anchored'){
       var anchored = result.directives.shift();
     }
-    result.directives = js.filter(result.directives, function(directive){
-      return !!directive[0];
-    });
-    result.directives.anchored = anchored;
 
+    result.directives = js.extend(js.filter(result.directives, function(directive){
+      return !!directive[0];
+    }), {
+      anchored: anchored,
+
+      update: function(newDirectives){
+        for(var key in result.directives){
+          result.directives[key] = 'INVALIDATED';
+        }
+        var directives = result.directives = newDirectives;
+        result.directives.write();
+      },
+
+      set: function(key, directive){
+        result.directives[key] = directive;
+        result.directives.write();
+      },
+
+      write: function(){
+        node.setAttribute('react', result.directives);
+      },
+
+      toString: function(){
+        var directiveStrings = js.map(result.directives, function(which, directive){
+          return directive.join(' ');
+        });
+        if(result.directives.anchored){
+          directiveStrings.unshift(result.directives.anchored.join(' '));
+        }
+        return directiveStrings.join(', ');
+      },
+
+      prepend: function(directive){
+        result.directives.unshift(directive);
+        result.directives.write();
+      }
+
+    });
 
     return result;
   };
