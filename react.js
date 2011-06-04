@@ -94,7 +94,7 @@
       var directiveContext = js.create(updateContext, {
         directiveIndex: listener.directiveIndex,
       });
-      this._followDirective(listener.directive, directiveContext);
+      listener.directive.follow(directiveContext);
       this._updateNodes(nodesToUpdate, updateContext);
     },
 
@@ -139,7 +139,7 @@
               directiveIndex: whichDirective,
               pushScope: pushScope
             });
-            this._followDirective(directives[whichDirective], directiveContext);
+            directives[whichDirective].follow(directiveContext);
           }
         }
       }
@@ -308,42 +308,10 @@
           scopeChain: scopeChain,
           pushScope: pushScope
         });
-        this._followDirective(directives[i], directiveContext);
+        directives[i].follow(directiveContext);
       }
 
       return scopeChain;
-    },
-
-    _followDirective: function(directive, context){
-      try{
-        if(context.scopeChain.scope === doNotRecurse){
-          return doNotRecurse;
-        }
-        var command = directive.shift();
-        js.errorIf(!this.commands[command], command+' is not a valid react command');
-        this.commands[command].apply(context, directive);
-      }catch (error){
-        js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
-        var directive = makeRnode(context.node).directives[context.directiveIndex];
-        js.log('Failure during React update: ', {
-          'original error': error,
-          'while processing node': context.node,
-          'index of failed directive': context.directiveIndex,
-          'directive call': directive[0]+'('+directive.slice(1).join(', ')+')',
-          'scope chain description': this._describeScopeChain(context.scopeChain),
-          '(internal scope chain object) ': context.scopeChain
-        });
-        throw error;
-      }
-    },
-
-    _describeScopeChain: function(link){
-      var scopeChainDescription = [];
-      while(link){
-        scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-        link = link.parent;
-      }
-      return scopeChainDescription;
     },
 
     anchor: function(options){
@@ -463,7 +431,7 @@
   };
 
 
-  react.commands = js.create(react, {
+  var commands = react.commands = js.create(react, {
 
   /*
    * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships
@@ -686,26 +654,51 @@
       node: node
     };
 
+    var makeDirective = function(array){
+      var directive = js.extend([], array);
+      directive.rnode = result;
+      directive.follow = function(context){
+        try{
+          if(context.scopeChain.scope === doNotRecurse){
+            return doNotRecurse;
+          }
+          var command = directive[0];
+          js.errorIf(!commands[command], command+' is not a valid react command');
+          commands[command].apply(context, directive.slice(1));
+        }catch (error){
+          js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
+          js.log('Failure during React update: ', {
+            'original error': error,
+            'while processing node': context.node,
+            'index of failed directive': context.directiveIndex,
+            'directive call': directive[0]+'('+directive.slice(1).join(', ')+')',
+            'scope chain description': describeScopeChain(context.scopeChain),
+            '(internal scope chain object) ': context.scopeChain
+          });
+          throw error;
+        }
+      };
+
+      return directive;
+    };
+
     var directiveStrings = (node.getAttribute('react')||'').split(matchers.directiveDelimiter);
-    result.directives = js.map(directiveStrings, function(which, string){
+    directiveArrays = js.map(directiveStrings, function(which, string){
       return js.extend(js.trim(string).replace(matchers.negation, '!').split(matchers.space), {rnode: result});
     });
-    if(result.directives[0] && result.directives[0][0] === 'anchored'){
-      var anchored = result.directives.shift();
+    if(directiveArrays[0] && directiveArrays[0][0] === 'anchored'){
+      var anchored = makeDirective(directiveArrays.shift());
     }
+    directiveArrays = js.filter(directiveArrays, function(directiveArray){
+      return !!directiveArray[0];
+    });
 
-    result.directives = js.extend(js.filter(result.directives, function(directive){
-      return !!directive[0];
-    }), {
+    var directives = js.map(directiveArrays, function(which, directive){
+      return makeDirective(directive);
+    });
+    result.directives = js.extend(directives,{
+
       anchored: anchored,
-
-      update: function(newDirectives){
-        for(var key in result.directives){
-          result.directives[key] = 'INVALIDATED';
-        }
-        var directives = result.directives = newDirectives;
-        result.directives.write();
-      },
 
       set: function(key, directive){
         result.directives[key] = directive;
@@ -734,6 +727,15 @@
     });
 
     return result;
+  };
+
+  var describeScopeChain = function(link){
+    var scopeChainDescription = [];
+    while(link){
+      scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
+      link = link.parent;
+    }
+    return scopeChainDescription;
   };
 
   window.react = react;
