@@ -69,8 +69,8 @@
       if(!this._listenerIsStillValid(listener, object, key)){ return; }
 
       // todo: bindItem is needed here but won't work until the registration is made on the array element it's bound to. something like
-      js.errorIf(listener.directive[0] === 'bindItem', 'you need recalculations for bindItem (when the key was an itemAlias), but those aren\'t implemented yet');
-      if(js.among(['within', 'withinEach', 'withinItem', 'for', 'if'], listener.directive[0])){
+      js.errorIf(listener.directive.command === 'bindItem', 'you need recalculations for bindItem (when the key was an itemAlias), but those aren\'t implemented yet');
+      if(js.among(['within', 'withinEach', 'withinItem', 'for', 'if'], listener.directive.command)){
         // todo: loopKey probably won't work, and maybe withinEach either
         this._updateTree({
           node: listener.node,
@@ -125,7 +125,7 @@
       for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
         scopeBuildingContext.node = ancestors[whichAncestor];
         var directives = makeRnode(scopeBuildingContext.node).directives;
-        scopeBuildingContext.scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeBuildingContext.scopeChain);
+        scopeBuildingContext.scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored && directives.anchored.inputs, scopeBuildingContext.scopeChain);
 
         var pushScope = function(scope, options){
           scopeBuildingContext.scopeChain = this._extendScopeChain(scopeBuildingContext.scopeChain, scope, options);
@@ -134,7 +134,7 @@
         for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
           if(scopeBuildingContext.node === node && (directiveIndex||0) <= whichDirective){ break; }
           if(!scopeBuildingContext.scopeChain){ continue; }
-          if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective][0])){
+          if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective].command)){
             var directiveContext = js.create(scopeBuildingContext, {
               directiveIndex: whichDirective,
               pushScope: pushScope
@@ -148,7 +148,7 @@
 
     _buildScopeChainFromAnchorNames: function(names, lastLink){
       if(names){
-        for(var whichToken = 1; whichToken < names.length; whichToken++){
+        for(var whichToken = 0; whichToken < names.length; whichToken++){
           var scopeKey = names[whichToken];
           js.errorIf(!this.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
           lastLink = this._extendScopeChain(lastLink, this.scopes[scopeKey], {type:'anchor', key: scopeKey});
@@ -294,7 +294,7 @@
       var directives = makeRnode(node).directives;
 
       if(directives.anchored){
-        scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored, scopeChain);
+        scopeChain = this._buildScopeChainFromAnchorNames(directives.anchored.inputs, scopeChain);
       }
 
       var pushScope = function(scope, options){
@@ -511,7 +511,7 @@
       }
     },
 
-    _createItemNodes: function(makeDirective){
+    _createItemNodes: function(directiveMaker){
       var $loopChildren = jQuery(this.node).children();
       js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
       var $itemTemplate = $loopChildren.first();
@@ -537,7 +537,7 @@
           itemNode = $itemTemplate.clone().removeClass('reactItemTemplate')[0];
           // todo: implement bindings as key aliases
           js.errorIf(matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
-          var itemDirective = makeDirective(i);
+          var itemDirective = directiveMaker(i);
           makeRnode(itemNode).directives.prepend(itemDirective);
           this._enqueueNodes(this._getReactNodes(itemNode));
         }
@@ -654,33 +654,45 @@
       node: node
     };
 
-    var makeDirective = function(array){
-      var directive = js.extend([], array);
-      directive.rnode = result;
-      directive.follow = function(context){
-        try{
-          if(context.scopeChain.scope === doNotRecurse){
-            return doNotRecurse;
+    var makeDirective = function(tokens){
+
+      var directive = {
+
+        isDirective: true,
+        rnode: result,
+        command: tokens[0],
+        inputs: tokens.slice(1),
+
+        toString: function(){
+          return [directive.command].concat(directive.inputs).join(' ');
+        },
+
+        follow: function(context){
+          try{
+            if(context.scopeChain.scope === doNotRecurse){
+              return doNotRecurse;
+            }
+            js.errorIf(!commands[directive.command], directive.command+' is not a valid react command');
+            commands[directive.command].apply(context, directive.inputs);
+          }catch (error){
+            js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
+            js.log('Failure during React update: ', {
+              'original error': error,
+              'while processing node': context.node,
+              'index of failed directive': context.directiveIndex,
+              'directive call': directive.command+'('+directive.inputs.join(', ')+')',
+              'scope chain description': describeScopeChain(context.scopeChain),
+              '(internal scope chain object) ': context.scopeChain
+            });
+            throw error;
           }
-          var command = directive[0];
-          js.errorIf(!commands[command], command+' is not a valid react command');
-          commands[command].apply(context, directive.slice(1));
-        }catch (error){
-          js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
-          js.log('Failure during React update: ', {
-            'original error': error,
-            'while processing node': context.node,
-            'index of failed directive': context.directiveIndex,
-            'directive call': directive[0]+'('+directive.slice(1).join(', ')+')',
-            'scope chain description': describeScopeChain(context.scopeChain),
-            '(internal scope chain object) ': context.scopeChain
-          });
-          throw error;
         }
+
       };
 
       return directive;
     };
+
 
     var directiveStrings = (node.getAttribute('react')||'').split(matchers.directiveDelimiter);
     directiveArrays = js.map(directiveStrings, function(which, string){
@@ -696,12 +708,14 @@
     var directives = js.map(directiveArrays, function(which, directive){
       return makeDirective(directive);
     });
+
     result.directives = js.extend(directives,{
 
       anchored: anchored,
 
+      // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
       set: function(key, directive){
-        result.directives[key] = directive;
+        result.directives[key] = makeDirective(directive);
         result.directives.write();
       },
 
@@ -711,16 +725,18 @@
 
       toString: function(){
         var directiveStrings = js.map(result.directives, function(which, directive){
-          return directive.join(' ');
+          if(!directive.isDirective){ debugger; }
+          return directive.toString();
         });
         if(result.directives.anchored){
-          directiveStrings.unshift(result.directives.anchored.join(' '));
+          if(!result.directives.anchored.isDirective){ debugger; }
+          directiveStrings.unshift(result.directives.anchored.toString());
         }
         return directiveStrings.join(', ');
       },
 
       prepend: function(directive){
-        result.directives.unshift(directive);
+        result.directives.unshift(directive.isDirective ? directive : makeDirective(directive));
         result.directives.write();
       }
 
