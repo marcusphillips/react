@@ -304,7 +304,6 @@ test('calling changed on a subobject that\'s associated with a within directive 
   same(node.innerHTML, 'inner', 'contents came from inner prop');
   scope.outterProp = 'newOutter';
   scope.subobject.innerProp = {val:'newInner'};
-debugger;
   react.changed(scope.subobject, 'innerProp');
   same($(node).attr('thing'), 'outter', 'attr was not changed');
   same(node.innerHTML, 'newInner', 'contents got updated');
@@ -603,7 +602,6 @@ test('regression test: index key binding is still available at change response t
   <span id="container"></span></div>')[0];
   react.update({node: node, scope: object, anchor: true});
   same($($('#container .item', node)[1]).html(), '1', 'which is available after an update operation');
-debugger;
   react.set(object, 1, {});
   same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
 });

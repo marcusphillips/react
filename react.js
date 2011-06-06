@@ -234,25 +234,6 @@
       }
     },
 
-    _getParent: function(node, updateContext){
-      var ancestor = $(node).parent()[0];
-      var repeatLimit = 1000;
-      while(repeatLimit--){
-        if(!ancestor || ancestor === document){
-          return false;
-        } else if (
-          ancestor === updateContext.root ||
-          ancestor.getAttribute('react') ||
-          updateContext.bequeathedScopeChains[getNodeKey(ancestor)] || // todo: what's this cover?
-          updateContext.loopItemTemplates[getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
-        ){
-          return ancestor;
-        }
-        ancestor = $(ancestor).parent()[0];
-      }
-      js.error('_getParent() broke');
-    },
-
     _updateNode: function(node, updateContext){
       //todo: test that you never revisit a node
       var nodeKey = getNodeKey(node);
@@ -269,7 +250,8 @@
         return;
       }
       var previousParent = 'unmatchable';
-      var parent = this._getParent(node, updateContext);
+      var rnode = makeRnode(node);
+      var parent = rnode.getParent(updateContext);
       // if processing the parent leads to this node having a new parent, repeat
       while(parent !== previousParent){
         if(!parent){
@@ -282,7 +264,7 @@
           return;
         }
         previousParent = parent;
-        parent = this._getParent(node, updateContext);
+        parent = rnode.getParent(updateContext);
       }
 
       var scopeChain = updateContext.bequeathedScopeChains[getNodeKey(parent)];
@@ -650,8 +632,30 @@
   });
 
   var makeRnode = function(node){
-    var result = {
-      node: node
+
+    var rnode = {
+
+      node: node,
+
+      getParent: function(updateContext){
+        var ancestor = $(node).parent()[0];
+        var repeatLimit = 1000;
+        while(repeatLimit--){
+          if(!ancestor || ancestor === document){
+            return false;
+          } else if (
+            ancestor === updateContext.root ||
+            ancestor.getAttribute('react') ||
+            updateContext.bequeathedScopeChains[getNodeKey(ancestor)] || // todo: what's this cover?
+            updateContext.loopItemTemplates[getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
+          ){
+            return ancestor;
+          }
+          ancestor = $(ancestor).parent()[0];
+        }
+        js.error('_getParent() broke');
+      },
+
     };
 
     var makeDirective = function(tokens){
@@ -659,7 +663,7 @@
       var directive = {
 
         isDirective: true,
-        rnode: result,
+        rnode: rnode,
         command: tokens[0],
         inputs: tokens.slice(1),
 
@@ -696,7 +700,7 @@
 
     var directiveStrings = (node.getAttribute('react')||'').split(matchers.directiveDelimiter);
     directiveArrays = js.map(directiveStrings, function(which, string){
-      return js.extend(js.trim(string).replace(matchers.negation, '!').split(matchers.space), {rnode: result});
+      return js.extend(js.trim(string).replace(matchers.negation, '!').split(matchers.space), {rnode: rnode});
     });
     if(directiveArrays[0] && directiveArrays[0][0] === 'anchored'){
       var anchored = makeDirective(directiveArrays.shift());
@@ -709,40 +713,40 @@
       return makeDirective(directive);
     });
 
-    result.directives = js.extend(directives,{
+    rnode.directives = js.extend(directives,{
 
       anchored: anchored,
 
       // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
       set: function(key, directive){
-        result.directives[key] = makeDirective(directive);
-        result.directives.write();
+        rnode.directives[key] = makeDirective(directive);
+        rnode.directives.write();
       },
 
       write: function(){
-        node.setAttribute('react', result.directives);
+        node.setAttribute('react', rnode.directives);
       },
 
       toString: function(){
-        var directiveStrings = js.map(result.directives, function(which, directive){
-          if(!directive.isDirective){ debugger; }
+        var directiveStrings = js.map(rnode.directives, function(which, directive){
+          if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
           return directive.toString();
         });
-        if(result.directives.anchored){
-          if(!result.directives.anchored.isDirective){ debugger; }
-          directiveStrings.unshift(result.directives.anchored.toString());
+        if(rnode.directives.anchored){
+          if(!rnode.directives.anchored.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
+          directiveStrings.unshift(rnode.directives.anchored.toString());
         }
         return directiveStrings.join(', ');
       },
 
       prepend: function(directive){
-        result.directives.unshift(directive.isDirective ? directive : makeDirective(directive));
-        result.directives.write();
+        rnode.directives.unshift(directive.isDirective ? directive : makeDirective(directive));
+        rnode.directives.write();
       }
 
     });
 
-    return result;
+    return rnode;
   };
 
   var describeScopeChain = function(link){
