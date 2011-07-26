@@ -2,6 +2,9 @@
 - Make a changed event on any numeric property of an array result in a changed event on the associated loop directives
 - make every node in a loop listen to it's associated key
 - remove update context?
+- allow delayed updates that wait until a flag is turned on
+- what if a listened-to property is stored somewhere up the prototype chain? how can listeners be registered there?
+- add a jsonified output of any object in debug mode
 
 write tests:
 - empty react attribute string doesnt break univers

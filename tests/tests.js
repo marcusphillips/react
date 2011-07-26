@@ -182,7 +182,7 @@ test('conditions can be negated', function(){
 });
 
 test('if directives turn off recursion in subsequent directives of the same node', function(){
-  var node = $('<div react="if condition \'foo\', contain bar">original</div>')[0];
+  var node = $('<div react="if condition, contain bar">original</div>')[0];
   react.update(node, {condition: true, bar: 'new'});
   equal($(node).html(), 'new', 'contents get set when condition is false');
 
@@ -231,12 +231,14 @@ test('template node is not visible after render', function(){
   var node = $('\
     <div id="outter" react="for which item">\
       <div react="contain item"></div>\
-    <div id="container"></div></div>\
+    <div id="container">a</div></div>\
   ')[0];
   var $itemTemplate = $(node).children().first();
-  $itemTemplate.is(':visible');
+  $('#qunit-fixture').html(node);
+  ok($itemTemplate.is(':visible'), 'template started out visible');
   react.update(node, ['a','b','c']);
-  $itemTemplate.is(':not(:visible)');
+  ok($itemTemplate.is(':not(:visible)'), 'template was no longer visible');
+  $('#qunit-fixture')[0].innerHTML = '';
 });
 
 test('can loop across values in an array', function(){
