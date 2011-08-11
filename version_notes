@@ -1,0 +1,8 @@
+1.2
+---
+
+
+--- desired
+?- lookups no longer fail when they evaluate to undefined. Now they only fail when the key is not among the object, using the 'in' operator.
+?- Allows for progressive rendering, by simply returning (rather than erroring) on lookup failure
+
