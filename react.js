@@ -28,106 +28,114 @@
     return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
   };
 
-  var makeScopeChain = function(previousLink, additionalScope, options){
-    options = options || {};
-    var scopeChain = {
-      parent: previousLink,
-      scope: additionalScope,
-      type: options.type,
-      key: options.key,
-      anchorKey: options.type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
+  var emptyScopeChain = (function(){
 
-      extend: function(additionalScope, options){
-        return makeScopeChain(scopeChain, additionalScope, options);
-      },
+    var makeScopeChain = function(previousLink, additionalScope, options){
+      options = options || {};
+      var scopeChain = {
+        parent: previousLink,
+        scope: additionalScope,
+        type: options.type,
+        key: options.key,
+        anchorKey: options.type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
 
-      extendMany: function(scopes, options){
-        scopes = scopes || [];
-        var lastLink = scopeChain;
-        for(var which = 0; which < scopes.length; which++){
-          lastLink = lastLink.extend(scopes[which], options);
-        }
-        return lastLink;
-      },
+        extend: function(additionalScope, options){
+          return makeScopeChain(scopeChain, additionalScope, options);
+        },
 
-      extendForAnchorNames: function(names){
-        names = names || [];
-        var scopes = [];
-        for(var whichToken = 0; whichToken < names.length; whichToken++){
-          var scopeKey = names[whichToken];
-          js.errorIf(!react.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
-          scopes.push(react.scopes[scopeKey]);
-        }
-        return scopeChain.extendMany(scopes, {type:'anchor', key: scopeKey});
-      },
-
-      describe: function(){
-        var link = scopeChain;
-        var scopeChainDescription = [];
-        while(link){
-          scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-          link = link.parent;
-        }
-        return scopeChainDescription;
-      },
-
-      lookup: function(key, options){
-        options = options || {};
-        if(key[0] === '!'){
-          var negate = true;
-          key = key.slice(1);
-        }
-        if (matchers.isString.test(key)) {
-          return key.slice(1, key.length-1);
-        }
-
-        // todo: clean up any pre-existing observers
-
-        var path = key.split('.');
-        var baseKey = path.shift();
-        var details = {failed: true};
-        // todo: write a test to verify that responses to change events don't result in new observers
-        // todo: test that we don't observe binding objects
-        if(scopeChain.scope[baseKey] instanceof react._Fallthrough){
-          details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
-        }else if(scopeChain.scope[baseKey] !== undefined){
-          if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
-            react._observeScope(scopeChain.scope, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, scopeChain.scope[baseKey] !== undefined);
+        extendMany: function(scopes, options){
+          scopes = scopes || [];
+          var lastLink = scopeChain;
+          for(var which = 0; which < scopes.length; which++){
+            lastLink = lastLink.extend(scopes[which], options);
           }
-          var prefix = baseKey + '.';
-          var subObject = scopeChain.scope;
-          var value = subObject[baseKey];
-          while(path.length){ // one for each segment of the dot acess
-            subObject = value;
-            if(subObject === undefined || subObject === null){
-              return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
-            }
-            if(scopeChain.anchorKey && !options.suppressObservers){
-              react._observeScope(subObject, prefix, path[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
-            }
-            prefix = prefix + path[0] + '.';
-            value = subObject[path.shift()];
-          }
-          details = {
-            matchingScopeChain: scopeChain,
-            matchingBaseObject: subObject,
-            baseKey: baseKey,
-            negated: negate,
-            value: typeof value === 'function' ? value.call(subObject||{}) : value
-          };
-          details.value = (negate ? ! details.value : details.value);
-        }else if(scopeChain.parent){
-          details = scopeChain.parent.lookup(key, js.extend({details:true}, options));
-        }
-        return options.details ? details : details.value;
-      }
+          return lastLink;
+        },
 
+        extendForAnchorNames: function(names){
+          names = names || [];
+          var scopes = [];
+          for(var whichToken = 0; whichToken < names.length; whichToken++){
+            var scopeKey = names[whichToken];
+            js.errorIf(!react.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
+            scopes.push(react.scopes[scopeKey]);
+          }
+          return scopeChain.extendMany(scopes, {type:'anchor', key: scopeKey});
+        },
+
+        describe: function(){
+          var link = scopeChain;
+          var scopeChainDescription = [];
+          while(link){
+            scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
+            link = link.parent;
+          }
+          return scopeChainDescription;
+        },
+
+        lookup: function(key, options){
+          options = options || {};
+          if(key[0] === '!'){
+            var negate = true;
+            key = key.slice(1);
+          }
+          if (matchers.isString.test(key)) {
+            return key.slice(1, key.length-1);
+          }
+
+          // todo: clean up any pre-existing observers
+
+          var path = key.split('.');
+          var baseKey = path.shift();
+          var details = {failed: true};
+          // todo: write a test to verify that responses to change events don't result in new observers
+          // todo: test that we don't observe binding objects
+          if(scopeChain.scope[baseKey] instanceof react._Fallthrough){
+            details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
+          }else if(scopeChain.scope[baseKey] !== undefined){
+            if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
+              react._observeScope(scopeChain.scope, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, scopeChain.scope[baseKey] !== undefined);
+            }
+            var prefix = baseKey + '.';
+            var subObject = scopeChain.scope;
+            var value = subObject[baseKey];
+            while(path.length){ // one for each segment of the dot acess
+              subObject = value;
+              if(subObject === undefined || subObject === null){
+                return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
+              }
+              if(scopeChain.anchorKey && !options.suppressObservers){
+                react._observeScope(subObject, prefix, path[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
+              }
+              prefix = prefix + path[0] + '.';
+              value = subObject[path.shift()];
+            }
+            details = {
+              matchingScopeChain: scopeChain,
+              matchingBaseObject: subObject,
+              baseKey: baseKey,
+              negated: negate,
+              value: typeof value === 'function' ? value.call(subObject||{}) : value
+            };
+            details.value = (negate ? ! details.value : details.value);
+          }else if(!scopeChain.parent.isEmpty){
+            details = scopeChain.parent.lookup(key, js.extend({details:true}, options));
+          }
+          return options.details ? details : details.value;
+        }
+
+      };
+      return scopeChain;
     };
-    return scopeChain;
-  };
+
+    var emptyScopeChain = makeScopeChain(undefined, undefined, {type:'empty'});
+    emptyScopeChain.isEmpty = true;
+    emptyScopeChain.lookup = function(){ js.error('cannot lookup in the empty scope chain'); };
+    return emptyScopeChain;
+  }());
 
   var globalScope = {};
-  var globalScopeChain = makeScopeChain(undefined, globalScope, {type:'global'});
+  var globalScopeChain = emptyScopeChain.extend(globalScope, {type:'global'});
 
   var react = {
 
