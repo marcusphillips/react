@@ -28,6 +28,8 @@
     return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
   };
 
+  var Fallthrough = function(key){ this.key = key; };
+
   var emptyScopeChain = (function(){
 
     var makeScopeChain = function(type, previousLink, additionalScope, options){
@@ -90,7 +92,7 @@
           var details = {failed: true};
           // todo: write a test to verify that responses to change events don't result in new observers
           // todo: test that we don't observe binding objects
-          if(scopeChain.scope[baseKey] instanceof react._Fallthrough){
+          if(scopeChain.scope[baseKey] instanceof Fallthrough){
             details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
           }else if(scopeChain.scope[baseKey] !== undefined){
             if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
@@ -104,6 +106,7 @@
               if(subObject === undefined || subObject === null){
                 return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
               }
+              emptyScopeChain.extend('dotAccess', subObject, {key:path[0], prefix:prefix});
               if(scopeChain.anchorKey && !options.suppressObservers){
                 react._observeScope(subObject, prefix, path[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
               }
@@ -233,32 +236,14 @@
       object.observers[key][nodeKey + ' ' + directiveIndex + ' ' + prefix] = true;
     },
 
-    _disregardScope: function(node, directiveIndex){
-      // todo: check this, it might be jank
-      var nodeKey = getNodeKey(node);
-      var observations = node['directive ' + directiveIndex + ' observes'];
-      for(var whichObservation = 0; whichObservation <  observations.length; whichObservation++){
-        var observation = observations[whichObservation];
-        delete observation.object.observers[observation.key][nodeKey + ' ' + directiveIndex];
+    integrate: {
+      jQuery: function(){
+        jQuery.fn.update = function(scope){
+          react.update(this, scope);
+        };
       }
-      delete nodes.observing[directiveIndex];
-      if(!js.size(nodes.observing)){
-        delete this.nodes[nodeKey];
-      }
-    },
-
-    _Fallthrough: function(key){
-      this.key = key;
     }
 
-  };
-
-  react.integrate = {
-    jQuery: function(){
-      jQuery.fn.update = function(scope){
-        react.update(this, scope);
-      };
-    }
   };
 
 
@@ -420,7 +405,7 @@
         itemBindings[keyAlias] = key;
       }
       // todo: don't make this a fallthrough - create an explicit binding to the previous array scope object
-      itemBindings[valueAlias] = new this._Fallthrough(key);
+      itemBindings[valueAlias] = new Fallthrough(key);
 
       this.pushScope('bindItem', itemBindings, {key:key});
     },
