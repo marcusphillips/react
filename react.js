@@ -73,9 +73,8 @@
 
       lookup: function(key, options){
         options = options || {};
-        var negate, value;
         if(key[0] === '!'){
-          negate = true;
+          var negate = true;
           key = key.slice(1);
         }
         if (matchers.isString.test(key)) {
@@ -84,42 +83,43 @@
 
         // todo: clean up any pre-existing observers
 
-        var keys = key.split('.');
-        var baseKey = keys.shift();
-        var focalScopeChain = {parent:scopeChain};
-        while(value === undefined && (focalScopeChain = focalScopeChain.parent)){
-          var object = focalScopeChain.scope;
-          value = object[baseKey];
-          // todo: write a test to verify that responses to change events don't result in new observers
-          if(focalScopeChain.anchorKey && options.listener && !options.suppressObservers){
-            react._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, focalScopeChain.anchorKey, value !== undefined);
+        var path = key.split('.');
+        var baseKey = path.shift();
+        var details = {failed: true};
+        // todo: write a test to verify that responses to change events don't result in new observers
+        // todo: test that we don't observe binding objects
+        if(scopeChain.scope[baseKey] instanceof react._Fallthrough){
+          details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
+        }else if(scopeChain.scope[baseKey] !== undefined){
+          if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
+            react._observeScope(scopeChain.scope, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, scopeChain.scope[baseKey] !== undefined);
           }
-          if(value instanceof react._Fallthrough){
-            baseKey = value.key;
-            value = undefined;
+          var prefix = baseKey + '.';
+          var subObject = scopeChain.scope;
+          var value = subObject[baseKey];
+          while(path.length){ // one for each segment of the dot acess
+            subObject = value;
+            if(subObject === undefined || subObject === null){
+              return options.returnObject ? false : js.error('can\'t find path '+path.join('.')+' on an undefined object');
+            }
+            if(scopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
+              react._observeScope(subObject, prefix, path[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
+            }
+            prefix = prefix + path[0] + '.';
+            value = subObject[path.shift()];
           }
+          details = {
+            matchingScopeChain: scopeChain,
+            matchingBaseObject: subObject,
+            baseKey: baseKey,
+            negated: negate,
+            value: typeof value === 'function' ? value.call(subObject||{}) : value
+          };
+          details.value = (negate ? ! details.value : details.value);
+        }else if(scopeChain.parent){
+          details = scopeChain.parent.lookup(key, js.extend({details:true}, options));
         }
-
-        var prefix = baseKey + '.';
-        // one for each segment of the dot acess
-        while(keys.length){
-          object = value;
-          if(object === undefined || object === null){
-            return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
-          }
-          if(focalScopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
-            react._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, focalScopeChain.anchorKey, true);
-          }
-          prefix = prefix + keys[0] + '.';
-          value = object[keys.shift()];
-        }
-
-        if(options.returnObject){
-          return object;
-        }
-
-        if(typeof value === 'function'){ value = value.call(object); }
-        return negate ? ! value : value;
+        return options.details ? details : options.returnObject ? details.matchingScopeChain && details.matchingBaseObject : details.value;
       }
 
     };
