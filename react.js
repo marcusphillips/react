@@ -30,6 +30,12 @@
 
   var Fallthrough = function(key){ this.key = key; };
 
+  var updateNodes = function(nodes, updateContext){
+    for(var i = 0; i < nodes.length; i++){
+      makeRnode(nodes[i]).update(updateContext);
+    }
+  };
+
   var emptyScopeChain = (function(){
 
     var makeScopeChain = function(type, previousLink, additionalScope, options){
@@ -188,12 +194,6 @@
       return makeRnode(options.node).updateTree(options);
     },
 
-    _updateNodes: function(nodes, updateContext){
-      for(var i = 0; i < nodes.length; i++){
-        makeRnode(nodes[i]).update(updateContext);
-      }
-    },
-
     _enqueueNodes: function(newNodes){
       this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
       for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
@@ -298,14 +298,10 @@
       // if the insertion is a node, use the dom appending method, but insert other items as text
       if(insertion && insertion.nodeType){
         jQuery(this.node).append(insertion);
-        this._enqueueNodes(this._getReactNodes(insertion));
+        this._enqueueNodes(makeRnode(insertion).getReactNodes());
       } else {
         jQuery(this.node).text(insertion);
       }
-    },
-
-    _getReactNodes: function(root){
-      return [root].concat(Array.prototype.slice.apply(root.querySelectorAll('[react]')));
     },
 
     classIf: function(conditionKey, nameKey){
@@ -356,7 +352,7 @@
           js.errorIf(matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
           var itemDirective = directiveMaker(i);
           makeRnode(itemNode).directives.prepend(itemDirective);
-          this._enqueueNodes(this._getReactNodes(itemNode));
+          this._enqueueNodes(makeRnode(itemNode).getReactNodes());
         }
         itemNodes.push(itemNode);
       }
@@ -477,6 +473,11 @@
         return getNodeKey(rnode.node);
       },
 
+      // note: getReactNodes() only returns the operative node and nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
+      getReactNodes: function(){
+        return [node].concat(Array.prototype.slice.apply(node.querySelectorAll('[react]')));
+      },
+
       getParent: function(updateContext){
         var ancestor = $(node).parent()[0];
         var repeatLimit = 1000;
@@ -493,7 +494,7 @@
           }
           ancestor = $(ancestor).parent()[0];
         }
-        js.error('_getParent() broke');
+        js.error('rnode.getParent() broke');
       },
 
       updateGivenScopeChain: function(scopeChain, updateContext, fromDirective){
@@ -577,7 +578,7 @@
         var baseScopeChain = rnode.buildParentScopeChain(options.fromDirective || 0).extendMany('updateInputs', scopes);
         updateContext.bequeathedScopeChains[rnode.getKey()] = rnode.updateGivenScopeChain(baseScopeChain, updateContext, options.fromDirective);
 
-        react._updateNodes(updateContext.nodesToUpdate, updateContext);
+        updateNodes(updateContext.nodesToUpdate, updateContext);
 
         return rnode.node;
       },
@@ -754,7 +755,7 @@
           directiveIndex: this.directiveIndex,
         });
         this.directive.follow(directiveContext);
-        react._updateNodes(nodesToUpdate, updateContext);
+        updateNodes(nodesToUpdate, updateContext);
       }
     };
   };
