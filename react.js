@@ -28,6 +28,64 @@
     return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
   };
 
+  var makeScopeChainLink = function(previousLink, additionalScope, options){
+    options = options || {};
+    var newLink = {
+      parent: previousLink,
+      scope: additionalScope,
+      type: options.type,
+      key: options.key,
+      anchorKey: options.type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
+
+      extend: function(additionalScope, options){
+        return makeScopeChainLink(newLink, additionalScope, options);
+      },
+
+      extendMany: function(scopes, options){
+        scopes = scopes || [];
+        var lastLink = newLink;
+        for(var which = 0; which < scopes.length; which++){
+          lastLink = lastLink.extend(scopes[which], options);
+        }
+        return lastLink;
+      },
+
+      extendForAnchorNames: function(names){
+        names = names || [];
+        var scopes = [];
+        for(var whichToken = 0; whichToken < names.length; whichToken++){
+          var scopeKey = names[whichToken];
+          js.errorIf(!react.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
+          scopes.push(react.scopes[scopeKey]);
+        }
+        return newLink.extendMany(scopes, {type:'anchor', key: scopeKey});
+      },
+
+      describe: function(){
+        var link = newLink;
+        var scopeChainDescription = [];
+        while(Link){
+          scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
+          link = link.parent;
+        }
+        return scopeChainDescription;
+      }
+    };
+    return newLink;
+  };
+
+  var globalScope = {};
+  var globalScopeChain = makeScopeChainLink(undefined, globalScope, {type:'global'});
+
+  makeScopeChain = function(scopes, options){
+    scopes = scopes || [];
+    var lastLink = globalScopeChain;
+    for(var which = 0; which < scopes.length; which++){
+      lastLink = lastLink.extend(scopes[which], options || {});
+    }
+    return lastLink;
+  };
+
   var react = {
 
     nodes: {},
@@ -61,39 +119,6 @@
       for(var listenerString in object.observers[key]){
         makeListener(object, key, listenerString).check();
       }
-    },
-
-    _buildScopeChainFromAnchorNames: function(names, lastLink){
-      if(names){
-        for(var whichToken = 0; whichToken < names.length; whichToken++){
-          var scopeKey = names[whichToken];
-          js.errorIf(!this.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
-          lastLink = this._extendScopeChain(lastLink, this.scopes[scopeKey], {type:'anchor', key: scopeKey});
-        }
-      }
-      return lastLink;
-    },
-
-    _buildScopeChain: function(scopes, options){
-      options = options || {};
-      var lastLink = options.prefix;
-      if(scopes){
-        for(var which = 0; which < scopes.length; which++){
-          lastLink = this._extendScopeChain(lastLink, scopes[which], options);
-        }
-      }
-      return lastLink;
-    },
-
-    _extendScopeChain: function(link, additionalScope, options){
-      options = options || {};
-      return {
-        parent: link,
-        scope: additionalScope,
-        type: options.type,
-        key: options.key,
-        anchorKey: options.type === 'anchor' ? options.key : (link||{}).anchorKey
-      };
     },
 
     update: function(/*[node, scope],*/ options){
@@ -174,6 +199,8 @@
       this.key = key;
     },
 
+
+// make this a scope chain method
     _lookupInScopeChain: function(key, scopeChain, options){
       if(!scopeChain){
         return;
@@ -206,7 +233,7 @@
         }else if(value !== undefined){
           break;
         }
-      }while((scopeChain = scopeChain.parent));
+      }while(scopeChain = scopeChain.parent);
 
       var prefix = baseKey + '.';
       // one for each segment of the dot acess
@@ -215,6 +242,7 @@
         if(object === undefined || object === null){
           return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
         }
+        // todo: how is this scope chain ever defined? above, scopeChain gets overwritten with .parent until it is falsey
         if(scopeChain.anchorKey && !options.returnObject && !this.suppressObservers){
           this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
         }
@@ -244,7 +272,7 @@
   var commands = react.commands = js.create(react, {
 
   /*
-   * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships
+   * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships)
    *
    * react {
    * }
@@ -466,7 +494,7 @@
 
       node: node,
 
-      getNodeKey: function(){
+      getKey: function(){
         return getNodeKey(rnode.node);
       },
 
@@ -490,15 +518,15 @@
       },
 
       updateGivenScopeChain: function(scopeChain, updateContext, fromDirective){
-        var nodeKey = rnode.getNodeKey();
+        var nodeKey = rnode.getKey();
         var directives = makeRnode(node).directives;
 
         if(directives.anchored){
-          scopeChain = react._buildScopeChainFromAnchorNames(directives.anchored.inputs, scopeChain);
+          scopeChain = scopeChain.extendForAnchorNames(directives.anchored.inputs);
         }
 
         var pushScope = function(scope, options){
-          scopeChain = react._extendScopeChain(scopeChain, scope, options);
+          scopeChain = scopeChain.extend(scope, options);
         };
 
         for(var i = fromDirective || 0; i < directives.length; i++){
@@ -546,50 +574,49 @@
           parent = rnode.getParent(updateContext);
         }
 
-        var scopeChain = updateContext.bequeathedScopeChains[getNodeKey(parent)];
+        var scopeChain = updateContext.bequeathedScopeChains[getNodeKey(parent)] || globalScopeChain;
         updateContext.bequeathedScopeChains[nodeKey] = rnode.updateGivenScopeChain(scopeChain, updateContext);
       },
 
       updateTree: function(options){
-        var root = rnode.node;
-
         //todo: test these
         //js.errorIf(!root, 'no root supplied to update()');
         //js.errorIf(react.isNode(root), 'first argument supplied to react.update() must be a dom node');
         js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
         var updateContext = js.create(react.commands, {
-          root: root,
-          nodesToUpdate: Array.prototype.slice.apply(root.querySelectorAll('[react]')),
+          root: rnode.node,
+          nodesToUpdate: Array.prototype.slice.apply(rnode.node.querySelectorAll('[react]')),
           bequeathedScopeChains: {},
           loopItemTemplates: {}
         });
         var scopes = options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
         if(options.anchor){
-          react.anchor({node: root, scopes:scopes});
-          scopes = undefined;
+          react.anchor({node: rnode.node, scopes:scopes});
+          scopes = [];
         }
-        var baseScopeChain = react._buildScopeChain(scopes, {type: 'updateInputs', prefix: rnode._buildScopeChain(options.fromDirective || 0)});
-        updateContext.bequeathedScopeChains[getNodeKey(root)] = rnode.updateGivenScopeChain(baseScopeChain, updateContext, options.fromDirective);
+        var baseScopeChain = rnode.buildParentScopeChain(options.fromDirective || 0).extendMany(scopes, {type: 'updateInputs'});
+        updateContext.bequeathedScopeChains[rnode.getKey()] = rnode.updateGivenScopeChain(baseScopeChain, updateContext, options.fromDirective);
 
         react._updateNodes(updateContext.nodesToUpdate, updateContext);
 
-        return root;
+        return rnode.node;
       },
 
-      _buildScopeChain: function(directiveIndex){
+      buildParentScopeChain: function(directiveIndex){
         var ancestors = $(Array.prototype.reverse.apply($(this.node).parents())).add(this.node);
         var scopeBuildingContext = js.create(react.commands, {
           //todo: deprecate the suppressObservers flag
-          suppressObservers: true
+          suppressObservers: true,
+          scopeChain: globalScopeChain
         });
         for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
           scopeBuildingContext.node = ancestors[whichAncestor];
           var directives = makeRnode(scopeBuildingContext.node).directives;
-          scopeBuildingContext.scopeChain = react._buildScopeChainFromAnchorNames(directives.anchored && directives.anchored.inputs, scopeBuildingContext.scopeChain);
+          scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extendForAnchorNames(directives.anchored && directives.anchored.inputs);
 
           var pushScope = function(scope, options){
-            scopeBuildingContext.scopeChain = react._extendScopeChain(scopeBuildingContext.scopeChain, scope, options);
+            scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extend(scope, options);
           };
 
           for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
@@ -711,7 +738,7 @@
       directiveIndex: directiveIndex,
       prefix: listener[2],
       directive: rnode.directives[directiveIndex],
-      scopeChain: rnode._buildScopeChain(directiveIndex),
+      scopeChain: rnode.buildParentScopeChain(directiveIndex),
       isValid: function(){
         // ignore the object if it's not in the same path that lead to registration of a listener
         return this.object === react._lookupInScopeChain(this.prefix+this.key, this.scopeChain, {returnObject: true});
@@ -749,15 +776,6 @@
         react._updateNodes(nodesToUpdate, updateContext);
       }
     };
-  };
-
-  var describeScopeChain = function(link){
-    var scopeChainDescription = [];
-    while(link){
-      scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-      link = link.parent;
-    }
-    return scopeChainDescription;
   };
 
   window.react = react;
