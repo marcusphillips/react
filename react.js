@@ -100,9 +100,9 @@
           while(path.length){ // one for each segment of the dot acess
             subObject = value;
             if(subObject === undefined || subObject === null){
-              return options.returnObject ? false : js.error('can\'t find path '+path.join('.')+' on an undefined object');
+              return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
             }
-            if(scopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
+            if(scopeChain.anchorKey && !options.suppressObservers){
               react._observeScope(subObject, prefix, path[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
             }
             prefix = prefix + path[0] + '.';
@@ -119,7 +119,7 @@
         }else if(scopeChain.parent){
           details = scopeChain.parent.lookup(key, js.extend({details:true}, options));
         }
-        return options.details ? details : options.returnObject ? details.matchingScopeChain && details.matchingBaseObject : details.value;
+        return options.details ? details : details.value;
       }
 
     };
@@ -727,7 +727,8 @@
       scopeChain: rnode.buildParentScopeChain(directiveIndex),
       isValid: function(){
         // ignore the object if it's not in the same path that lead to registration of a listener
-        return this.object === this.scopeChain.lookup(this.prefix+this.key, {returnObject: true});
+        var details = this.scopeChain.lookup(this.prefix+this.key, {details: true, suppressObservers: true});
+        return !details.failed && (details.matchingBaseObject === this.object);
       },
       check: function(){
         if(!this.isValid()){ return; }
