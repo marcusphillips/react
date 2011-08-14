@@ -30,24 +30,24 @@
 
   var emptyScopeChain = (function(){
 
-    var makeScopeChain = function(previousLink, additionalScope, options){
+    var makeScopeChain = function(type, previousLink, additionalScope, options){
       options = options || {};
       var scopeChain = {
         parent: previousLink,
         scope: additionalScope,
-        type: options.type,
+        type: type,
         key: options.key,
-        anchorKey: options.type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
+        anchorKey: type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
 
-        extend: function(additionalScope, options){
-          return makeScopeChain(scopeChain, additionalScope, options);
+        extend: function(type, additionalScope, options){
+          return makeScopeChain(type, scopeChain, additionalScope, options);
         },
 
-        extendMany: function(scopes, options){
+        extendMany: function(type, scopes, options){
           scopes = scopes || [];
           var lastLink = scopeChain;
           for(var which = 0; which < scopes.length; which++){
-            lastLink = lastLink.extend(scopes[which], options);
+            lastLink = lastLink.extend(type, scopes[which], options);
           }
           return lastLink;
         },
@@ -60,7 +60,7 @@
             js.errorIf(!react.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
             scopes.push(react.scopes[scopeKey]);
           }
-          return scopeChain.extendMany(scopes, {type:'anchor', key: scopeKey});
+          return scopeChain.extendMany('anchor', scopes, {key: scopeKey});
         },
 
         describe: function(){
@@ -135,7 +135,7 @@
   }());
 
   var globalScope = {};
-  var globalScopeChain = emptyScopeChain.extend(globalScope, {type:'global'});
+  var globalScopeChain = emptyScopeChain.extend('global', globalScope);
 
   var react = {
 
@@ -297,13 +297,13 @@
     },
 
     anchored: function(token){
-      this.pushScope(this.scopes[token], {type:'anchor', key:token});
+      this.pushScope('anchor', this.scopes[token], {key:token});
     },
 
     within: function(key){
       // todo: port and test this
       // js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
-      this.pushScope(this.lookup(key), {type:'within', key:key});
+      this.pushScope('within', this.lookup(key), {key:key});
     },
 
     contain: function(key){
@@ -422,7 +422,7 @@
       // todo: don't make this a fallthrough - create an explicit binding to the previous array scope object
       itemBindings[valueAlias] = new this._Fallthrough(key);
 
-      this.pushScope(itemBindings, {type:'bindItem', key:key});
+      this.pushScope('bindItem', itemBindings, {key:key});
     },
 
     _conditionalShow: function(conditional){
@@ -436,7 +436,7 @@
         $(this.node)[conditional ? 'removeClass' : 'addClass']('reactConditionallyHidden');
       }
       if(!conditional){
-        this.pushScope(doNotRecurse);
+        this.pushScope('doNotRecurse', doNotRecurse);
       }
       this._conditionalShow(conditional);
     },
@@ -519,8 +519,8 @@
           scopeChain = scopeChain.extendForAnchorNames(directives.anchored.inputs);
         }
 
-        var pushScope = function(scope, options){
-          scopeChain = scopeChain.extend(scope, options);
+        var pushScope = function(type, scope, options){
+          scopeChain = scopeChain.extend(type, scope, options);
         };
 
         for(var i = fromDirective || 0; i < directives.length; i++){
@@ -589,7 +589,7 @@
           react.anchor({node: rnode.node, scopes:scopes});
           scopes = [];
         }
-        var baseScopeChain = rnode.buildParentScopeChain(options.fromDirective || 0).extendMany(scopes, {type: 'updateInputs'});
+        var baseScopeChain = rnode.buildParentScopeChain(options.fromDirective || 0).extendMany('updateInputs', scopes);
         updateContext.bequeathedScopeChains[rnode.getKey()] = rnode.updateGivenScopeChain(baseScopeChain, updateContext, options.fromDirective);
 
         react._updateNodes(updateContext.nodesToUpdate, updateContext);
@@ -609,8 +609,8 @@
           var directives = makeRnode(scopeBuildingContext.node).directives;
           scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extendForAnchorNames(directives.anchored && directives.anchored.inputs);
 
-          var pushScope = function(scope, options){
-            scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extend(scope, options);
+          var pushScope = function(type, scope, options){
+            scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extend(type, scope, options);
           };
 
           for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
@@ -653,6 +653,7 @@
             js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
             js.log('Failure during React update: ', {
               'original error': error,
+              'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
               'while processing node': context.node,
               'index of failed directive': context.directiveIndex,
               'directive call': directive.command+'('+directive.inputs.join(', ')+')',
