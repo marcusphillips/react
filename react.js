@@ -28,9 +28,9 @@
     return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
   };
 
-  var makeScopeChainLink = function(previousLink, additionalScope, options){
+  var makeScopeChain = function(previousLink, additionalScope, options){
     options = options || {};
-    var newLink = {
+    var scopeChain = {
       parent: previousLink,
       scope: additionalScope,
       type: options.type,
@@ -38,12 +38,12 @@
       anchorKey: options.type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
 
       extend: function(additionalScope, options){
-        return makeScopeChainLink(newLink, additionalScope, options);
+        return makeScopeChain(scopeChain, additionalScope, options);
       },
 
       extendMany: function(scopes, options){
         scopes = scopes || [];
-        var lastLink = newLink;
+        var lastLink = scopeChain;
         for(var which = 0; which < scopes.length; which++){
           lastLink = lastLink.extend(scopes[which], options);
         }
@@ -58,33 +58,79 @@
           js.errorIf(!react.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
           scopes.push(react.scopes[scopeKey]);
         }
-        return newLink.extendMany(scopes, {type:'anchor', key: scopeKey});
+        return scopeChain.extendMany(scopes, {type:'anchor', key: scopeKey});
       },
 
       describe: function(){
-        var link = newLink;
+        var link = scopeChain;
         var scopeChainDescription = [];
         while(Link){
           scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
           link = link.parent;
         }
         return scopeChainDescription;
+      },
+
+      lookup: function(key, options){
+        options = options || {};
+        var negate;
+        var value;
+        if(key[0] === '!'){
+          negate = true;
+          key = key.slice(1);
+        }
+        if (matchers.isString.test(key)) {
+          return key.slice(1, key.length-1);
+        }
+
+        // todo: clean up any pre-existing observers
+
+        var keys = key.split('.');
+        var baseKey = keys.shift();
+        var focalScopeChain = scopeChain;
+        do {
+          var object = focalScopeChain.scope;
+          value = object[baseKey];
+          // todo: write a test to verify that responses to change events don't result in new observers
+          if(focalScopeChain.anchorKey && options.listener && !options.suppressObservers){
+            react._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, focalScopeChain.anchorKey, value !== undefined);
+          }
+          if(value instanceof react._Fallthrough){
+            baseKey = value.key;
+          }else if(value !== undefined){
+            break;
+          }
+          // todo: what happens when focalScopeChain finally equals undefined?
+        }while((focalScopeChain = focalScopeChain.parent));
+
+        var prefix = baseKey + '.';
+        // one for each segment of the dot acess
+        while(keys.length){
+          object = value;
+          if(object === undefined || object === null){
+            return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
+          }
+          if(focalScopeChain.anchorKey && !options.returnObject && !options.suppressObservers){
+            react._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, focalScopeChain.anchorKey, true);
+          }
+          prefix = prefix + keys[0] + '.';
+          value = object[keys.shift()];
+        }
+
+        if(options.returnObject){
+          return object;
+        }
+
+        if(typeof value === 'function'){ value = value.call(object); }
+        return negate ? ! value : value;
       }
+
     };
-    return newLink;
+    return scopeChain;
   };
 
   var globalScope = {};
-  var globalScopeChain = makeScopeChainLink(undefined, globalScope, {type:'global'});
-
-  makeScopeChain = function(scopes, options){
-    scopes = scopes || [];
-    var lastLink = globalScopeChain;
-    for(var which = 0; which < scopes.length; which++){
-      lastLink = lastLink.extend(scopes[which], options || {});
-    }
-    return lastLink;
-  };
+  var globalScopeChain = makeScopeChain(undefined, globalScope, {type:'global'});
 
   var react = {
 
@@ -170,6 +216,7 @@
       return options.node;
     },
 
+    // todo now: make this a method of scopeChain
     _observeScope: function(object, prefix, key, node, directiveIndex, anchorKey, didMatch){
       // todo: scope observers per node-object anchoring, for easy cleanup of memory references
       var nodeKey = getNodeKey(node);
@@ -197,65 +244,6 @@
 
     _Fallthrough: function(key){
       this.key = key;
-    },
-
-
-// make this a scope chain method
-    _lookupInScopeChain: function(key, scopeChain, options){
-      if(!scopeChain){
-        return;
-      }
-      options = options || {};
-      var negate;
-      var value;
-      if(key[0] === '!'){
-        negate = true;
-        key = key.slice(1);
-      }
-      if (matchers.isString.test(key)) {
-        return key.slice(1, key.length-1);
-      }
-
-      // todo: clean up any pre-existing observers
-
-      var keys = key.split('.');
-      var baseKey = keys.shift();
-      // the search paths list holds a set of namespaces
-      do {
-        var object = scopeChain.scope;
-        value = object[baseKey];
-        // todo: write a test to verify that responses to change events don't result in new observers
-        if(scopeChain.anchorKey && options.listener && !this.suppressObservers){
-          this._observeScope(object, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, value !== undefined);
-        }
-        if(value instanceof this._Fallthrough){
-          baseKey = value.key;
-        }else if(value !== undefined){
-          break;
-        }
-      }while(scopeChain = scopeChain.parent);
-
-      var prefix = baseKey + '.';
-      // one for each segment of the dot acess
-      while(keys.length){
-        object = value;
-        if(object === undefined || object === null){
-          return options.returnObject ? false : js.error('can\'t find keys '+keys.join('.')+' on an undefined object');
-        }
-        // todo: how is this scope chain ever defined? above, scopeChain gets overwritten with .parent until it is falsey
-        if(scopeChain.anchorKey && !options.returnObject && !this.suppressObservers){
-          this._observeScope(object, prefix, keys[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
-        }
-        prefix = prefix + keys[0] + '.';
-        value = object[keys.shift()];
-      }
-
-      if(options.returnObject){
-        return object;
-      }
-
-      if(typeof value === 'function'){ value = value.call(object); }
-      return negate ? ! value : value;
     }
 
   };
@@ -297,9 +285,10 @@
       options = options || {};
       options.listener = {
         node: this.node,
-        directiveIndex: this.directiveIndex
+        directiveIndex: this.directiveIndex,
+        suppressObservers: this.suppressObservers
       };
-      return this._lookupInScopeChain(key, this.scopeChain, options);
+      return this.scopeChain.lookup(key, options);
     },
 
     anchored: function(token){
@@ -741,7 +730,7 @@
       scopeChain: rnode.buildParentScopeChain(directiveIndex),
       isValid: function(){
         // ignore the object if it's not in the same path that lead to registration of a listener
-        return this.object === react._lookupInScopeChain(this.prefix+this.key, this.scopeChain, {returnObject: true});
+        return this.object === this.scopeChain.lookup(this.prefix+this.key, {returnObject: true});
       },
       check: function(){
         if(!this.isValid()){ return; }
