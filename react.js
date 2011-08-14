@@ -64,7 +64,7 @@
       describe: function(){
         var link = scopeChain;
         var scopeChainDescription = [];
-        while(Link){
+        while(link){
           scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
           link = link.parent;
         }
@@ -73,8 +73,7 @@
 
       lookup: function(key, options){
         options = options || {};
-        var negate;
-        var value;
+        var negate, value;
         if(key[0] === '!'){
           negate = true;
           key = key.slice(1);
@@ -87,8 +86,8 @@
 
         var keys = key.split('.');
         var baseKey = keys.shift();
-        var focalScopeChain = scopeChain;
-        do {
+        var focalScopeChain = {parent:scopeChain};
+        while(value === undefined && (focalScopeChain = focalScopeChain.parent)){
           var object = focalScopeChain.scope;
           value = object[baseKey];
           // todo: write a test to verify that responses to change events don't result in new observers
@@ -97,11 +96,9 @@
           }
           if(value instanceof react._Fallthrough){
             baseKey = value.key;
-          }else if(value !== undefined){
-            break;
+            value = undefined;
           }
-          // todo: what happens when focalScopeChain finally equals undefined?
-        }while((focalScopeChain = focalScopeChain.parent));
+        }
 
         var prefix = baseKey + '.';
         // one for each segment of the dot acess
@@ -651,7 +648,7 @@
               'while processing node': context.node,
               'index of failed directive': context.directiveIndex,
               'directive call': directive.command+'('+directive.inputs.join(', ')+')',
-              'scope chain description': describeScopeChain(context.scopeChain),
+              'scope chain description': context && context.scopeChain && context.scopeChain.describe(),
               '(internal scope chain object) ': context.scopeChain
             });
             throw error;
