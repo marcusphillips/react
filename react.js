@@ -239,7 +239,6 @@
       return options.node;
     },
 
-    // todo now: make this a method of scopeChain
     integrate: {
       jQuery: function(){
         jQuery.fn.update = function(scope){
