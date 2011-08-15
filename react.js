@@ -45,6 +45,7 @@
         scope: additionalScope,
         type: type,
         key: options.key,
+        prefix: options.prefix || '',
         anchorKey: type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
 
         extend: function(type, additionalScope, options){
@@ -71,14 +72,15 @@
           return scopeChain.extendMany('anchor', scopes, {key: scopeKey});
         },
 
-        describe: function(){
-          var link = scopeChain;
-          var scopeChainDescription = [];
-          while(link){
-            scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-            link = link.parent;
-          }
-          return scopeChainDescription;
+        observe: function(key, directive){
+          var object = scopeChain.scope;
+          // todo: scope observers per node-object anchoring, for easy cleanup of memory references
+          react.nodes[directive.rnode.getKey()] = directive.rnode.node;
+          var observations = directive.rnode.node['directive ' + directive.index + ' observes'] = directive.rnode.node['directive ' + directive.index + ' observes'] || [];
+          observations.push({object: object, key: key});
+          object.observers = object.observers || {};
+          object.observers[key] = object.observers[key] || {};
+          object.observers[key][directive.rnode.getKey() + ' ' + directive.index + ' ' + scopeChain.prefix] = true;
         },
 
         lookup: function(key, options){
@@ -101,8 +103,8 @@
           if(scopeChain.scope[baseKey] instanceof Fallthrough){
             details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
           }else if(scopeChain.scope[baseKey] !== undefined){
-            if(scopeChain.anchorKey && options.listener && !options.suppressObservers){
-              react._observeScope(scopeChain.scope, '', baseKey, options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, scopeChain.scope[baseKey] !== undefined);
+            if(scopeChain.anchorKey && options.listeningDirective && !options.suppressObservers){
+              scopeChain.observe(baseKey, options.listeningDirective);
             }
             var prefix = baseKey + '.';
             var subObject = scopeChain.scope;
@@ -112,9 +114,11 @@
               if(subObject === undefined || subObject === null){
                 return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
               }
-              emptyScopeChain.extend('dotAccess', subObject, {key:path[0], prefix:prefix});
-              if(scopeChain.anchorKey && !options.suppressObservers){
-                react._observeScope(subObject, prefix, path[0], options.listener.node, options.listener.directiveIndex, scopeChain.anchorKey, true);
+              if(scopeChain.anchorKey && !options.suppressObservers && options.listeningDirective){
+                emptyScopeChain.extend('dotAccess', subObject, {
+                  prefix: prefix,
+                  anchorKey: scopeChain.anchorKey
+                }).observe(path[0], options.listeningDirective);
               }
               prefix = prefix + path[0] + '.';
               value = subObject[path.shift()];
@@ -131,9 +135,20 @@
             details = scopeChain.parent.lookup(key, js.extend({details:true}, options));
           }
           return options.details ? details : details.value;
+        },
+
+        describe: function(){
+          var link = scopeChain;
+          var scopeChainDescription = [];
+          while(link){
+            scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
+            link = link.parent;
+          }
+          return scopeChainDescription;
         }
 
       };
+
       return scopeChain;
     };
 
@@ -225,17 +240,6 @@
     },
 
     // todo now: make this a method of scopeChain
-    _observeScope: function(object, prefix, key, node, directiveIndex, anchorKey, didMatch){
-      // todo: scope observers per node-object anchoring, for easy cleanup of memory references
-      var nodeKey = getNodeKey(node);
-      this.nodes[nodeKey] = node;
-      var observations = node['directive ' + directiveIndex + ' observes'] = node['directive ' + directiveIndex + ' observes'] || [];
-      observations.push({object: object, key: key, didMatch: didMatch});
-      object.observers = object.observers || {};
-      object.observers[key] = object.observers[key] || {};
-      object.observers[key][nodeKey + ' ' + directiveIndex + ' ' + prefix] = true;
-    },
-
     integrate: {
       jQuery: function(){
         jQuery.fn.update = function(scope){
@@ -273,11 +277,9 @@
 
     lookup: function(key, options){
       options = options || {};
-      options.listener = {
-        node: this.node,
-        directiveIndex: this.directiveIndex,
-        suppressObservers: this.suppressObservers
-      };
+      options.listeningDirective = makeRnode(this.node).directives[this.directiveIndex];
+      options.suppressObservers = 'suppressObservers' in options ? options.suppressObservers : this.suppressObservers;
+
       return this.scopeChain.lookup(key, options);
     },
 
@@ -340,7 +342,7 @@
       js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
       if(this.scopeChain.anchorKey && !this.suppressObservers){
         // todo: optimize. this is a shortcut - it simply puts a listener on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
-        this._observeScope(collection, '', 'length', this.node, this.directiveIndex, this.scopeChain.anchorKey, true);
+        this.scopeChain.observe('length', makeRnode(this.node).directives[this.directiveIndex]);
       }
 
       var itemNodes = [];
@@ -615,12 +617,13 @@
       }
     };
 
-    var makeDirective = function(tokens){
+    var makeDirective = function(index, tokens){
 
       var directive = {
 
         isDirective: true,
         rnode: rnode,
+        index: index,
         command: tokens[0],
         inputs: tokens.slice(1),
 
@@ -660,14 +663,14 @@
       return js.extend(js.trim(string).replace(matchers.negation, '!').split(matchers.space), {rnode: rnode});
     });
     if(directiveArrays[0] && directiveArrays[0][0] === 'anchored'){
-      var anchored = makeDirective(directiveArrays.shift());
+      var anchored = makeDirective('anchored', directiveArrays.shift());
     }
     directiveArrays = js.filter(directiveArrays, function(directiveArray){
       return !!directiveArray[0];
     });
 
     var directives = js.map(directiveArrays, function(which, directive){
-      return makeDirective(directive);
+      return makeDirective(''+which, directive);
     });
 
     rnode.directives = js.extend(directives,{
@@ -676,7 +679,7 @@
 
       // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
       set: function(key, directive){
-        rnode.directives[key] = makeDirective(directive);
+        rnode.directives[key] = makeDirective(''+key, directive);
         rnode.directives.write();
       },
 
@@ -697,7 +700,10 @@
       },
 
       prepend: function(directive){
-        rnode.directives.unshift(directive.isDirective ? directive : makeDirective(directive));
+        rnode.directives.unshift(directive.isDirective ? directive : makeDirective('0', directive));
+        js.map(rnode.directives, function(which, directive){
+          directive.index = ''+which;
+        });
         rnode.directives.write();
       }
 
