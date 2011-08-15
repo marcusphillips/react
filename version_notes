@@ -1,0 +1,5 @@
+1.1.2
+---
+- Bugfix: In ie, react was iterating into loop templates. expando data properties were being copied, but now using jquery's .data() function
+- Bugfix: In ie, react would error on trying to work with the object returned from querySelectorAll()
+- Large under-the-hood revision to structure and readability

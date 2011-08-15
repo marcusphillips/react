@@ -1,3 +1,9 @@
+--- goals for next version ---
+?- lookups no longer fail when they evaluate to undefined. Now they only fail when the key is not among the object, using the 'in' operator.
+?- Allows for progressive rendering, by simply returning (rather than erroring) on lookup failure
+?- don't recurse on nodes within contain directives
+
+--- random todos ---
 - Make lookups fail when property isn't defined on the object ('prop' in obj), rather than when it has a value of undefined
 - Make a changed event on any numeric property of an array result in a changed event on the associated loop directives
 - make every node in a loop listen to it's associated key
@@ -6,6 +12,6 @@
 - what if a listened-to property is stored somewhere up the prototype chain? how can listeners be registered there?
 - add a jsonified output of any object in debug mode
 
-write tests:
+--- write tests ---
 - empty react attribute string doesnt break univers
 
