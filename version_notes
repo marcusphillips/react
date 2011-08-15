@@ -1,9 +1,5 @@
-1.2
+1.1.2
 ---
-
-
---- future versions todo ---
-?- lookups no longer fail when they evaluate to undefined. Now they only fail when the key is not among the object, using the 'in' operator.
-?- Allows for progressive rendering, by simply returning (rather than erroring) on lookup failure
-?- don't recurse on nodes within contain directives
-
+- Bugfix: In ie, react was iterating into loop templates. expando data properties were being copied, but now using jquery's .data() function
+- Bugfix: In ie, react would error on trying to work with the object returned from querySelectorAll()
+- Large under-the-hood revision to structure and readability
