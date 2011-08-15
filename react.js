@@ -21,17 +21,17 @@
   };
 
   var getNodeKey = function(node){
-    return (node.reactKey = node.reactKey || js.util.unique('reactNode'));
-  };
-
-  var getScopeKey = function(object){
-    return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
+    // todo: without using .data(), IE copies expando properties over, breaking loop behaviors and other cloning operations. disable .data() long enough to write a test for this.
     var key = $(node).data("reactKey");
     if(!key){
       key = js.util.unique('reactNode');
       $(node).data("reactKey", key);
     }
-    return k;
+    return key;
+  };
+
+  var getScopeKey = function(object){
+    return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
   };
 
   var Fallthrough = function(key){ this.key = key; };
@@ -40,6 +40,16 @@
     for(var i = 0; i < nodes.length; i++){
       makeRnode(nodes[i]).update(updateContext);
     }
+  };
+
+  // todo: calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE. revert this code to use that and write a test for it.
+  // also see if there's a more efficient way to build an array other than iterating over the array like object
+  var makeArrayFromArrayLikeObject = function(arrayLikeObject){
+    var array = [];
+    for(var i = 0, length = arrayLikeObject.length; i < length ; i++){
+      array.push(arrayLikeObject[i]);
+    }
+    return array;
   };
 
   var emptyScopeChain = (function(){
@@ -482,7 +492,7 @@
 
       // note: getReactNodes() only returns the operative node and nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
       getReactNodes: function(){
-        return [node].concat(Array.prototype.slice.apply(node.querySelectorAll('[react]')));
+        return [node].concat(makeArrayFromArrayLikeObject(node.querySelectorAll('[react]')));
       },
 
       getParent: function(updateContext){
@@ -573,7 +583,7 @@
 
         var updateContext = js.create(react.commands, {
           root: rnode.node,
-          nodesToUpdate: Array.prototype.slice.apply(rnode.node.querySelectorAll('[react]')),
+          nodesToUpdate: makeArrayFromArrayLikeObject(rnode.node.querySelectorAll('[react]')),
           bequeathedScopeChains: {},
           loopItemTemplates: {}
         });
