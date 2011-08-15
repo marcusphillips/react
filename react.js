@@ -26,6 +26,12 @@
 
   var getScopeKey = function(object){
     return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
+    var key = $(node).data("reactKey");
+    if(!key){
+      key = js.util.unique('reactNode');
+      $(node).data("reactKey", key);
+    }
+    return k;
   };
 
   var Fallthrough = function(key){ this.key = key; };
