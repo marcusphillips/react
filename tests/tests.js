@@ -229,7 +229,7 @@ test('requires at least an item template node and a contents node inside the loo
 
 test('template node is not visible after render', function(){
   var node = $('\
-    <div id="outter" react="for which item">\
+    <div id="outer" react="for which item">\
       <div react="contain item"></div>\
     <div id="container">a</div></div>\
   ')[0];
@@ -243,7 +243,7 @@ test('template node is not visible after render', function(){
 
 test('can loop across values in an array', function(){
   var node = $('\
-    <div id="outter" react="for which item">\
+    <div id="outer" react="for which item">\
       <div id="item" react="contain item"></div>\
     <div id="container"></div></div>\
   ')[0];
@@ -257,9 +257,30 @@ test('can loop across values in an array', function(){
   ], ['a','b','c'], 'children\'s innerHTML is set to array items\' contents');
 });
 
+test('deleting a changing a lookup value to fail does not result in the ', function(){
+  var scope = {
+    prop: 'value'
+  };
+
+  var node = $('<div react="contain prop">original</div>')[0];
+
+  react.update({
+    node: node,
+    scope:scope,
+    anchor: true
+  });
+
+  same(node.innerHTML, 'value', 'node contained subscope\'s prop');
+
+  delete scope.prop;
+debugger;
+  react.changed(scope, 'prop');
+  same(node.innerHTML, '', 'node contained subscope\'s prop');
+});
+
 test('does not operate on loop item template node', function(){
   var node = $('\
-    <div id="outter" react="for which item">\
+    <div id="outer" react="for which item">\
       <div id="item" react="contain item">stuff</div>\
     <div id="container"></div></div>\
   ')[0];
@@ -270,7 +291,7 @@ test('does not operate on loop item template node', function(){
 
 test('does not operate on descendants of loop item template node', function(){
   var node = $('\
-    <div id="outter" react="for which item">\
+    <div id="outer" react="for which item">\
       <div id="item"><div id="descendant" react="contain item">stuff</div></div>\
     <div id="container"></div></div>\
   ')[0];
@@ -288,9 +309,9 @@ test('does not operate on descendants of loop item template node, even when loop
 });
 
 test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
-  var node = $('<div react="attr \'thing\' outterProp, within subobject, within innerProp, contain val"></div>')[0];
+  var node = $('<div react="attr \'thing\' outerProp, within subobject, within innerProp, contain val"></div>')[0];
   var scope = {
-    outterProp: 'outter',
+    outerProp: 'outer',
     subobject: {
       innerProp: {val:'inner'}
     }
@@ -300,12 +321,12 @@ test('calling changed on a subobject that\'s associated with a within directive 
     scope: scope,
     anchor: true
   });
-  same($(node).attr('thing'), 'outter', 'attr came from outter prop');
+  same($(node).attr('thing'), 'outer', 'attr came from outer prop');
   same(node.innerHTML, 'inner', 'contents came from inner prop');
-  scope.outterProp = 'newOutter';
+  scope.outerProp = 'newOuter';
   scope.subobject.innerProp = {val:'newInner'};
   react.changed(scope.subobject, 'innerProp');
-  same($(node).attr('thing'), 'outter', 'attr was not changed');
+  same($(node).attr('thing'), 'outer', 'attr was not changed');
   same(node.innerHTML, 'newInner', 'contents got updated');
 });
 
@@ -439,8 +460,8 @@ test('nested withinEachs', function(){
     <span></span></div>\
   ');
   react.update($node[0], [[{foo:'a'}]]);
-  var $outterResultsHolder = $node.children().last();
-  var $innerLoop = $outterResultsHolder.children().first();
+  var $outerResultsHolder = $node.children().last();
+  var $innerLoop = $outerResultsHolder.children().first();
   var $innerResultsHolder = $innerLoop.children().last();
   same($innerResultsHolder.children().first().html(), 'a', 'doubly nested children took their values from item objects\' foo properties');
 });
@@ -522,12 +543,12 @@ test('can name objects', function(){
 });
 
 test('anchored nodes are prepended to scope chains on render', function(){
-  var outter = $('<div react="anchored obj"></div>')[0];
+  var outer = $('<div react="anchored obj"></div>')[0];
   var inner = $('<div react="contain foo"></div>')[0];
-  $(outter).html(inner);
+  $(outer).html(inner);
   react.name('obj', {foo:'bar'});
-  react.update(outter, {});
-  equal($(inner).html(), 'bar', 'inner node had access to outter node\'s anchor object');
+  react.update(outer, {});
+  equal($(inner).html(), 'bar', 'inner node had access to outer node\'s anchor object');
 });
 
 // todo: test support for anchoring to whole scope chains
@@ -621,9 +642,9 @@ test('regression test: a withinEach inside a for will not get duplicate bindings
     <span id="container"></span></div>\
   ')[0];
   react.update({node: node, scope: object, anchor: true});
-  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'there is only one element in the outter array, so index substitution (binding to the key "which") should always be 0');
+  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
   react.set(object, 0, [{prop:'c'}, {prop:'d'}]);
-  // before the bug fix, the binding instruction from the outter 'for' directive never got blown away as the scope chain got built up
+  // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
   // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
   same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'index substitution is still set to 0');
   react.set(object, 0, [{which:'foo'}, {which:'bar'}]);
@@ -642,7 +663,7 @@ test('when a list item is removed, associated loop item nodes disappear', functi
   same($($('#container .item', node)[1]).html(), 'b', 'second item got set');
   object.slice(0,1);
   react.changed(object, 1);
-  // before the bug fix, the binding instruction from the outter 'for' directive never got blown away as the scope chain got built up
+  // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
   // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
   same($('#container .item', node).length, 1, 'redundant node got deleted');
 */
