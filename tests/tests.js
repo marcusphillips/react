@@ -211,10 +211,10 @@ test('if directives turn off recursion in child nodes', function(){
 
 
 /*
- * withinEach
+ * within
  */
 
-module("withinEach");
+module("within");
 
 test('works with a missing key alias', function(){/*...*/});
 
@@ -273,7 +273,7 @@ test('deleting a changing a lookup value to fail does not result in the ', funct
   same(node.innerHTML, 'value', 'node contained subscope\'s prop');
 
   delete scope.prop;
-debugger;
+
   react.changed(scope, 'prop');
   same(node.innerHTML, '', 'node contained subscope\'s prop');
 });
