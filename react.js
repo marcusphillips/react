@@ -68,6 +68,10 @@
           return makeScopeChain(type, scopeChain, additionalScope, options);
         },
 
+        contains: function(scope){
+          return scopeChain.scope === scope || scopeChain.parent && scopeChain.parent.contains(scope);
+        },
+
         extendMany: function(type, scopes, options){
           scopes = scopes || [];
           var lastLink = scopeChain;
@@ -641,7 +645,7 @@
               scopeBuildingContext.scopeChain = emptyScopeChain;
               continue;
             }
-            if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective].command)){
+            if(js.among(['within', 'withinItem', 'bindItem'], directives[whichDirective].command)){
               var directiveContext = js.create(scopeBuildingContext, {
                 directiveIndex: whichDirective,
                 pushScope: pushScope
@@ -766,7 +770,7 @@
       isValid: function(){
         // ignore the object if it's not in the same path that lead to registration of a listener
         var details = this.scopeChain.lookup(this.prefix+this.key, {details: true, suppressObservers: true});
-        return !details.failed && (details.matchingBaseObject === this.object);
+        return details.matchingBaseObject === this.object || details.failed && this.scopeChain.contains(this.object);
       },
       check: function(){
         if(!this.isValid()){ return; }
