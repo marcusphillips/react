@@ -332,6 +332,10 @@
     },
 
     anchored: function(token){
+      if(!this.scopes[token]){
+        debug('anchored directive failed to find a scope for the key "'+key+'"');
+        return;
+      }
       this.pushScope('anchor', this.scopes[token], {key:token});
     },
 

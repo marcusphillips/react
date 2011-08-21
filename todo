@@ -1,9 +1,15 @@
 --- goals for next version ---
-?- lookups no longer fail when they evaluate to undefined. Now they only fail when the key is not among the object, using the 'in' operator.
-?- Allows for progressive rendering, by simply returning (rather than erroring) on lookup failure
-?- don't recurse on nodes within contain directives
+- don't recurse into widget nodes
+- deprecate the .update() function
+- provide .render() that anchors and associates all listeners
+- when should listeners relink?
+
+- loop item template must be labeled
+- no loop items container node (all results get appended after template node)
+- must declare a node as a react widget
 
 --- random todos ---
+- change queryselectorall to $.find() for compatibility
 - Make lookups fail when property isn't defined on the object ('prop' in obj), rather than when it has a value of undefined
 - Make a changed event on any numeric property of an array result in a changed event on the associated loop directives
 - make every node in a loop listen to it's associated key
