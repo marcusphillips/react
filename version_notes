@@ -1,5 +1,6 @@
 local changes
 ---
+- lookups in scope chain fail only when property is not in the object at all, rather than when it is present but set to undefined
 - any node substituted by a 'contain' directive does not inherit the containing scope chain
 
 

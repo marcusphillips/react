@@ -486,8 +486,12 @@ test('scope can be shifted within a property', function(){
   equal($(node).html(), 'content', 'key fell through fell through to next higher scope when local key is missing');
 
   var node = $('<div react="within subobject, contain key"/>')[0];
+  react.update(node, {subobject: {}, key:'content'});
+  equal($(node).html(), 'content', 'key fell through to next higher scope when local key is not in object undefined');
+
+  var node = $('<div react="within subobject, contain key"/>')[0];
   react.update(node, {subobject: {key: undefined}, key:'content'});
-  equal($(node).html(), 'content', 'key fell through fell through to next higher scope when local key is undefined');
+  equal($(node).html(), '', 'key did not fall through when local key is in object, but undefined');
 });
 
 

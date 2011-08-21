@@ -8,7 +8,13 @@
 
 (function () {
 
-  var debug = true;
+  var debugging = true;
+
+  var debug = function(){
+    if(debugging && typeof console !== 'undefined' && console.warn && console.warn.apply){
+      console.warn.apply(console, arguments);
+    }
+  };
 
   var doNotRecurse = {};
 
@@ -124,7 +130,7 @@
           // todo: test that we don't observe binding objects
           if(scopeChain.scope[baseKey] instanceof Fallthrough){
             details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
-          }else if(scopeChain.scope[baseKey] !== undefined){
+          }else if(baseKey in scopeChain.scope){
             if(scopeChain.anchorKey && options.listeningDirective && !options.suppressObservers){
               scopeChain.observe(baseKey, options.listeningDirective);
             }
@@ -134,7 +140,8 @@
             while(path.length){ // one for each segment of the dot acess
               subObject = value;
               if(subObject === undefined || subObject === null){
-                return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
+                debug('Could not find a valid subscope at '+prefix+' for '+key+' on ', scopeChain.scope);
+                return options.details ? details : subObject;
               }
               if(scopeChain.anchorKey && !options.suppressObservers && options.listeningDirective){
                 emptyScopeChain.extend('dotAccess', subObject, {
@@ -331,9 +338,7 @@
     within: function(key){
       var scope = this.lookup(key);
       if(!scope){
-        if(debug && typeof console !== 'undefined' && console.warn){
-          console.warn('within directive failed to find a scope for the key "'+key+'"');
-        }
+        debug('within directive failed to find a scope for the key "'+key+'"');
         return;
       }
       this.pushScope('within', scope, {key:key});
