@@ -443,12 +443,16 @@ test('withinEach implies a within statement on item nodes', function(){
     <span></span></div>\
   ')[0];
   var resultsHolder = $(node).children()[1];
-  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
+  var list = [{foo:'a'}, {foo:'b'}, {foo:'c'}];
+  react.update({node:node, scope:list, anchor:true});
   same([
     $($(resultsHolder).children()[0]).html(),
     $($(resultsHolder).children()[1]).html(),
     $($(resultsHolder).children()[2]).html()
   ], ['a','b','c'], 'children took their values from item objects\' foo properties');
+  list[0].foo = 'new a';
+  react.changed(list[0], 'foo');
+  same($($(resultsHolder).children()[0]).html(), 'new a', 'regression test: withinItem directive still applies after change event');
 });
 
 test('nested withinEachs', function(){

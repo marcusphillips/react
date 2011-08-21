@@ -623,7 +623,7 @@
           for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
             if(scopeBuildingContext.node === this.node && (directiveIndex||0) <= whichDirective){ break; }
             if(!scopeBuildingContext.scopeChain){ continue; }
-            if(js.among(['within', 'withinEach', 'bindItem'], directives[whichDirective].command)){
+            if(js.among(['within', 'withinItem', 'bindItem'], directives[whichDirective].command)){
               var directiveContext = js.create(scopeBuildingContext, {
                 directiveIndex: whichDirective,
                 pushScope: pushScope
