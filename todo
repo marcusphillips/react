@@ -11,7 +11,9 @@
 - allow delayed updates that wait until a flag is turned on
 - what if a listened-to property is stored somewhere up the prototype chain? how can listeners be registered there?
 - add a jsonified output of any object in debug mode
+- attrIf needs the same persistence behavior as classIf, write test for it first
 
 --- write tests ---
 - empty react attribute string doesnt break univers
 - attributes should be removed if property is undefined, even after deletion
+- when a within command fails lookup, the new scope is not added to the chain

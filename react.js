@@ -8,6 +8,8 @@
 
 (function () {
 
+  var debug = true;
+
   var doNotRecurse = {};
 
   var undefined;
@@ -186,6 +188,11 @@
     nodes: {},
     scopes: {},
 
+    debug: function(setting){
+      if(typeof setting === 'undefined'){ setting = true; }
+      debug = setting;
+    },
+
     name: function(name, object){
       this.scopes[name] = object;
     },
@@ -322,9 +329,14 @@
     },
 
     within: function(key){
-      // todo: port and test this
-      // js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
-      this.pushScope('within', this.lookup(key), {key:key});
+      var scope = this.lookup(key);
+      if(!scope){
+        if(debug && typeof console !== 'undefined' && console.warn){
+          console.warn('within directive failed to find a scope for the key "'+key+'"');
+        }
+        return;
+      }
+      this.pushScope('within', scope, {key:key});
     },
 
     contain: function(key){
@@ -335,7 +347,6 @@
       if(insertion && insertion.nodeType){
         jQuery(this.node).append(insertion);
         this._removeNodes(makeRnode(insertion).getReactNodes());
-        // todo: this.pushScope('doNotRecurse', doNotRecurse);
       } else {
         jQuery(this.node).text(insertion);
       }
@@ -460,8 +471,7 @@
     },
 
     showIf: function(condition){
-      var conditional = this.lookup(condition);
-      this._conditionalShow(conditional);
+      this._conditionalShow(this.lookup(condition));
     },
 
     visIf: function(condition){
@@ -474,10 +484,10 @@
       name = this.lookup(name);
       value = this.lookup(value);
 
-      if(!js.among(['string', 'number', 'undefined', 'null'], typeof name)){
+      if(!js.among(['string', 'number', 'undefined'], typeof name)){
         js.log('bad attr name: ', name);
         js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
-      }else if(!js.among(['string', 'number', 'undefined', 'null'], typeof value)){
+      }else if(!js.among(['string', 'number', 'undefined'], typeof value)){
         js.log('bad attr value: ', value);
         js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
       }
