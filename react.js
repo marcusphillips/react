@@ -232,13 +232,19 @@
 
     update: function(/*[node, scope],*/ options){
       options = options || {};
-      if(options.nodeType){
+      if(options.nodeType || (options instanceof jQuery)){
         // detect argument signature of (node, scope)
         options = {
           node: arguments[0],
           scope: arguments[1]
         };
         js.extend(options, arguments[2] || {});
+      }
+      if(options.node instanceof jQuery){
+        if(options.node.length !== 1){
+          js.error('you cannot pass a jquery object containing many nodes to react.update()');
+        }
+        options.node = options.node[0];
       }
       return makeRnode(options.node).updateTree(options);
     },

@@ -1,3 +1,51 @@
+(function(){
+
+var nodes, $nodes, scopes;
+
+QUnit.testStart = function(){
+
+  /*
+   * fixtures
+   */
+
+  $nodes = {
+    inert: $('<div></div>'),
+    inert2: $('<div></div>'),
+
+    withNonexistentCommand: $('<div react="nonexistentcommand arg1"></div>'),
+
+    containingStringLiteral: $('<div react="contain \'example\'"></div>'),
+    containingName: $('<div react="contain name"></div>'),
+    containingWidget: $('<div react="contain widget"></div>'),
+    containingAddressDotStreet: $('<div react="contain address.street"/>'),
+
+    withAttributesFromStrings: $('<div react="attr \'name\' \'value\'"/>'),
+    withDynamicAttributeName:  $('<div react="attr   name   \'value\'"/>'),
+    withDynamicAttributeValue: $('<div react="attr \'name\'   value  "/>'),
+
+    mugshot: $('<img react="attr \'src\' mugshotUrl"/>'),
+
+    withConditionalAttribute: $('<div react="attrIf isAdmin \'name\' \'value\'"/>')
+  };
+
+  nodes = {};
+  for(var key in $nodes){
+    nodes[key] = $nodes[key][0];
+  }
+
+  scopes = {
+    inert: {},
+    bob: {
+      name: 'bob',
+      mugshotUrl: 'example.com',
+      address: {
+        street: 'cornell'
+      }
+    }
+  };
+
+};
+
 /*
  * helpers
  */
@@ -20,37 +68,31 @@ var throws = function(block, description){
 module("basics");
 
 test('errors on unknown commands', function(){
-  var node = $('<div react="nonexistentcommand arg1"></div>')[0];
   throws(function(){
-    react.update(node, {});
-  }, 'throws at nonexistantcommand');
-});
-
-test('keys can use dot operator', function(){
-  var node = $('<div react="contain key.subkey"/>')[0];
-  react.update(node, {key:{subkey:'content'}});
-  equal($(node).html(), 'content', 'key resolved while using a dot operator');
+    react.update(nodes.withNonexistentCommand, {});
+  }, 'throws at nonexistentcommand');
 });
 
 test('calling update returns the root', function(){
-  var node = $('<div id="foo"></div>')[0];
-  equal(react.update(node, {}), node, 'same node was returned');
+  equal(react.update(nodes.inert, {}), nodes.inert, 'same node was returned');
 });
 
-test('rendering to nodes that are nested in others still works', function(){
-  var $parent = $('<div></div>');
-  var $child = $('<div react="contain foo"></div>');
-  $parent.html($child);
-  react.update($child[0], {foo:'bar'});
-  equal($child.html(), 'bar', 'the child node got the appropriate content');
+test('keys can use dot operator', function(){
+  react.update(nodes.containingAddressDotStreet, scopes.bob);
+  equal(nodes.containingAddressDotStreet.innerHTML, 'cornell', 'key resolved while using a dot operator');
+});
+
+test('reactive nodes need not be at the top level', function(){
+  $nodes.inert.html(nodes.containingName);
+  react.update(nodes.inert, scopes.bob);
+  equal(nodes.containingName.innerHTML, 'bob', 'the child node got the appropriate content');
 });
 
 test('rendering to nodes that are nested in others still works, an additional layer deep', function(){
-  var $parent = $('<div></div>');
-  var $child = $('<div><div react="contain foo"></div></div>');
-  $parent.html($child);
-  react.update($child[0], {foo:'bar'});
-  equal($child.children().first().html(), 'bar', 'the child node got the appropriate content');
+  $nodes.inert.html(nodes.inert2);
+  $nodes.inert2.html(nodes.containingName);
+  react.update(nodes.inert2, scopes.bob);
+  equal(nodes.containingName.innerHTML, 'bob', 'the child node got the appropriate content');
 });
 
 /*
@@ -60,29 +102,24 @@ test('rendering to nodes that are nested in others still works, an additional la
 module("contain");
 
 test('containing strings', function(){
-  var node = $('<div react="contain \'example\'"></div>')[0];
-  react.update(node, {});
-  equal(node.innerHTML, 'example', 'contain directive inserted a string');
+  react.update(nodes.containingStringLiteral, scopes.inert);
+  equal(nodes.containingStringLiteral.innerHTML, 'example', 'contain directive inserted a string');
 });
 
 test('containing variables', function(){
-  var node = $('<div react="contain key"></div>')[0];
-  react.update(node, {key:'value'});
-  equal(node.innerHTML, 'value', 'contain directive inserted a string variable');
+  react.update(nodes.containingName, scopes.bob);
+  equal(nodes.containingName.innerHTML, 'bob', 'contain directive inserted a string variable');
 });
 
 test('containing node variables', function(){
-  var node = $('<div react="contain child"></div>')[0];
-  var child = $('<div/>')[0];
-  react.update(node, {child:child});
-  equal($(node).children()[0], child, 'contain directive inserted a node variable');
+  react.update(nodes.containingWidget, {widget:nodes.inert});
+  equal($nodes.containingWidget.children()[0], nodes.inert, 'contain directive inserted a node variable');
 });
 
 test('containing react nodes', function(){
-  var node = $('<div react="contain child"></div>')[0];
-  var child = $('<div react="contain foo">none</div>')[0];
-  react.update(node, {child:child, foo:'bar'});
-  equal($(node).children().html(), 'none', 'react directive of contained node was not followed');
+  nodes.containingName.innerHTML = 'none';
+  react.update(nodes.containingWidget, {widget:nodes.containingName, name:'zoe'});
+  equal(nodes.containingName.innerHTML, 'none', 'react directive of contained node was not followed');
 });
 
 
@@ -93,37 +130,32 @@ test('containing react nodes', function(){
 module("attributes");
 
 test('setting string attributes', function(){
-  var node = $('<div react="attr \'foo\' \'bar\'"/>')[0];
-  react.update(node, {});
-  equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
+  react.update(nodes.withAttributesFromStrings, scopes.inert);
+  equal($nodes.withAttributesFromStrings.attr('name'), 'value', 'attribute was written correctly');
 });
 
 test('substituting variables in attribute names', function(){
-  var node = $('<div react="attr attrName \'bar\'"/>')[0];
-  react.update(node, {attrName:'foo'});
-  equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
+  react.update(nodes.withDynamicAttributeName, scopes.bob);
+  equal($nodes.withDynamicAttributeName.attr('bob'), 'value', 'attribute was written correctly');
 });
 
 test('substituting variables in attribute values', function(){
-  var node = $('<div react="attr \'foo\' value"/>')[0];
-  react.update(node, {value:'bar'});
-  equal($(node).attr('foo'), 'bar', 'attribute was written correctly');
+  react.update(nodes.mugshot, scopes.bob);
+  equal($nodes.mugshot.attr('src'), 'example.com', 'attribute was written correctly');
 });
 
 test('conditionally adding attributes', function(){
-  var node = $('<div react="attrIf condition \'foo\' \'bar\'"/>')[0];
+  react.update(nodes.withConditionalAttribute, {isAdmin:true});
+  equal($nodes.withConditionalAttribute.attr('name'), 'value', 'attribute was added when condition is true');
 
-  react.update(node, {condition:true});
-  equal($(node).attr('foo'), 'bar', 'attribute was added when condition is true');
+  react.update(nodes.withConditionalAttribute, {isAdmin:false});
+  equal($nodes.withConditionalAttribute.attr('name'), undefined, 'attribute was not added when condition is false');
 
-  react.update(node, {condition:false});
-  equal($(node).attr('foo'), undefined, 'attribute was not added when condition is false');
+  react.update(nodes.withConditionalAttribute, {isAdmin:undefined});
+  equal($nodes.withConditionalAttribute.attr('name'), undefined, 'attribute was not added when condition is undefined');
 
-  react.update(node, {condition:undefined});
-  equal($(node).attr('foo'), undefined, 'attribute was not added when condition is undefined');
-
-  react.update(node, {condition:true});
-  equal($(node).attr('foo'), 'bar', 'attribute was re-added when condition is true');
+  react.update(nodes.withConditionalAttribute, {isAdmin:true});
+  equal($nodes.withConditionalAttribute.attr('name'), 'value', 'attribute was re-added when condition is true');
 });
 
 
@@ -968,3 +1000,5 @@ test('regression test - within directive doesn\'t halt updates to the changed lo
   same(jQuery('#bar', node)[0].innerHTML, 'changed', 'bar gets set');
   same(jQuery('#baz', node)[0].innerHTML, 'changed', 'baz gets set');
 });
+
+}());
