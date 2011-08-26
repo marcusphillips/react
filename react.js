@@ -192,6 +192,30 @@
 
   var react = {
 
+      _enqueueNodes: function(newNodes){
+        this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
+        for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
+          var nodeKey = getNodeKey(newNodes[whichNode]);
+          delete this.bequeathedScopeChains[nodeKey];
+          delete this.loopItemTemplates[nodeKey];
+        }
+      },
+
+      _removeNodes: function(newNodes){
+        var nodeKeysToRemove = {};
+        for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
+          var nodeKey = getNodeKey(newNodes[whichNode]);
+          nodeKeysToRemove[nodeKey] = true;
+          delete this.bequeathedScopeChains[nodeKey];
+          delete this.loopItemTemplates[nodeKey];
+        }
+        var newNodesToUpdate = js.filter(this.nodesToUpdate, function(which, each){
+          return !nodeKeysToRemove[getNodeKey(each)];
+        });
+        this.nodesToUpdate.splice(0, this.nodesToUpdate.length);
+        this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodesToUpdate);
+     },
+
     nodes: {},
     scopes: {},
 
@@ -247,30 +271,6 @@
         options.node = options.node[0];
       }
       return makeRnode(options.node).updateTree(options);
-    },
-
-    _enqueueNodes: function(newNodes){
-      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
-      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-        var nodeKey = getNodeKey(newNodes[whichNode]);
-        delete this.bequeathedScopeChains[nodeKey];
-        delete this.loopItemTemplates[nodeKey];
-      }
-    },
-
-    _removeNodes: function(newNodes){
-      var nodeKeysToRemove = {};
-      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-        var nodeKey = getNodeKey(newNodes[whichNode]);
-        nodeKeysToRemove[nodeKey] = true;
-        delete this.bequeathedScopeChains[nodeKey];
-        delete this.loopItemTemplates[nodeKey];
-      }
-      var newNodesToUpdate = js.filter(this.nodesToUpdate, function(which, each){
-        return !nodeKeysToRemove[getNodeKey(each)];
-      });
-      this.nodesToUpdate.splice(0, this.nodesToUpdate.length);
-      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodesToUpdate);
     },
 
     anchor: function(options){
@@ -532,7 +532,7 @@
       node: node,
 
       getKey: function(){
-        return getNodeKey(rnode.node);
+        return getNodeKey(node);
       },
 
       // note: getReactNodes() only returns the operative node and nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
@@ -561,41 +561,33 @@
 
       updateGivenScopeChain: function(scopeChain, updateContext, fromDirective){
         var nodeKey = rnode.getKey();
-        var directives = makeRnode(node).directives;
+        var directives = rnode.directives;
 
         if(directives.anchored){
           scopeChain = scopeChain.extendForAnchorNames(directives.anchored.inputs);
         }
 
-        var pushScope = function(type, scope, options){
-          scopeChain = scopeChain.extend(type, scope, options);
-        };
-
+        var directiveContext = {scopeChain: scopeChain};
         for(var i = fromDirective || 0; i < directives.length; i++){
-          var directiveContext = js.create(updateContext, {
-            node: rnode.node,
-            directiveIndex: i,
-            scopeChain: scopeChain,
-            pushScope: pushScope
-          });
+          var directiveContext = updateContext.makeDirectiveContext(node, i, directiveContext.scopeChain);
           directives[i].follow(directiveContext);
         }
 
-        return scopeChain;
+        return directiveContext.scopeChain;
       },
 
       update: function(updateContext){
         //todo: test that you never revisit a node
-        var nodeKey = getNodeKey(rnode.node);
+        var nodeKey = getNodeKey(node);
         if(
           typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined' ||
-          rnode.node === updateContext.root // this is to prevent an undefined scope chain for the root getting overwritten with false. don't like it.
+          node === updateContext.root // this is to prevent an undefined scope chain for the root getting overwritten with false. don't like it.
         ){
           // node has already been visited
           return;
         }
 
-        if(updateContext.loopItemTemplates[getNodeKey(rnode.node)]){ // todo: get rid of all these references to 'loop item templates', use custom class instead
+        if(updateContext.loopItemTemplates[getNodeKey(node)]){ // todo: get rid of all these references to 'loop item templates', use custom class instead
           updateContext.bequeathedScopeChains[nodeKey] = false;
           return;
         }
@@ -620,34 +612,33 @@
         updateContext.bequeathedScopeChains[nodeKey] = rnode.updateGivenScopeChain(scopeChain, updateContext);
       },
 
+      makeUpdateContext: function(){
+        return makeUpdateContext(node);
+      },
+
       updateTree: function(options){
         //todo: test these
         //js.errorIf(!root, 'no root supplied to update()');
         //js.errorIf(react.isNode(root), 'first argument supplied to react.update() must be a dom node');
         js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
-        var updateContext = js.create(react.commands, {
-          root: rnode.node,
-          nodesToUpdate: makeArrayFromArrayLikeObject(rnode.node.querySelectorAll('[react]')),
-          bequeathedScopeChains: {},
-          loopItemTemplates: {}
-        });
         var scopes = options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
         if(options.anchor){
-          react.anchor({node: rnode.node, scopes:scopes});
+          react.anchor({node: node, scopes:scopes});
           scopes = [];
         }
         var baseScopeChain = rnode.buildParentScopeChain(options.fromDirective || 0).extendMany('updateInputs', scopes);
+        var updateContext = rnode.makeUpdateContext();
         updateContext.bequeathedScopeChains[rnode.getKey()] = rnode.updateGivenScopeChain(baseScopeChain, updateContext, options.fromDirective);
 
         updateNodes(updateContext.nodesToUpdate, updateContext);
 
-        return rnode.node;
+        return node;
       },
 
       buildParentScopeChain: function(directiveIndex){
-        var ancestors = $(Array.prototype.reverse.apply($(this.node).parents())).add(this.node);
-        var scopeBuildingContext = js.create(react.commands, {
+        var ancestors = $(Array.prototype.reverse.apply($(node).parents())).add(node);
+        var scopeBuildingContext = /*makeUpdateContext(node);*/js.create(react.commands, {
           //todo: deprecate the suppressObservers flag
           suppressObservers: true,
           scopeChain: globalScopeChain
@@ -662,7 +653,7 @@
           };
 
           for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
-            if(scopeBuildingContext.node === this.node && (directiveIndex||0) <= whichDirective){ break; }
+            if(scopeBuildingContext.node === node && (directiveIndex||0) <= whichDirective){ break; }
             // todo: this scopeChain will never be falsey, so what this used to do is broken. write a test
             if(!scopeBuildingContext.scopeChain){ continue; }
 
@@ -778,6 +769,28 @@
     return rnode;
   };
 
+  var makeUpdateContext = function(node){
+    var updateContext = js.create(react.commands, {
+      root: node,
+      nodesToUpdate: makeArrayFromArrayLikeObject(node.querySelectorAll('[react]')),
+      bequeathedScopeChains: {},
+      loopItemTemplates: {},
+
+      makeDirectiveContext: function(node, directiveIndex, scopeChain){
+        var directiveContext = js.create(updateContext, {
+          node: node,
+          directiveIndex: directiveIndex,
+          scopeChain: scopeChain,
+          pushScope: function(type, scope, options){
+            directiveContext.scopeChain = scopeChain.extend(type, scope, options);
+          }
+        });
+        return directiveContext;
+      }
+    });
+    return updateContext;
+  };
+
   var makeListener = function(object, key, listenerString){
     var listener = listenerString.split(' ');
     var rnode = makeRnode(react.nodes[listener[0]]);
@@ -804,31 +817,20 @@
         js.errorIf(this.directive.command === 'bindItem', 'you need recalculations for bindItem (when the key was an itemAlias), but those aren\'t implemented yet');
         if(js.among(['within', 'withinEach', 'withinItem', 'for', 'if'], this.directive.command)){
           // todo: loopKey probably won't work, and maybe withinEach either
-          makeRnode(this.node).updateTree({
+          rnode.updateTree({
             node: this.node,
             fromDirective: this.directiveIndex
           });
           return;
         }
 
-        var nodesToUpdate = [];
-        var updateContext = js.create(react.commands, {
-          root: this.node, // todo: is this right? root seems meaningless in this case. only added root to the updateNode method so I could allow updating of whole branch at once
-          node: this.node,
-          nodesToUpdate: nodesToUpdate,
-          scopeChain: this.scopeChain,
+        var updateContext = makeUpdateContext(this.node);
 // todo: consolidate all these updateContext object creations
 // todo: these last two probably don't belong here. they were added to keep .enqueueNodes() from erroring.
-          bequeathedScopeChains: {},
-          loopItemTemplates: {},
 // todo: this shouldn't need a pushscope method. it only uses it because directive functions access it. factor this out
-          pushScope: function(type, scope){updateContext.scopeChain = updateContext.scopeChain.extend(type,scope);}
-        });
-        var directiveContext = js.create(updateContext, {
-          directiveIndex: this.directiveIndex,
-        });
+        var directiveContext = updateContext.makeDirectiveContext(this.node, this.directiveIndex, this.scopeChain);
         this.directive.follow(directiveContext);
-        updateNodes(nodesToUpdate, updateContext);
+        updateNodes(updateContext.nodesToUpdate, updateContext);
       }
     };
   };
