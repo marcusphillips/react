@@ -14,4 +14,4 @@
 
 --- write tests ---
 - empty react attribute string doesnt break univers
-
+- attributes should be removed if property is undefined, even after deletion

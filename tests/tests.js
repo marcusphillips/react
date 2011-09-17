@@ -80,9 +80,9 @@ test('containing node variables', function(){
 
 test('containing react nodes', function(){
   var node = $('<div react="contain child"></div>')[0];
-  var child = $('<div react="contain foo"></div>')[0];
+  var child = $('<div react="contain foo">none</div>')[0];
   react.update(node, {child:child, foo:'bar'});
-  equal($(node).children().html(), 'bar', 'react directive of contained node was followed');
+  equal($(node).children().html(), 'none', 'react directive of contained node was not followed');
 });
 
 
@@ -770,11 +770,24 @@ test('event handlers don\'t get lost by loop item creation', function(){
   ok(wasClicked, 'click was noticed after list changed and contents of loop results node were updated');
 });
 
-test('anchors are followed even for child nodes of the input node', function(){
-  var subNode = $('<span react="contain foo"></span>')[0];
-  react.anchor(subNode, {foo: 'bar'});
-  react.update($('<span react="contain subNode"></span>')[0], {subNode: subNode});
-  same(subNode.innerHTML, 'bar', 'foo did not get updated');
+test('anchors are not followed for contained nodes of an input node', function(){
+  var innerNode = $('<span react="contain foo, attr \'foo\' foo">original</span>')[0];
+  var innerNodeObject = {foo: 'inner anchor property'};
+  react.anchor(innerNode, innerNodeObject);
+  var outerNode = $('<span react="contain innerNode, attr \'foo\' foo"></span>')[0];
+  var outerNodeObject = {innerNode: innerNode, foo:'outer anchor property'};
+  react.anchor(outerNode, outerNodeObject);
+
+  react.update(outerNode);
+  same(innerNode.innerHTML, 'original', 'substitution in contained node did not get updated for update of outer node');
+  react.update(outerNode);
+  same(innerNode.innerHTML, 'original', 'substitution in contained node stil did not get updated for update of outer node, even after having been contained already at update time');
+  react.update(innerNode);
+  same($(innerNode).attr('foo'), 'inner anchor property', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
+  delete innerNodeObject.foo;
+  react.update(innerNode);
+  same(innerNode.innerHTML, '', 'substitution in contained node does not inherit containing scope');
+  same($(innerNode).attr('foo'), 'inner anchor property', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
 });
 
 test('anchored nodes within root get operated on, even if root does not', function(){

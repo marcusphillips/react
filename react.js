@@ -238,6 +238,21 @@
       }
     },
 
+    _removeNodes: function(newNodes){
+      var nodeKeysToRemove = {};
+      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
+        var nodeKey = getNodeKey(newNodes[whichNode]);
+        nodeKeysToRemove[nodeKey] = true;
+        delete this.bequeathedScopeChains[nodeKey];
+        delete this.loopItemTemplates[nodeKey];
+      }
+      var newNodesToUpdate = js.filter(this.nodesToUpdate, function(which, each){
+        return !nodeKeysToRemove[getNodeKey(each)];
+      });
+      this.nodesToUpdate.splice(0, this.nodesToUpdate.length);
+      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodesToUpdate);
+    },
+
     anchor: function(options){
       options = options || {};
       if(options.nodeType){
@@ -319,7 +334,8 @@
       // if the insertion is a node, use the dom appending method, but insert other items as text
       if(insertion && insertion.nodeType){
         jQuery(this.node).append(insertion);
-        this._enqueueNodes(makeRnode(insertion).getReactNodes());
+        this._removeNodes(makeRnode(insertion).getReactNodes());
+        // todo: this.pushScope('doNotRecurse', doNotRecurse);
       } else {
         jQuery(this.node).text(insertion);
       }
@@ -458,12 +474,12 @@
       name = this.lookup(name);
       value = this.lookup(value);
 
-      if(!js.among(['string', 'number'], typeof name)){
+      if(!js.among(['string', 'number', 'undefined', 'null'], typeof name)){
         js.log('bad attr name: ', name);
-        js.error('expected attr name token ' + name + ' to resolve to a string or number, not ' + typeof name);
-      }else if(!js.among(['string', 'number'], typeof value)){
+        js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
+      }else if(!js.among(['string', 'number', 'undefined', 'null'], typeof value)){
         js.log('bad attr value: ', value);
-        js.error('expected attr value token ' + value + ' to resolve to a string or number not, not ' + typeof value);
+        js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
       }
 
       jQuery(this.node).attr(name, value);
@@ -622,7 +638,12 @@
 
           for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
             if(scopeBuildingContext.node === this.node && (directiveIndex||0) <= whichDirective){ break; }
+            // todo: this scopeChain will never be falsey, so what this used to do is broken. write a test
             if(!scopeBuildingContext.scopeChain){ continue; }
+            if(directives[whichDirective].command === 'contain'){
+              scopeBuildingContext.scopeChain = emptyScopeChain;
+              continue;
+            }
             if(js.among(['within', 'withinItem', 'bindItem'], directives[whichDirective].command)){
               var directiveContext = js.create(scopeBuildingContext, {
                 directiveIndex: whichDirective,
@@ -684,7 +705,7 @@
     if(directiveArrays[0] && directiveArrays[0][0] === 'anchored'){
       var anchored = makeDirective('anchored', directiveArrays.shift());
     }
-    directiveArrays = js.filter(directiveArrays, function(directiveArray){
+    directiveArrays = js.filter(directiveArrays, function(which, directiveArray){
       return !!directiveArray[0];
     });
 
@@ -770,11 +791,12 @@
           node: this.node,
           nodesToUpdate: nodesToUpdate,
           scopeChain: this.scopeChain,
-// todo: this probably needs a pushscope method
 // todo: consolidate all these updateContext object creations
 // todo: these last two probably don't belong here. they were added to keep .enqueueNodes() from erroring.
           bequeathedScopeChains: {},
-          loopItemTemplates: {}
+          loopItemTemplates: {},
+// todo: this shouldn't need a pushscope method. it only uses it because directive functions access it. factor this out
+          pushScope: function(type, scope){updateContext.scopeChain = updateContext.scopeChain.extend(type,scope);}
         });
         var directiveContext = js.create(updateContext, {
           directiveIndex: this.directiveIndex,

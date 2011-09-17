@@ -1,4 +1,9 @@
-1.1.2
+local changes
+---
+- any node substituted by a 'contain' directive does not inherit the containing scope chain
+
+
+1.1.2 - cleanup and bug fixes
 ---
 - Bugfix: In ie, react was iterating into loop templates. expando data properties were being copied, but now using jquery's .data() function
 - Bugfix: In ie, react would error on trying to work with the object returned from querySelectorAll()
