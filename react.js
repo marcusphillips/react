@@ -6,22 +6,33 @@
  * Dual licensed under the MIT or GPL Version 2 licenses.
  */
 
-(function () {
+(function() {
 
-  var doNotRecurse = {};
+  /*
+   * Library-wide helpers
+   */
 
-  var undefined;
+  var debugging = true;
+
+  var noop = function(){};
+  var undefined; // safeguard, undefined can be overwritten in the global scope
+
+  var debug = function(){
+    if(debugging && console !== undefined && console.warn && console.warn.apply){
+      console.warn.apply(console, arguments);
+    }
+  };
 
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
     space: /\s+/,
-    isString: /(^'.*'$)|(^".*"$)/,
     negation: /!\s*/,
-    isNumber: /\d+/
+    isString: /(^'.*'$)|(^".*"$)/,
+    isNumber: /^\d+$/
   };
 
+  // returns a unique, consistent key for every node
   var getNodeKey = function(node){
-    // todo: without using .data(), IE copies expando properties over, breaking loop behaviors and other cloning operations. disable .data() long enough to write a test for this.
     var key = $(node).data("reactKey");
     if(!key){
       key = js.util.unique('reactNode');
@@ -34,16 +45,6 @@
     return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
   };
 
-  var Fallthrough = function(key){ this.key = key; };
-
-  var updateNodes = function(nodes, updateContext){
-    for(var i = 0; i < nodes.length; i++){
-      makeRnode(nodes[i]).update(updateContext);
-    }
-  };
-
-  // todo: calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE. revert this code to use that and write a test for it.
-  // also see if there's a more efficient way to build an array other than iterating over the array like object
   var makeArrayFromArrayLikeObject = function(arrayLikeObject){
     var array = [];
     for(var i = 0, length = arrayLikeObject.length; i < length ; i++){
@@ -52,27 +53,41 @@
     return array;
   };
 
+
+  // Fallthroughs provide a mechanism for binding one key in a scope to the value at another key
+  var Fallthrough = function(key){ this.key = key; };
+
+
+  /*
+   * Scope chains
+   */
+
+  // Scope chains are used to model namespace lookup behavior in templates
+  // all scope chains are built by calling emptyScopeChain.extend()
   var emptyScopeChain = (function(){
 
+    // helper for creating the result (emptyScopeChain) and future scope chains returned from .extend()
     var makeScopeChain = function(type, previousLink, additionalScope, options){
       options = options || {};
+
       var scopeChain = {
         parent: previousLink,
         scope: additionalScope,
         type: type,
         key: options.key,
         prefix: options.prefix || '',
-        anchorKey: type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
+// asdf this shouldn't need a prefix
+        anchorKey: options.anchorKey ? options.anchorKey : type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
+
+        contains: function(scope){
+          return scopeChain.scope === scope || (scopeChain.parent && scopeChain.parent.contains(scope));
+        },
 
         extend: function(type, additionalScope, options){
           return makeScopeChain(type, scopeChain, additionalScope, options);
         },
 
-        contains: function(scope){
-          return scopeChain.scope === scope || scopeChain.parent && scopeChain.parent.contains(scope);
-        },
-
-        extendMany: function(type, scopes, options){
+        extendWithMany: function(type, scopes, options){
           scopes = scopes || [];
           var lastLink = scopeChain;
           for(var which = 0; which < scopes.length; which++){
@@ -81,90 +96,85 @@
           return lastLink;
         },
 
-        extendForAnchorNames: function(names){
-          names = names || [];
-          var scopes = [];
-          for(var whichToken = 0; whichToken < names.length; whichToken++){
-            var scopeKey = names[whichToken];
-            js.errorIf(!react.scopes[scopeKey], 'could not follow anchored directive, nothing found at react.scopes.'+scopeKey);
-            scopes.push(react.scopes[scopeKey]);
-          }
-          return scopeChain.extendMany('anchor', scopes, {key: scopeKey});
-        },
-
-        observe: function(key, directive){
-          var object = scopeChain.scope;
-          // todo: scope observers per node-object anchoring, for easy cleanup of memory references
-          react.nodes[directive.rnode.getKey()] = directive.rnode.node;
-          var observations = directive.rnode.node['directive ' + directive.index + ' observes'] = directive.rnode.node['directive ' + directive.index + ' observes'] || [];
-          observations.push({object: object, key: key});
-          object.observers = object.observers || {};
-          object.observers[key] = object.observers[key] || {};
-          object.observers[key][directive.rnode.getKey() + ' ' + directive.index + ' ' + scopeChain.prefix] = true;
-        },
-
-        lookup: function(key, options){
+        // provides the value at a given key by looking through the scope chain from this leaf up
+        detailedLookup: function(key, options){
           options = options || {};
+          key = key.toString();
           if(key[0] === '!'){
             var negate = true;
             key = key.slice(1);
           }
-          if (matchers.isString.test(key)) {
-            return key.slice(1, key.length-1);
+          // the details object will contain all interesting aspects of this lookup
+          // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
+          var details = {potentialObservers: []};
+          // extend details must be called on any return values, since it handles the final step of negation
+          var extendDetails = function(moreDetails){
+            for(var key in moreDetails||{}){
+              details[key] = (
+                key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
+                key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
+                moreDetails[key]
+              );
+            }
+            if(negate){ details.value = !details.vailue; }
+            return details;
+          };
+
+          // all lookups fail in the empty scope chain
+          if(scopeChain === emptyScopeChain){
+            return extendDetails({failed:true});
           }
 
-          // todo: clean up any pre-existing observers
+          if (matchers.isString.test(key)) {
+            js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
+            return extendDetails({value: key.slice(1, key.length-1)});
+          }
 
           var path = key.split('.');
+          // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
           var baseKey = path.shift();
-          var details = {failed: true};
-          // todo: write a test to verify that responses to change events don't result in new observers
-          // todo: test that we don't observe binding objects
-          if(scopeChain.scope[baseKey] instanceof Fallthrough){
-            details = scopeChain.parent.lookup([scopeChain.scope[baseKey].key].concat(path).join('.'), js.extend({details:true}, options));
-          }else if(scopeChain.scope[baseKey] !== undefined){
-            if(scopeChain.anchorKey && options.listeningDirective && !options.suppressObservers){
-              scopeChain.observe(baseKey, options.listeningDirective);
-            }
-            var prefix = baseKey + '.';
-            var subObject = scopeChain.scope;
-            var value = subObject[baseKey];
-            while(path.length){ // one for each segment of the dot acess
-              subObject = value;
-              if(subObject === undefined || subObject === null){
-                return options.details ? details : js.error('can\'t find path '+path.join('.')+' on an undefined object');
-              }
-              if(scopeChain.anchorKey && !options.suppressObservers && options.listeningDirective){
-                emptyScopeChain.extend('dotAccess', subObject, {
-                  prefix: prefix,
-                  anchorKey: scopeChain.anchorKey
-                }).observe(path[0], options.listeningDirective);
-              }
-              prefix = prefix + path[0] + '.';
-              value = subObject[path.shift()];
-            }
-            details = {
-              matchingScopeChain: scopeChain,
-              matchingBaseObject: subObject,
-              baseKey: baseKey,
-              negated: negate,
-              value: typeof value === 'function' ? value.call(subObject||{}) : value
-            };
-            details.value = (negate ? ! details.value : details.value);
-          }else if(!scopeChain.parent.isEmpty){
-            details = scopeChain.parent.lookup(key, js.extend({details:true}, options));
+          var value = scopeChain.scope[baseKey];
+
+          // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
+          if(value instanceof Fallthrough){
+            return extendDetails(scopeChain.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
           }
-          return options.details ? details : details.value;
+
+          details.potentialObservers.push({scopeChain: scopeChain, key: baseKey});
+          details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === scopeChain.scope);
+          // recurse onto the parent scopeChain if the lookup fails at this level
+          if(! (baseKey in scopeChain.scope) ){
+            return extendDetails(scopeChain.parent.detailedLookup(key, options));
+          }
+
+          // for dot access
+          if(path.length){
+            if(value === undefined || value === null){
+              debug('Could not find '+key+' on a null or undefined object at path '+scopeChain.prefix+baseKey+' from', scopeChain.scope);
+              return extendDetails();
+            }
+            return extendDetails(emptyScopeChain.extend('dotAccess', value, {
+              // asdf - i think this needs to pass a key
+              prefix: scopeChain.prefix + baseKey + '.',
+              anchorKey: scopeChain.anchorKey
+            }).detailedLookup(path.join('.'), options));
+          }
+
+          // functions are called before being returned
+          value = typeof value === 'function' ? value.call(scopeChain.scope) : value;
+
+          return extendDetails({value: value});
         },
 
+        lookup: function(){
+          return scopeChain.detailedLookup.apply(scopeChain, arguments).value;
+        },
+
+        // provides a description of the scope chain in array format, optimized for viewing in the console
         describe: function(){
-          var link = scopeChain;
-          var scopeChainDescription = [];
-          while(link){
-            scopeChainDescription.push(['scope: ', link.scope, ', type of scope shift: ' + link.type + (link.key ? ' (key: '+link.key+')': '') + (link.anchorKey ? ', anchored to: '+link.anchorKey+')': '')]);
-            link = link.parent;
-          }
-          return scopeChainDescription;
+          return [
+            ['scope: ', scopeChain.scope, ', type of scope shift: ' + scopeChain.type + (scopeChain.key ? ' (key: '+scopeChain.key+')': '') + (scopeChain.anchorKey ? ', anchored to: '+scopeChain.anchorKey+')': '')]
+          ].concat(scopeChain.parent ? scopeChain.parent.describe() : []);
         }
 
       };
@@ -172,85 +182,71 @@
       return scopeChain;
     };
 
-    var emptyScopeChain = makeScopeChain(undefined, undefined, {type:'empty'});
-    emptyScopeChain.isEmpty = true;
-    emptyScopeChain.lookup = function(){ js.error('cannot lookup in the empty scope chain'); };
+    var emptyScopeChain = makeScopeChain('empty');
     return emptyScopeChain;
   }());
 
-  var globalScope = {};
-  var globalScopeChain = emptyScopeChain.extend('global', globalScope);
+
+  /*
+   * Library interface
+   */
 
   var react = {
 
     nodes: {},
     scopes: {},
 
+    setDebugging: function(setting){
+      if(setting === undefined){ setting = true; }
+      debugging = setting;
+    },
+
+    // for giving scope objects meaningful names, which appear in the anchor directives on nodes. not yet ready for external consumption
     name: function(name, object){
+      js.errorIf(object.reactKey, 'You tried to name a scope object that already had a name');
+      object.reactKey = name;
       this.scopes[name] = object;
     },
 
+    // convenience method for setting object values and automatically calling changed on them
     set: function(object, key, value){
       object[key] = value;
       this.changed(object, key);
     },
 
-    changed: function(object, key){
-      // if no key is supplied, check every key
-      if(arguments.length < 2){
-        for(key in object){
-          this.changed(object, key);
-        }
-        // todo: this still won't work for arguments lists
-        if(Object.prototype.toString.call(object) === '[object Array]'){
-          this.changed(object, 'length');
-        }
-        return;
-      }
-
-      // if there are no observers for the supplied key, do nothing
-      if(!object || !object.observers || !object.observers[key]){ return; }
-
-      for(var listenerString in object.observers[key]){
-        makeListener(object, key, listenerString).check();
-      }
+    // allows user to notify react that an object's property has changed, so the relevant nodes may be updated
+    changed: function(){
+      makeOperation().changed.apply({}, arguments).run();
     },
 
-    update: function(/*[node, scope],*/ options){
+    update: function(/*[node, scope,]*/ options){
       options = options || {};
-      if(options.nodeType){
+      if(options.nodeType || (options instanceof jQuery)){
         // detect argument signature of (node, scope)
-        options = {
+        options = js.extend({
           node: arguments[0],
           scope: arguments[1]
-        };
-        js.extend(options, arguments[2] || {});
+        }, arguments[2] || {});
       }
-      return makeRnode(options.node).updateTree(options);
-    },
+      if(options.node instanceof jQuery){
+        if(options.node.length !== 1){
+          js.error('you cannot pass a jquery object containing many nodes to react.update()');
+        }
+        options.node = options.node[0];
+      }
 
-    _enqueueNodes: function(newNodes){
-      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodes);
-      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-        var nodeKey = getNodeKey(newNodes[whichNode]);
-        delete this.bequeathedScopeChains[nodeKey];
-        delete this.loopItemTemplates[nodeKey];
-      }
-    },
+      js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
-    _removeNodes: function(newNodes){
-      var nodeKeysToRemove = {};
-      for(var whichNode = 0; whichNode < newNodes.length; whichNode++){
-        var nodeKey = getNodeKey(newNodes[whichNode]);
-        nodeKeysToRemove[nodeKey] = true;
-        delete this.bequeathedScopeChains[nodeKey];
-        delete this.loopItemTemplates[nodeKey];
+      var scopes = options.scope ? [options.scope] : options.scopes || [];
+      if(options.anchor){
+        react.anchor({node: options.node, scopes: scopes});
+        scopes = [];
       }
-      var newNodesToUpdate = js.filter(this.nodesToUpdate, function(which, each){
-        return !nodeKeysToRemove[getNodeKey(each)];
-      });
-      this.nodesToUpdate.splice(0, this.nodesToUpdate.length);
-      this.nodesToUpdate.push.apply(this.nodesToUpdate, newNodesToUpdate);
+
+      var operation = makeOperation();
+      operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).contageous();
+      operation.run();
+      return options.node;
     },
 
     anchor: function(options){
@@ -266,7 +262,7 @@
 
       this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      makeRnode(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
+      makeOperation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
         var scopeKey = getScopeKey(scopes[i]);
         react.scopes[scopeKey] = scopes[i];
         return scopeKey;
@@ -284,144 +280,553 @@
 
   };
 
+  var commands = react.commands = {
+    scopes: react.scopes
+  };
 
-  var commands = react.commands = js.create(react, {
 
   /*
-   * when a command runs, it will have a 'this' scope like the following (arrows indicate prototype relationships)
-   *
-   * react {
-   * }
-   *
-   *  ^
-   *  |
-   * commands {
-   *   command handler definitions
-   *   lookup(key)
-   * }
-   *
-   *  ^
-   *  |
-   * // a new processing scope is created for each node to be updated
-   * nodeContext {
-   *   node
-   *   scopeChain
-   * }
+   * Operation
    */
 
-    lookup: function(key, options){
-      options = options || {};
-      options.listeningDirective = makeRnode(this.node).directives[this.directiveIndex];
-      options.suppressObservers = 'suppressObservers' in options ? options.suppressObservers : this.suppressObservers;
+  // An operation provides a shared context where complex interactions may rely upon shared state
 
-      return this.scopeChain.lookup(key, options);
+  var makeOperation = function(){
+    // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
+    var $nodes = {};
+    var proxies = [];
+
+    // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
+    var descendantsToConsider = {};
+    var directivesToConsider = {};
+    var consideredDirectives = {};
+    var deferredDirectives = {};
+    var encompassedBranches = {};
+
+    /*
+     * Proxy
+     */
+
+    // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
+
+    var makeProxy = function(object){
+
+      var proxy = {
+        // writes an association between a directive and a property on an object by annotating the object
+        observe: function(key, directive, prefix){
+          directive.$node.store();
+          makeObserver(key, directive.$node.key, directive.index, prefix).write();
+        },
+
+        changed: function(keys){
+          // if no key is supplied, check every key
+          if(!object || !object.observers){ return; }
+          keys = (
+            js.isArray(keys) ? keys :
+            keys !== undefined ? [keys] :
+            js.keys(object).concat('length' in object && !object.propertyIsEnumerable('length') ? ['length'] : [])
+          );
+
+          // we first need to collect all the observers of the changed keys
+          for(var whichKey = 0; whichKey < keys.length; whichKey++){
+            var key = keys[whichKey];
+            if(!object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
+            for(var keyObserverString in object.observers[key]){
+              makeObserver(key, keyObserverString).dirty();
+            }
+          }
+        }
+      };
+
+      var cachedObservers = {};
+      var makeObserver = function(propertyKey, nodeKey, directiveIndex, prefix){
+        if(arguments.length === 2){
+          var tokens = arguments[1].split(matchers.space);
+          nodeKey = tokens[0];
+          directiveIndex = tokens[1];
+          prefix = tokens[2];
+        }
+
+        var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
+        var observerKey = propertyKey+' '+observerDetailsString;
+        if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
+
+        var observer = {
+          object: object,
+
+          directive: $(react.nodes[nodeKey]).directives[directiveIndex],
+
+          key: observerKey,
+
+          write: function(){
+            object.observers = object.observers || {};
+            object.observers[propertyKey] = object.observers[propertyKey] || {};
+            object.observers[propertyKey][observerDetailsString] = true;
+          },
+
+          dirty: function(){
+            if(observer.isDirty){ return; }
+            observer.isDirty = true;
+            observer.directive.dirtyObserver(observer);
+          },
+
+          pertains: function(){
+            // ignore the object if it's not in the same path that lead to registration of the observer
+            return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
+          }
+        };
+
+        return (cachedObservers[observerKey] = observer);
+      };
+
+      proxies.push(proxy);
+      return proxy;
+    };
+
+    // Overriding jQuery to provide supplemental functionality to DOM node wrappers
+    // Within the scope of makeOperation, all calls to $() return a customized jQuery object. For access to the original, use jQuery()
+    var $ = function(node){
+      js.errorIf(arguments.length !== 1 || !node || node.nodeType !== 1 || js.isArray[arguments[0]] || arguments[0] instanceof jQuery, 'overridden $ can only accept one input, which must be a DOM node');
+      if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
+
+      var $node = js.create(jQuery(node), {
+        key: getNodeKey(node),
+
+        getDirectiveStrings: function(){
+          return ($node.attr('react')||'').split(matchers.directiveDelimiter);
+        },
+
+        getDirectiveArrays: function(){
+          return js.reduce($node.getDirectiveStrings(), [], function(which, string, memo){
+            return string ? memo.concat([js.trim(string).replace(matchers.negation, '!').split(matchers.space)]) : memo;
+          });
+        },
+
+        wrappedParent: function(){
+          return (
+            ! $node.parent()[0] ? null :
+            $node.parent()[0] === document ? null :
+            $($node.parent()[0])
+          );
+        },
+
+        store: function(){
+          react.nodes[$node.key] = node;
+        },
+
+        // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
+        getReactDescendants: function(){
+          return js.map(makeArrayFromArrayLikeObject(node.querySelectorAll('[react]')), function(which, node){
+            return $(node);
+          });
+        },
+
+        getReactNodes: function(){
+          return [$node].concat($node.getReactDescendants());
+        }
+
+      });
+
+      // provides an object representing the directive itself (for example, "contain user.name")
+      var makeDirective = function(index, tokens){
+        var parent;
+        var dirtyObservers = {};
+        var isDirty, isContageous, isDead;
+        var gotIsDirty, gotIsContageous, gotIsDead;
+        var followed;
+        var scopeChain;
+        var scopeInjectionArgLists = [];
+        var didCallIfDirty;
+
+        var directive = js.create(commands, {
+          $: $,
+          $node: $node,
+          node: node,
+          isDirective: true,
+          command: tokens[0],
+          inputs: tokens.slice(1),
+          reasonsToFollow: [],
+
+          setIndex: function(newIndex){
+            index = directive.index = newIndex;
+            directive.key = $node.key+' '+index;
+          },
+
+          lookup: function(key){
+            var details = directive.getScopeChain().detailedLookup(key);
+            for(var i = 0; i < details.potentialObservers.length; i++){
+              var potentialObserver = details.potentialObservers[i];
+              if(directive.isDirty() && potentialObserver.scopeChain.anchorKey){
+                makeProxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
+              }
+            }
+            return details.value;
+          },
+
+          resetScopeChain: function(){
+            scopeChain = emptyScopeChain;
+          },
+
+          injectScopes: function(type, scopes){
+            scopeInjectionArgLists = scopeInjectionArgLists.concat(js.map(scopes, function(which, scope){
+              return [type, scope];
+            }));
+            return directive;
+          },
+
+          pushScope: function(type, scope, options){
+            scopeChain = directive.getScopeChain().extend(type, scope, options);
+          },
+
+          getScopeChain: function(){
+            if(scopeChain){ return scopeChain; }
+            scopeChain = js.reduce(scopeInjectionArgLists, directive.getParent().getScopeChain(), function(which, scopeChainArguments, memo){
+              return memo.extend.apply(memo, scopeChainArguments);
+            });
+            scopeChainInjectionArgLists = [];
+            return scopeChain;
+          },
+
+          getScope: function(){
+            return directive.getScopeChain().scope;
+          },
+
+          // state starts undefined, and can be set to 'dead' or 'dirty'
+          // if it is left in an undefined state, and it does not inherit a dirty state from some ancestor, it is not rendered
+          // a directive is 'dirty' if the currently rendered output needs to be updated based on the new inputs
+          // when a directive is 'dead', it isn't rendered. 'dead' trumps any inherited state, and is passed on to all descendants
+          dirtyObserver: function(observer){
+            js.errorIf(isDirty === false, 'tried to add a dirty observer after checking isDirty');
+            dirtyObservers[observer.key] = observer;
+            directive.consider();
+            return directive;
+          },
+
+          dirty: function(){
+            js.errorIf(isDirty === false, 'tried to set to isDirty twice');
+            js.errorIf(gotIsDirty && isDirty !== true, 'tried to set to isDirty after checking');
+            directive.consider();
+            isDirty = true;
+            return directive;
+           },
+
+          contageous: function(){
+            js.errorIf(isContageous === false, 'tried to set to isContageous twice');
+            js.errorIf(gotIsContageous && isContageous !== true, 'tried to set to isContageous after checking');
+            directive.dirty();
+            directive.considerDescendants();
+            isContageous = true;
+            return directive;
+          },
+
+          dead: function(){
+            isDead = true;
+            return directive;
+          },
+
+          isDirty: function(){
+            gotIsDirty = true;
+            return (isDirty = directive.isDead() ? false : isDirty || directive.getParent().isContageous() || directive.dirtyObserverPertains());
+          },
+
+          isContageous: function(){
+            gotIsContageous = true;
+            return (isContageous = directive.isDead() ? false : isContageous || directive.getParent().isContageous());
+          },
+
+          isDead: function(){
+            gotIsDead = true;
+            return (isDead = isDead || directive.getParent().isDead());
+          },
+
+          dirtyObserverPertains: function(){
+            return js.reduce(js.toArray(dirtyObservers), false, function(which, observer, memo){
+              return memo || observer.pertains();
+            });
+          },
+
+          // calling this method ensures that the directive (and all its parents) will be visited in the operation, and considered for a rendering update
+          consider: function(reason){
+            (directivesToConsider[directive.key] = directive).reasonsToFollow.push(reason || 'force');
+            return directive;
+          },
+
+          considerDescendants: function(){
+            directive.consider();
+            return (descendantsToConsider[directive.key] = directive);
+          },
+
+          hasReasonToConsider: function(){
+            return js.reduce(directive.reasonsToFollow, false, function(which, each, memo){
+              return memo || each === 'force' || directive.isAmongAncestors(each);
+            });
+          },
+
+          isAmongAncestors: function(potentialAncestor){
+            return potentialAncestor === directive.getParent() || directive.getParent().isAmongAncestors(potentialAncestor);
+          },
+
+          ifDirty: function(callback){
+            didCallIfDirty = true;
+            if(directive.isDirty() && callback){
+              callback.apply(directive);
+            }
+          },
+
+          // the directive's command (for example, 'contain') will be executed with a 'this' context of that directive
+          follow: function(){
+            js.errorIf(!isRunning, 'An internal error occurred: someone tried to .follow() a directive outside of operation.run()');
+            if(followed){ return; }
+            followed = true;
+            directive.getParent().follow();
+            describeErrors(function(){
+              js.errorIf(!commands[directive.command], directive.command+' is not a valid react command');
+              commands[directive.command].apply(directive, directive.inputs);
+              js.errorIf(!didCallIfDirty, 'all directives must run a section of their code in a block passed to this.ifDirty(), even if the block is empty. Put any code that will mutate state there, and leave code that manipulates scope chains, etc outside of it.'+ directive.command);
+              if(descendantsToConsider[directive.key] && !directive.isDead() && !encompassedBranches[directive.$node.key]){
+                // visit the after directive of all descendant react nodes (including the root)
+                var $nodes = $node.getReactNodes();
+                for(var which = 0; which < $nodes.length; which++){
+                  encompassedBranches[$nodes[which].key] = true;
+                  $nodes[which].directives.after.consider(directive);
+                }
+              }
+            });
+          },
+
+          getParent: function(){
+            if(parent){ return parent; }
+            var getCurrentParent = function(){
+              return (
+                directive.index === 'before' ? ($node.wrappedParent() ? $node.wrappedParent().directives.after : nullDirective) :
+                directive.index === 'anchored' ? directives.before :
+                directive.index.toString() === '0' ? directives.anchored :
+                directive.index.toString().match(matchers.isNumber) ? directives[directive.index-1] :
+                directive.index === 'after' ? (directives.length ? directives[directives.length-1] : directives.anchored) :
+                js.error('invalid directive key')
+              );
+            };
+            var repeatLimit = 10000;
+            while(parent !== (parent = getCurrentParent())){
+              if(parent){ parent.follow(); }
+              js.errorIf(!(repeatLimit--), 'You\'ve done something really crazy in your directives. Probably mutated state in a way that changes the dom structure. Don\'t do that.');
+            }
+            return parent;
+          },
+
+          setParent: function(directive){
+            parent = directive;
+          },
+
+          toString: function(){
+            return [directive.command].concat(directive.inputs).join(' ');
+          }
+
+        });
+
+        directive.setIndex(index);
+
+        var describeErrors = function(callback){
+          try{ callback(); } catch (error){
+            js.log('Failure during React update: ', {
+              'original error': error,
+              'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
+              'while processing node': node,
+              'index of failed directive': directive.index,
+              'directive call': directive.command+'('+directive.inputs.join(', ')+')',
+              'scope chain description': directive.getScopeChain().describe(),
+              '(internal scope chain object) ': directive.getScopeChain()
+            });
+            throw error;
+          }
+        };
+
+        return directive;
+      };
+
+      var nullDirective = makeDirective(null, [], null);
+      nullDirective.follow = noop;
+      nullDirective.isDirty = nullDirective.isContageous = nullDirective.isAmongAncestors = nullDirective.isDead = function(){ return false; };
+      nullDirective.getParent = function(){ js.error('internal error: cannot get the parent of a null directive'); };
+      nullDirective.getScopeChain = function(){ return emptyScopeChain; };
+
+      // build up directives
+      var directives = js.reduce($node.getDirectiveArrays(), [], function(which, tokens, memo){
+        which === 0 && tokens[0] === 'anchored' ?
+          memo.anchored = makeDirective('anchored', tokens) :
+          memo.push(makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
+        return memo;
+      });
+
+      directives.anchored = directives.anchored || makeDirective('anchored', ['anchored']);
+
+      $node.directives = js.extend(directives,{
+
+        before: makeDirective('before', ['before']),
+        after: makeDirective('after', ['after']),
+
+        // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
+        set: function(key, directive){
+          directives[key] = makeDirective(''+key, directive);
+          directives.write();
+        },
+
+        write: function(){
+          node.setAttribute('react', directives);
+        },
+
+        orderedForString: function(){
+          return (directives.anchored.inputs.length ? [directives.anchored] : []).concat(directives);
+        },
+
+        toString: function(){
+          return js.map(directives.orderedForString(), function(which, directive){
+            if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
+            return directive.toString();
+          }).join(', ');
+        },
+
+        prepend: function(directive){
+          directive = directive.isDirective ? directive : makeDirective('0', directive);
+          directives.unshift(directive);
+          js.map(directives, function(which, directive){
+            directive.setIndex(which.toString());
+          });
+          directives.write();
+        }
+
+      });
+
+      return ($nodes[$node.key] = $node);
+    };
+
+    var getDirective = function(key){
+      var tokens = key.split(' ');
+      return $(key[0]).directives[tokens[1]];
+    };
+
+    var hasRun = false, isRunning = false;
+    var operation = {
+      $: $,
+
+      updateBranch: function(node, fromDirective){
+        $(node).directives[fromDirective||'after'].contageous();
+      },
+
+      run: function(){
+        js.errorIf(hasRun, 'An operation cannot be run twice');
+        isRunning = true;
+        var repeatLimit = 100000;
+        // iterating over the directivesToConsider list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
+        while(js.hasKeys(directivesToConsider)){
+          js.errorIf(!(repeatLimit--), 'we seem to be checking quite a few directives here...');
+          for(var key in directivesToConsider){
+            js.errorIf(consideredDirectives[key], 'internal error: react tried to consider the same directive twice');
+            var directive = directivesToConsider[key];
+            if( directive.hasReasonToConsider() ){
+              directive.follow();
+              consideredDirectives[key] = directive;
+            } else {
+              // if the reasons for considering a directive are no longer valid (IE the ancestry path changed), defer the directive until all valid directives have been processed, so we can try again when the path might have become valid again
+              deferredDirectives[key] = directive;
+            }
+            delete directivesToConsider[key];
+          }
+          for(key in deferredDirectives){
+            if(deferredDirectives[key].hasReasonToConsider()){
+              directivesToConsider[key] = deferredDirectives[key];
+              delete deferredDirectives[key];
+            }
+          }
+        }
+        isRunning = false;
+        hasRun = true;
+     },
+
+      changed: function(object, keys){
+        makeProxy(object).changed(keys);
+        return operation;
+      }
+
+    };
+
+    return operation;
+  };
+
+
+  /*
+   * commands
+   */
+
+  js.extend(react.commands, {
+
+    log: function(){
+      var inputs = {}, that = this;
+      js.map(arguments, function(which, argument){
+        inputs[argument] = that.lookup(argument);
+      });
+      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:inputs})
     },
 
-    anchored: function(token){
-      this.pushScope('anchor', this.scopes[token], {key:token});
+    before: function(){
+      if(this.$node.hasClass('reactItemTemplate')){
+        this.dead();
+      }
+      this.ifDirty();
+    },
+
+    after: function(){ this.ifDirty(); },
+
+    anchored: function(/*token1, ...tokenN */){
+      for(var i = 0; i < arguments.length; i++){
+        var token = arguments[i];
+        if(this.scopes[token]){
+         this.pushScope('anchor', this.scopes[token], {key:token});
+        }else{
+          this.dead();
+          debug('anchored directive failed to find a scope for the key "'+key+'"');
+        }
+      }
+      this.ifDirty(function(){
+        this.contageous();
+      });
     },
 
     within: function(key){
-      // todo: port and test this
-      // js.errorIf(typeof scope !== 'object' && typeof scope !== 'array' && typeof scope !== 'function', 'mask commands must receive a namespacing value');
-      this.pushScope('within', this.lookup(key), {key:key});
+      this._withScope('within', key);
     },
 
-    contain: function(key){
-      // using innerHTML to clear the node because the jQuery convenience functions unbind event handlers. This would be an unexpected side effect for most React user consumption cases.
-      this.node.innerHTML = '';
-      var insertion = this.lookup(key);
-      // if the insertion is a node, use the dom appending method, but insert other items as text
-      if(insertion && insertion.nodeType){
-        jQuery(this.node).append(insertion);
-        this._removeNodes(makeRnode(insertion).getReactNodes());
-        // todo: this.pushScope('doNotRecurse', doNotRecurse);
-      } else {
-        jQuery(this.node).text(insertion);
+    _withScope: function(type, key){
+      var scope = this.lookup(key);
+      if(!scope){
+        this.lookup(key);
       }
-    },
-
-    classIf: function(conditionKey, nameKey){
-      this.node.classIfs = this.node.classIfs || {};
-      var condition = this.lookup(conditionKey);
-      var className;
-      var persistence = conditionKey + ' ' + nameKey;
-      if(condition){
-        className = this.lookup(nameKey);
-        if(className){
-          $(this.node).addClass(className);
-          this.node.classIfs[persistence] = className;
-        }
-      } else {
-        className = this.node.classIfs[persistence] || this.lookup(nameKey);
-        if(className){
-          $(this.node).removeClass(className);
-          delete this.node.classIfs[persistence];
-        }
+      if(scope){
+        this.pushScope(type, scope, {key:key});
+      }else{
+        this.dead();
+        debug('within directive failed to find a scope for the key "'+key+'"');
       }
-    },
-
-    _createItemNodes: function(directiveMaker){
-      var $loopChildren = jQuery(this.node).children();
-      js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
-      var $itemTemplate = $loopChildren.first();
-      //js.errorIf(makeRnode($itemTemplate[0]).directives[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
-      $itemTemplate.addClass('reactItemTemplate');
-      this.loopItemTemplates[getNodeKey($itemTemplate[0])] = $itemTemplate[0];
-      var $resultsContainer = $($loopChildren[1]);
-      var $resultsContents = $resultsContainer.children();
-
-      // todo: ignore binding scopes when looking for scope to iterate over
-      var collection = this.scopeChain.scope;
-      // todo: don't allow looping over static native objects (like strings - this is almost certainly an error)
-      js.errorIf(collection === null || collection === undefined, 'The loop command expected a collection, but instead encountered '+collection);
-      if(this.scopeChain.anchorKey && !this.suppressObservers){
-        // todo: optimize. this is a shortcut - it simply puts a listener on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
-        this.scopeChain.observe('length', makeRnode(this.node).directives[this.directiveIndex]);
-      }
-
-      var itemNodes = [];
-      for(var i = 0; i < collection.length; i++){
-        var itemNode = $resultsContents[i];
-        if(!itemNode){
-          itemNode = $itemTemplate.clone().removeClass('reactItemTemplate')[0];
-          // todo: implement bindings as key aliases
-          js.errorIf(matchers.space.test(i), 'looping not currently supported over colletions with space-filled keys'); // todo: make this even more restrictive - just alphanumerics
-          var itemDirective = directiveMaker(i);
-          makeRnode(itemNode).directives.prepend(itemDirective);
-          this._enqueueNodes(makeRnode(itemNode).getReactNodes());
-        }
-        itemNodes.push(itemNode);
-      }
-      if(collection.length !== $resultsContents.length){
-        // we set innerHTML here to prevent jQuery fron detaching all event handlers (automatic in an .html() call)
-        $resultsContainer[0].innerHTML = '';
-        $resultsContainer.html(itemNodes);
-      }
-    },
-
-    withinEach: function(){
-      // todo: return here (and everywhere else) if collection is undefined.  test for this
-      this._createItemNodes(function(index){
-        return ['withinItem', index];
+      this.ifDirty(function(){
+        this.contageous();
       });
     },
 
     withinItem: function(key){
       // todo: add a rule to only allow getting items from last scope (check if key < scope.length?)
       // todo: add a rule to make sure the last scope object is an array
-      js.errorIf(this.scopeChain.scope.length-1 < +key, 'Tried to re-render a node for an index the no longer exists');
-      // todo: want to raise an error including link to this.scopeChain.scope - write an error helper
-      js.errorIf(!this.scopeChain.scope[key], 'Could not find anything at key '+key+' on the scope object');
-      // todo: might be a problem that using the within() as a helper will give the scope a type of 'within'
-      this.within(key);
+      if(!js.isArray(this.getScope()) || this.getScope().length-1 < +key || !this.getScope()[key]){
+        this.dead();
+      }
+      this._withScope('withinItem', key);
     },
 
-    'for': function(keyAlias, valueAlias){
-      var aliases = arguments;
-      // todo: return here (and everywhere else) if collection is undefined.  test for this
-      this._createItemNodes(function(index){
-        return ['bindItem', index].concat(Array.prototype.slice.call(aliases));
+    withinEach: function(){
+      this._createItemNodes(function(index, itemNode){
+        this.$(itemNode).directives.prepend(['withinItem', index]);
+      });
+      this.ifDirty(function(){
+        this.contageous();
       });
     },
 
@@ -437,375 +842,160 @@
       if(keyAlias !== undefined){
         itemBindings[keyAlias] = key;
       }
-      // todo: don't make this a fallthrough - create an explicit binding to the previous array scope object
       itemBindings[valueAlias] = new Fallthrough(key);
 
       this.pushScope('bindItem', itemBindings, {key:key});
+
+      this.ifDirty(function(){
+        this.contageous();
+      });
+    },
+
+    'for': function(keyAlias, valueAlias){
+      var aliases = Array.prototype.slice.call(arguments);
+      this.ifDirty(function(){
+        // todo: return here (and everywhere else) if collection is undefined.  test for this
+        this._createItemNodes(function(index, itemNode){
+          this.$(itemNode).directives.prepend( ['bindItem', index].concat(aliases) );
+        });
+        this.contageous();
+      });
+    },
+
+    _createItemNodes: function(callback){
+      var $loopChildren = jQuery(this.node).children();
+      js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
+      var $itemTemplate = $loopChildren.first();
+      //js.errorIf(this.$($itemTemplate[0]).directives[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
+      $itemTemplate.addClass('reactItemTemplate');
+      var $resultsContainer = $($loopChildren[1]);
+      var $resultsContents = $resultsContainer.children();
+
+      // todo: ignore binding scopes when looking for scope to iterate over
+      var collection = this.getScope();
+      if(!js.isArray(collection)){
+        this.dead();
+        debug('no collection found');
+        return;
+      }
+      if(this.getScopeChain().anchorKey){
+        this.lookup('length');
+      }
+
+      var itemNodes = [];
+      for(var i = 0; i < collection.length; i++){
+        var itemNode = $resultsContents[i];
+        if(!itemNode){
+          itemNode = $itemTemplate.clone().removeClass('reactItemTemplate')[0];
+          callback.call(this, i, itemNode);
+          this.$(itemNode).directives.before.considerDescendants();
+        }
+        itemNodes.push(itemNode);
+      }
+      if(collection.length !== $resultsContents.length){
+        // we set innerHTML here to prevent jQuery fron detaching all event handlers (automatic in an .html() call)
+        $resultsContainer[0].innerHTML = '';
+        $resultsContainer.html(itemNodes);
+      }
+    },
+
+    contain: function(key){
+      this.ifDirty(function(){
+        // using innerHTML to clear the node because the jQuery convenience functions unbind event handlers. This would be an unexpected side effect for most React user consumption cases.
+        this.node.innerHTML = '';
+        var insertion = this.lookup(key);
+        // if the insertion is a node, use the dom appending method, but insert other items as text
+        jQuery(this.node)[insertion && insertion.nodeType ? 'append' : 'text'](insertion);
+        // note: .dead() can't happen outside ifDirty() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
+        this.$node.directives.after.dead();
+      });
+      this.$node.directives.after.resetScopeChain();
+    },
+
+    'if': function(condition){
+      var conditional = this.lookup(condition);
+      if(!conditional){ this.dead(); }
+      this.ifDirty(function(){
+        $(this.node)[conditional ? 'removeClass' : 'addClass']('reactConditionallyHidden');
+        this._conditionalShow(conditional);
+        this.contageous();
+      });
     },
 
     _conditionalShow: function(conditional){
       jQuery(this.node)[conditional ? 'show' : 'hide']();
     },
 
-    'if': function(condition){
-      var conditional = this.lookup(condition);
-      // this is technical debt, but will go away in the refactor. the suppressObservers flag happens to be useful in this case to detect when we are only building a scope chain.  when that happens, we also don't want to have these side effects on the classes either
-      if(!this.suppressObservers){
-        $(this.node)[conditional ? 'removeClass' : 'addClass']('reactConditionallyHidden');
-      }
-      if(!conditional){
-        this.pushScope('doNotRecurse', doNotRecurse);
-      }
-      this._conditionalShow(conditional);
-    },
-
     showIf: function(condition){
-      var conditional = this.lookup(condition);
-      this._conditionalShow(conditional);
+      this.ifDirty(function(){
+        this._conditionalShow(this.lookup(condition));
+      });
     },
 
     visIf: function(condition){
-      jQuery(this.node).css('visibility', this.lookup(condition) ? 'visible' : 'hidden');
+      this.ifDirty(function(){
+        jQuery(this.node).css('visibility', this.lookup(condition) ? 'visible' : 'hidden');
+      });
+    },
+
+    classIf: function(conditionKey, nameKey){
+      this.ifDirty(function(){
+        this.node.classIfs = this.node.classIfs || {};
+        var condition = this.lookup(conditionKey);
+        var className;
+        var persistence = conditionKey + ' ' + nameKey;
+        if(condition){
+          className = this.lookup(nameKey);
+          if(className){
+            $(this.node).addClass(className);
+            this.node.classIfs[persistence] = className;
+          }
+        } else {
+          className = this.node.classIfs[persistence] || this.lookup(nameKey);
+          if(className){
+            $(this.node).removeClass(className);
+            delete this.node.classIfs[persistence];
+          }
+        }
+      });
     },
 
     attr: function(name, value){
       js.errorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
+      this.ifDirty(function(){
 
-      name = this.lookup(name);
-      value = this.lookup(value);
+        name = this.lookup(name);
+        value = this.lookup(value);
 
-      if(!js.among(['string', 'number', 'undefined', 'null'], typeof name)){
-        js.log('bad attr name: ', name);
-        js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
-      }else if(!js.among(['string', 'number', 'undefined', 'null'], typeof value)){
-        js.log('bad attr value: ', value);
-        js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
-      }
+        if(!js.among(['string', 'number', 'undefined'], typeof name)){
+          js.log('bad attr name: ', name);
+          js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
+        }else if(!js.among(['string', 'number', 'undefined'], typeof value)){
+          js.log('bad attr value: ', value);
+          js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
+        }
 
-      jQuery(this.node).attr(name, value);
+        jQuery(this.node).attr(name, value);
+      });
     },
 
     attrIf: function(condition, name, value){
-      if(this.lookup(condition)){
-        $(this.node).attr(this.lookup(name), this.lookup(value));
-      } else {
-        $(this.node).removeAttr(this.lookup(name));
-      }
+      this.ifDirty(function(){
+        this.lookup(condition) ? $(this.node).attr(this.lookup(name), this.lookup(value)) : $(this.node).removeAttr(this.lookup(name));
+      });
     },
 
     checkedIf: function(condition){
-      $(this.node).attr('checked', this.lookup(condition));
+      this.ifDirty(function(){
+        $(this.node).attr('checked', !!this.lookup(condition));
+      });
     }
 
   });
 
-  // a reactnode (rnode) is a wrapper for dom nodes that provides supplemental functionality
-  var makeRnode = function(node){
-
-    var rnode = {
-
-      node: node,
-
-      getKey: function(){
-        return getNodeKey(rnode.node);
-      },
-
-      // note: getReactNodes() only returns the operative node and nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
-      getReactNodes: function(){
-        return [node].concat(makeArrayFromArrayLikeObject(node.querySelectorAll('[react]')));
-      },
-
-      getParent: function(updateContext){
-        var ancestor = $(node).parent()[0];
-        var repeatLimit = 1000;
-        while(repeatLimit--){
-          if(!ancestor || ancestor === document){
-            return false;
-          } else if (
-            ancestor === updateContext.root ||
-            ancestor.getAttribute('react') ||
-            updateContext.bequeathedScopeChains[getNodeKey(ancestor)] || // todo: what's this cover?
-            updateContext.loopItemTemplates[getNodeKey(ancestor)] // todo: I don't think we need this now that it gets a special class attached to it
-          ){
-            return ancestor;
-          }
-          ancestor = $(ancestor).parent()[0];
-        }
-        js.error('rnode.getParent() broke');
-      },
-
-      updateGivenScopeChain: function(scopeChain, updateContext, fromDirective){
-        var nodeKey = rnode.getKey();
-        var directives = makeRnode(node).directives;
-
-        if(directives.anchored){
-          scopeChain = scopeChain.extendForAnchorNames(directives.anchored.inputs);
-        }
-
-        var pushScope = function(type, scope, options){
-          scopeChain = scopeChain.extend(type, scope, options);
-        };
-
-        for(var i = fromDirective || 0; i < directives.length; i++){
-          var directiveContext = js.create(updateContext, {
-            node: rnode.node,
-            directiveIndex: i,
-            scopeChain: scopeChain,
-            pushScope: pushScope
-          });
-          directives[i].follow(directiveContext);
-        }
-
-        return scopeChain;
-      },
-
-      update: function(updateContext){
-        //todo: test that you never revisit a node
-        var nodeKey = getNodeKey(rnode.node);
-        if(
-          typeof updateContext.bequeathedScopeChains[nodeKey] !== 'undefined' ||
-          rnode.node === updateContext.root // this is to prevent an undefined scope chain for the root getting overwritten with false. don't like it.
-        ){
-          // node has already been visited
-          return;
-        }
-
-        if(updateContext.loopItemTemplates[getNodeKey(rnode.node)]){ // todo: get rid of all these references to 'loop item templates', use custom class instead
-          updateContext.bequeathedScopeChains[nodeKey] = false;
-          return;
-        }
-        var previousParent = 'unmatchable';
-        var parent = rnode.getParent(updateContext);
-        // if processing the parent leads to this node having a new parent, repeat
-        while(parent !== previousParent){
-          if(!parent){
-            updateContext.bequeathedScopeChains[nodeKey] = false;
-            return;
-          }
-          makeRnode(parent).update(updateContext);
-          if(updateContext.bequeathedScopeChains[getNodeKey(parent)] === false){
-            updateContext.bequeathedScopeChains[nodeKey] = false;
-            return;
-          }
-          previousParent = parent;
-          parent = rnode.getParent(updateContext);
-        }
-
-        var scopeChain = updateContext.bequeathedScopeChains[getNodeKey(parent)] || globalScopeChain;
-        updateContext.bequeathedScopeChains[nodeKey] = rnode.updateGivenScopeChain(scopeChain, updateContext);
-      },
-
-      updateTree: function(options){
-        //todo: test these
-        //js.errorIf(!root, 'no root supplied to update()');
-        //js.errorIf(react.isNode(root), 'first argument supplied to react.update() must be a dom node');
-        js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
-
-        var updateContext = js.create(react.commands, {
-          root: rnode.node,
-          nodesToUpdate: makeArrayFromArrayLikeObject(rnode.node.querySelectorAll('[react]')),
-          bequeathedScopeChains: {},
-          loopItemTemplates: {}
-        });
-        var scopes = options.scope ? [options.scope] : options.scopes ? options.scopes : undefined;
-        if(options.anchor){
-          react.anchor({node: rnode.node, scopes:scopes});
-          scopes = [];
-        }
-        var baseScopeChain = rnode.buildParentScopeChain(options.fromDirective || 0).extendMany('updateInputs', scopes);
-        updateContext.bequeathedScopeChains[rnode.getKey()] = rnode.updateGivenScopeChain(baseScopeChain, updateContext, options.fromDirective);
-
-        updateNodes(updateContext.nodesToUpdate, updateContext);
-
-        return rnode.node;
-      },
-
-      buildParentScopeChain: function(directiveIndex){
-        var ancestors = $(Array.prototype.reverse.apply($(this.node).parents())).add(this.node);
-        var scopeBuildingContext = js.create(react.commands, {
-          //todo: deprecate the suppressObservers flag
-          suppressObservers: true,
-          scopeChain: globalScopeChain
-        });
-        for(var whichAncestor = 0; whichAncestor < ancestors.length; whichAncestor++){
-          scopeBuildingContext.node = ancestors[whichAncestor];
-          var directives = makeRnode(scopeBuildingContext.node).directives;
-          scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extendForAnchorNames(directives.anchored && directives.anchored.inputs);
-
-          var pushScope = function(type, scope, options){
-            scopeBuildingContext.scopeChain = scopeBuildingContext.scopeChain.extend(type, scope, options);
-          };
-
-          for(var whichDirective = 0; whichDirective < directives.length; whichDirective++){
-            if(scopeBuildingContext.node === this.node && (directiveIndex||0) <= whichDirective){ break; }
-            // todo: this scopeChain will never be falsey, so what this used to do is broken. write a test
-            if(!scopeBuildingContext.scopeChain){ continue; }
-            if(directives[whichDirective].command === 'contain'){
-              scopeBuildingContext.scopeChain = emptyScopeChain;
-              continue;
-            }
-            if(js.among(['within', 'withinItem', 'bindItem'], directives[whichDirective].command)){
-              var directiveContext = js.create(scopeBuildingContext, {
-                directiveIndex: whichDirective,
-                pushScope: pushScope
-              });
-              directives[whichDirective].follow(directiveContext);
-            }
-          }
-        }
-        return scopeBuildingContext.scopeChain;
-      }
-    };
-
-    var makeDirective = function(index, tokens){
-
-      var directive = {
-
-        isDirective: true,
-        rnode: rnode,
-        index: index,
-        command: tokens[0],
-        inputs: tokens.slice(1),
-
-        toString: function(){
-          return [directive.command].concat(directive.inputs).join(' ');
-        },
-
-        follow: function(context){
-          try{
-            if(context.scopeChain.scope === doNotRecurse){
-              return doNotRecurse;
-            }
-            js.errorIf(!commands[directive.command], directive.command+' is not a valid react command');
-            commands[directive.command].apply(context, directive.inputs);
-          }catch (error){
-            js.errorIf(typeof context.directiveIndex !== 'number', 'You tried to follow a directive without supplying a directive index in the execution context');
-            js.log('Failure during React update: ', {
-              'original error': error,
-              'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
-              'while processing node': context.node,
-              'index of failed directive': context.directiveIndex,
-              'directive call': directive.command+'('+directive.inputs.join(', ')+')',
-              'scope chain description': context && context.scopeChain && context.scopeChain.describe(),
-              '(internal scope chain object) ': context.scopeChain
-            });
-            throw error;
-          }
-        }
-
-      };
-
-      return directive;
-    };
-
-    var directiveStrings = (node.getAttribute('react')||'').split(matchers.directiveDelimiter);
-    var directiveArrays = js.map(directiveStrings, function(which, string){
-      return js.extend(js.trim(string).replace(matchers.negation, '!').split(matchers.space), {rnode: rnode});
-    });
-    if(directiveArrays[0] && directiveArrays[0][0] === 'anchored'){
-      var anchored = makeDirective('anchored', directiveArrays.shift());
-    }
-    directiveArrays = js.filter(directiveArrays, function(which, directiveArray){
-      return !!directiveArray[0];
-    });
-
-    var directives = js.map(directiveArrays, function(which, directive){
-      return makeDirective(''+which, directive);
-    });
-
-    rnode.directives = js.extend(directives,{
-
-      anchored: anchored,
-
-      // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
-      set: function(key, directive){
-        rnode.directives[key] = makeDirective(''+key, directive);
-        rnode.directives.write();
-      },
-
-      write: function(){
-        node.setAttribute('react', rnode.directives);
-      },
-
-      toString: function(){
-        var directiveStrings = js.map(rnode.directives, function(which, directive){
-          if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
-          return directive.toString();
-        });
-        if(rnode.directives.anchored){
-          if(!rnode.directives.anchored.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
-          directiveStrings.unshift(rnode.directives.anchored.toString());
-        }
-        return directiveStrings.join(', ');
-      },
-
-      prepend: function(directive){
-        rnode.directives.unshift(directive.isDirective ? directive : makeDirective('0', directive));
-        js.map(rnode.directives, function(which, directive){
-          directive.index = ''+which;
-        });
-        rnode.directives.write();
-      }
-
-    });
-
-    return rnode;
-  };
-
-  var makeListener = function(object, key, listenerString){
-    var listener = listenerString.split(' ');
-    var rnode = makeRnode(react.nodes[listener[0]]);
-    var directiveIndex = +listener[1];
-
-    return {
-      object: object,
-      key: key,
-      rnode: rnode,
-      node: rnode.node,
-      directiveIndex: directiveIndex,
-      prefix: listener[2],
-      directive: rnode.directives[directiveIndex],
-      scopeChain: rnode.buildParentScopeChain(directiveIndex),
-      isValid: function(){
-        // ignore the object if it's not in the same path that lead to registration of a listener
-        var details = this.scopeChain.lookup(this.prefix+this.key, {details: true, suppressObservers: true});
-        return details.matchingBaseObject === this.object || details.failed && this.scopeChain.contains(this.object);
-      },
-      check: function(){
-        if(!this.isValid()){ return; }
-
-        // todo: bindItem is needed here but won't work until the registration is made on the array element it's bound to. something like
-        js.errorIf(this.directive.command === 'bindItem', 'you need recalculations for bindItem (when the key was an itemAlias), but those aren\'t implemented yet');
-        if(js.among(['within', 'withinEach', 'withinItem', 'for', 'if'], this.directive.command)){
-          // todo: loopKey probably won't work, and maybe withinEach either
-          makeRnode(this.node).updateTree({
-            node: this.node,
-            fromDirective: this.directiveIndex
-          });
-          return;
-        }
-
-        var nodesToUpdate = [];
-        var updateContext = js.create(react.commands, {
-          root: this.node, // todo: is this right? root seems meaningless in this case. only added root to the updateNode method so I could allow updating of whole branch at once
-          node: this.node,
-          nodesToUpdate: nodesToUpdate,
-          scopeChain: this.scopeChain,
-// todo: consolidate all these updateContext object creations
-// todo: these last two probably don't belong here. they were added to keep .enqueueNodes() from erroring.
-          bequeathedScopeChains: {},
-          loopItemTemplates: {},
-// todo: this shouldn't need a pushscope method. it only uses it because directive functions access it. factor this out
-          pushScope: function(type, scope){updateContext.scopeChain = updateContext.scopeChain.extend(type,scope);}
-        });
-        var directiveContext = js.create(updateContext, {
-          directiveIndex: this.directiveIndex,
-        });
-        this.directive.follow(directiveContext);
-        updateNodes(nodesToUpdate, updateContext);
-      }
-    };
-  };
+  /*
+   * Exporting library
+   */
 
   window.react = react;
 
