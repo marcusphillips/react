@@ -1,7 +1,14 @@
-1.1.3
+1.2
 ---
-- any node substituted by a 'contain' directive does not inherit the containing scope chain
+- new directive 'log' outputs information about the current rendering context and any inputs
+- lookups in scope chain fail only when property is not in the object at all, rather than when it is present but set to undefined
+- allows for progressive rendering
+  - dot access into undefined and null properties resolves to undefined, rather than erroring
+  - the scope extension directives 'within', 'withinItem', and 'anchored' do not error when scope is undefined
+  - withinItem passes if the top scope is not an array-like object
 
+1.1.3
+- any node substituted by a 'contain' directive does not inherit the containing scope chain, and is not recursed onto for an update operation
 
 1.1.2 - cleanup and bug fixes
 ---
