@@ -172,7 +172,7 @@ React currently uses jQuery to facilitate DOM operations, though the dependency 
 ### Basics
 
 #### `contain(<string/number/DOM> value)`
-Inserts `value` as the contents of the node
+Inserts `value` as the contents of the node. Value can be a string, number, or DOM node. (note: contained DOM nodes will not be recursed upon in update operations)
 
 #### `within(<string> key)`
 Takes the value found at `key` in the scope chain, and adds it to the top of the scope chain.  Useful for subtemplates, and when dealing with many different properties of a single, nested object.  The behavior is identical to that of Mustache's dereferencing feature.
