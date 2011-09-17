@@ -1,4 +1,4 @@
-local changes
+1.2
 ---
 - new directive 'log' outputs information about the current rendering context and any inputs
 - lookups in scope chain fail only when property is not in the object at all, rather than when it is present but set to undefined
