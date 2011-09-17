@@ -1,4 +1,4 @@
-local changes
+1.1.3
 ---
 - any node substituted by a 'contain' directive does not inherit the containing scope chain
 
