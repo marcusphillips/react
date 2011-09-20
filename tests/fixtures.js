@@ -21,16 +21,9 @@ var makeFixtureScopes = function(){
     inert: {},
 
     alice: {
+      name: 'alice',
       isAdmin: true,
-      email: 'alice@startup.com'
-    },
-
-    bob: {
-      name: 'bob',
-      isVerified: true,
-      email: 'bob@webmail.com',
-      mugshotUrl: 'example.com',
-      friends: [],
+      email: 'alice@startup.com',
       address: {
         street: 'cornell'
       },
@@ -39,11 +32,19 @@ var makeFixtureScopes = function(){
           street: 'main'
         }
       },
+      mugshotUrl: 'example.com',
+      friends: [],
       car: {
         color: 'blue',
         name: 'chitty',
         value: '$4000'
       }
+    },
+
+    bob: {
+      name: 'bob',
+      isVerified: true,
+      email: 'bob@webmail.com'
     },
 
     charlie: {
@@ -69,7 +70,11 @@ var makeFixtureScopes = function(){
 
   };
 
-  scopes.bob.friends.push(scopes.charlie, scopes.david, scopes.ellen);
+  scopes.people = [scopes.alice, scopes.bob, scopes.charlie, scopes.david, scopes.ellen];
+  for(var i = 0; i < scopes.people.length; i++){
+    if(i){ scopes.alice.friends.push(scopes.people[i]); }
+    if(i !== scopes.people.length){ scopes.people[i].neighbor = scopes.people[i+1]; }
+  }
 
   return addAccessors(scopes);
 }

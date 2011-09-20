@@ -21,11 +21,12 @@
       <div id="fixture-nodes">
 
         <div data-fixture="inert"></div>
-        <div data-fixture="broken"              react="nonexistentcommand">orig</div>
+        <div data-fixture="broken"                     react="nonexistentcommand">orig</div>
         <div data-fixture="containingStringLiteral"    react="contain 'example'">orig</div>
         <div data-fixture="name"                       react="contain name">orig</div>
         <div data-fixture="containingWidget"           react="contain widget">orig</div>
         <div data-fixture="addressDotStreet"           react="contain address.street">orig</div>
+        <div data-fixture="withinAddress"              react="within address, contain street">orig</div>
         <div data-fixture="withAttributesFromStrings"  react="attr 'name' 'value'">orig</div>
         <div data-fixture="withDynamicAttributeName"   react="attr  name  'value'">orig</div>
         <div data-fixture="withDynamicAttributeValue"  react="attr 'name'  value">orig</div>
@@ -68,6 +69,13 @@
         <div data-fixture="indexIteratorResults"></div></div>
 
         <!-- gap -->
+
+        <div data-fixture="neighborsPoints">
+          <div react="contain points">orig</div>
+          <div react="contain neighbor.points">orig</div>
+          <div react="contain neighbor.neighbor.points">orig</div>
+          <div react="contain neighbor.neighbor.neighbor.points">orig</div>
+        </div>
 
         <div data-fixture="multipleWithins">
           <div react="within address">
