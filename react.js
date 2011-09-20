@@ -228,12 +228,14 @@
           scope: arguments[1]
         }, arguments[2] || {});
       }
+      var nodeInput = options.node;
       if(options.node instanceof jQuery){
         if(options.node.length !== 1){
           js.error('you cannot pass a jquery object containing many nodes to react.update()');
         }
         options.node = options.node[0];
       }
+      js.errorIf(!options.node, 'you did not pass a valid node to react.update()');
 
       js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
@@ -246,7 +248,7 @@
       var operation = makeOperation();
       operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).contageous();
       operation.run();
-      return options.node;
+      return nodeInput;
     },
 
     anchor: function(options){
@@ -272,8 +274,8 @@
 
     integrate: {
       jQuery: function(){
-        jQuery.fn.update = function(scope){
-          react.update(this, scope);
+        jQuery.fn.anchor = function(scope){
+          return react.update(this, scope, {anchor: true});
         };
       }
     }
@@ -386,7 +388,7 @@
     // Overriding jQuery to provide supplemental functionality to DOM node wrappers
     // Within the scope of makeOperation, all calls to $() return a customized jQuery object. For access to the original, use jQuery()
     var $ = function(node){
-      js.errorIf(arguments.length !== 1 || !node || node.nodeType !== 1 || js.isArray[arguments[0]] || arguments[0] instanceof jQuery, 'overridden $ can only accept one input, which must be a DOM node');
+      js.debugIf(arguments.length !== 1 || !node || node.nodeType !== 1 || js.isArray[arguments[0]] || arguments[0] instanceof jQuery, 'overridden $ can only accept one input, which must be a DOM node');
       if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
 
       var $node = js.create(jQuery(node), {

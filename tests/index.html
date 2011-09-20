@@ -8,6 +8,7 @@
     <script type="text/javascript" src="../lib/js_dot_standin/js.js"></script>
     <link rel="stylesheet" href="../react.css" type="text/css" media="screen">
     <script type="text/javascript" src="../react.js"></script>
+    <script type="text/javascript" src="./fixtures.js"></script>
     <script type="text/javascript" src="./tests.js"></script>
   </head>
   <body>
@@ -16,6 +17,57 @@
     <div id="qunit-testrunner-toolbar"></div>
     <h2 id="qunit-userAgent"></h2>
     <ol id="qunit-tests"></ol>
-    <div id="qunit-fixture"></div>
+    <div id="qunit-fixture">
+      <div id="fixture-nodes">
+
+        <div data-fixture="inert"></div><div data-fixture="inert2"></div>
+        <div data-fixture="broken"              react="nonexistentcommand">orig</div>
+        <div data-fixture="containingStringLiteral"    react="contain 'example'">orig</div>
+        <div data-fixture="name"                       react="contain name">orig</div>
+        <div data-fixture="containingWidget"           react="contain widget">orig</div>
+        <div data-fixture="addressDotStreet"           react="contain address.street">orig</div>
+        <div data-fixture="withAttributesFromStrings"  react="attr 'name' 'value'">orig</div>
+        <div data-fixture="withDynamicAttributeName"   react="attr  name  'value'">orig</div>
+        <div data-fixture="withDynamicAttributeValue"  react="attr 'name'  value">orig</div>
+        <img data-fixture="mugshot"                    react="attr 'src' mugshotUrl"/>
+        <div data-fixture="adminIcon"                  react="showIf isAdmin,
+                                                              classIf isAdmin 'active',
+                                                              attrIf isAdmin 'data-admin' 'true',
+                                                              attrIf !isAdmin 'data-user' 'true'
+                                                              " class="icon">orig</div>
+        <div data-fixture="verifiedBadge"              react="visIf isVerified">orig</div>
+
+        <div data-fixture="adminEmail"                 react="if isAdmin, attr 'data-email' email" data-email="orig">
+          <a data-fixture="adminEmailLink" react="contain email">orig</a>
+        </div>
+
+        <div data-fixture="containerlessLoop" react="for item">
+          <span class="exampleTemplate"></span>
+          <!-- to prevent debeloper surprise, the missing container tag here is required -->
+        </div>
+
+        <div data-fixture="friends" react="for which friend">
+          <div data-fixture="friendTemplate" react="attr 'data-name' friend.name" data-name="orig">
+            <div data-fixture="friendName" react="contain name">orig</div>
+          </div>
+          <div data-fixture="friendsContainer">orig</div>
+        </div>
+
+
+        <ul data-fixture="navItems" react="for which item">
+          <li data-fixture="navItemTemplate"><!-- tests require this tag not to have a react attribute -->
+            <div data-fixture="navItemText" react="contain text">orig</div>
+          </li>
+          <div data-fixture="navItemsContainer">orig</div>
+        </ul>
+
+        <div data-fixture="businessStreet"  react="attr 'name' name, within business, within address, contain street"></div>
+
+        <div data-fixture="indexIterator" react="for which item">
+          <div data-fixture="indexIteratorTemplate" react="contain which"></div>
+        <div data-fixture="indexIteratorResults"></div></div>
+
+      </div>
+    </div>
   </body>
 </html>

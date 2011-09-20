@@ -1,3 +1,7 @@
+local
+---
+- react.integrate.jQuery() no longer adds an update() methoed. it instead provides .anchor(), which operates the same but always anchors in the process
+
 1.2
 ---
 - new directive 'log' outputs information about the current rendering context and any inputs

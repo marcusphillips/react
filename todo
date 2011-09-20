@@ -1,8 +1,10 @@
 --- goals for next version ---
+- deprecate ability to see index (- 'for' directive cannot do index binding. "for item" rather than "for which item")
 - don't recurse into widget nodes
 - deprecate the .update() function
 - provide .render() that anchors and associates all listeners
 - when should listeners relink?
+- when a jquery object is passed in, pass it back out
 
 - loop item template must be labeled
 - no loop items container node (all results get appended after template node)
