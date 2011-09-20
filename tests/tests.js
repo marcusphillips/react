@@ -55,7 +55,7 @@ var throws = function(block, description){
 module("basics");
 
 test('errors on unknown commands', function(){
-  throws(function(){ react.update(nodes.broken, {}); }, 'throws at nonexistent command');
+  throws(function(){ node.$broken.anchor({}); }, 'throws at nonexistent command');
 });
 
 test('calling update returns the root', function(){
@@ -72,14 +72,13 @@ test('keys can use dot operator', function(){
 
 test('reactive nodes need not be at the top level', function(){
   nodes.$inert.html(nodes.name);
-  react.update(nodes.inert, scopes.bob);
+  nodes.$inert.anchor(scopes.bob);
   equal(nodes.name.innerHTML, 'bob', 'the child node got the appropriate content');
 });
 
 test('rendering to nodes that are nested in others still works, an additional layer deep', function(){
   nodes.$inert.html(nodes.inert2);
-  nodes.$inert2.html(nodes.name);
-  react.update(nodes.inert2, scopes.bob);
+  nodes.$inert2.html(nodes.name).anchor(scopes.bob);
   equal(nodes.name.innerHTML, 'bob', 'the child node got the appropriate content');
 });
 
@@ -90,13 +89,11 @@ test('rendering to nodes that are nested in others still works, an additional la
 module("contain");
 
 test('containing strings', function(){
-  react.update(nodes.containingStringLiteral, scopes.inert);
-  equal(nodes.containingStringLiteral.innerHTML, 'example', 'contain directive inserted a string');
+  equal(nodes.$containingStringLiteral.anchor(scopes.inert).html(), 'example', 'contain directive inserted a string');
 });
 
 test('containing variables', function(){
-  react.update(nodes.name, scopes.bob);
-  equal(nodes.name.innerHTML, 'bob', 'contain directive inserted a string variable');
+  equal(nodes.$name.anchor(scopes.bob).html(), 'bob', 'contain directive inserted a string variable');
 });
 
 test('containing node variables', function(){
