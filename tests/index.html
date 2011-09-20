@@ -20,7 +20,7 @@
     <div id="qunit-fixture">
       <div id="fixture-nodes">
 
-        <div data-fixture="inert"></div><div data-fixture="inert2"></div>
+        <div data-fixture="inert"></div>
         <div data-fixture="broken"              react="nonexistentcommand">orig</div>
         <div data-fixture="containingStringLiteral"    react="contain 'example'">orig</div>
         <div data-fixture="name"                       react="contain name">orig</div>
@@ -66,6 +66,17 @@
         <div data-fixture="indexIterator" react="for which item">
           <div data-fixture="indexIteratorTemplate" react="contain which"></div>
         <div data-fixture="indexIteratorResults"></div></div>
+
+        <!-- gap -->
+
+        <div data-fixture="multipleWithins">
+          <div react="within address">
+            <div data-fixture="firstDescendant" react="contain street">orig</div>
+          </div>
+          <div react="within address">
+            <div data-fixture="secondDescendant" react="contain street">orig</div>
+          </div>
+        </div>
 
       </div>
     </div>

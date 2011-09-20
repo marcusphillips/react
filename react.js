@@ -230,9 +230,7 @@
       }
       var nodeInput = options.node;
       if(options.node instanceof jQuery){
-        if(options.node.length !== 1){
-          js.error('you cannot pass a jquery object containing many nodes to react.update()');
-        }
+        js.errorIf(options.node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
         options.node = options.node[0];
       }
       js.errorIf(!options.node, 'you did not pass a valid node to react.update()');

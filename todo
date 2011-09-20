@@ -1,4 +1,6 @@
 --- goals for next version ---
+- anchor command also updates
+- don't allow iterating over strings
 - deprecate ability to see index (- 'for' directive cannot do index binding. "for item" rather than "for which item")
 - don't recurse into widget nodes
 - deprecate the .update() function

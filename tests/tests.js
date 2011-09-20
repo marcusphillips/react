@@ -8,17 +8,24 @@ $(function(){
   $originalFixtureNodes = $('#fixture-nodes').remove();
 });
 
+for(var key in {'join':1}){
+  jQuery.fn[key] = jQuery.fn[key] || Array.prototype[key];
+}
+
 /*
  * clone new fixture nodes from those found in tests/index.html
  */
 var refreshNodes = function(){
   js.errorIf(!$originalFixtureNodes, 'fixture nodes not defined before attempted node refresh!');
   nodes = {};
-  $originalFixtureNodes.clone().find('[data-fixture]').each(function(which, node){
-    var key = $(node).attr('data-fixture');
-    nodes['$'+key] = $(node);
-    nodes[key] = node;
-  });
+  for(var i = 0; i < 5; i++){
+    $originalFixtureNodes.clone().find('[data-fixture]').each(function(which, node){
+      var key = $(node).attr('data-fixture') + (i ? (i+1).toString() : '');
+      $(node).attr('data-fixture', key);
+      nodes['$'+key] = $(node);
+      nodes[key] = node;
+    });
+  }
 };
 
 /*
@@ -213,11 +220,7 @@ test('template node is not visible after render', function(){
 test('can loop across values in an array', function(){
   react.update(nodes.friends, scopes.bob.friends);
   equal(nodes.$friendsContainer.children().length, 3, 'results container node contains three child elements');
-  same([
-    nodes.$friendsContainer.children().eq(0).attr('data-name'),
-    nodes.$friendsContainer.children().eq(1).attr('data-name'),
-    nodes.$friendsContainer.children().eq(2).attr('data-name')
-  ], ['charlie','david','ellen'], 'children\'s innerHTML is set to array items\' contents');
+  same(nodes.$friendsContainer.children().map(function(){return $(this).attr('data-name');}).join(','), 'charlie,david,ellen', 'children\'s innerHTML is set to array items\' contents');
 });
 
 test('deleting a property of an anchored scope causes a rerender', function(){
@@ -253,11 +256,7 @@ test('calling changed on a subobject that\'s associated with a within directive 
 
 test('can loop across keys in an array', function(){
   nodes.$indexIterator.anchor(scopes.bob.friends);
-  same([
-    nodes.$indexIteratorResults.children().eq(0).html(),
-    nodes.$indexIteratorResults.children().eq(1).html(),
-    nodes.$indexIteratorResults.children().eq(2).html()
-  ], ['0','1','2'], 'children\'s innerHTML is set to array key\'s contents');
+  same(nodes.$indexIteratorResults.children().map(function(){return this.innerHTML;}).join(','), '0,1,2', 'children\'s innerHTML is set to array key\'s contents');
 });
 
 test('functions bound at loop time evaluate in correct context', function(){
@@ -862,26 +861,12 @@ test('regression test - values at various depths are correctly bound and updated
   same(jQuery('#three', node)[0].innerHTML, '3', 'depth three got set');
 });
 
-test('regression test - within directive doesn\'t halt updates to the changed loop', function(){
-  // https://github.com/marcusphillips/react/issues/3
-  var object = {bar:{prop:'original'}};
-  var node = $('<div>\
-    <div react="within bar">\
-      <div id="foo" react="contain prop"></div>\
-    </div>\
-    <div react="within bar">\
-      <div id="bar" react="contain prop"></div>\
-    </div>\
-    <div react="within bar">\
-      <div id="baz" react="contain prop">\
-    </div>\
-  </div>')[0];
-  react.update({node: node, scope: object, anchor: true});
-  object.bar.prop = 'changed';
-  react.changed(object);
-  same(jQuery('#foo', node)[0].innerHTML, 'changed', 'foo gets set');
-  same(jQuery('#bar', node)[0].innerHTML, 'changed', 'bar gets set');
-  same(jQuery('#baz', node)[0].innerHTML, 'changed', 'baz gets set');
+test('within directive doesn\'t halt updates to the changed loop', function(){
+  // regression test: https://github.com/marcusphillips/react/issues/3
+  nodes.$multipleWithins.anchor(scopes.bob);
+  scopes.bob.address.set('street', 'ashbury');
+  same(nodes.$firstDescendant.html(), 'ashbury', 'first descendant gets set');
+  same(nodes.$secondDescendant.html(), 'ashbury', 'second descendant gets set');
 });
 
 }());
