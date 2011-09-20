@@ -385,21 +385,9 @@ test('nested withinEachs', function(){
 module("within");
 
 test('scope can be shifted within a property', function(){
-  var node = $('<div react="within subobject, contain key"/>')[0];
-  react.update(node, {subobject: {key: 'content'}, key:'wrongContent'});
-  equal($(node).html(), 'content', 'content was correct from within a subobject');
-
-  var node = $('<div react="within subobject, contain key"/>')[0];
-  react.update(node, {subobject: {}, key:'content'});
-  equal($(node).html(), 'content', 'key fell through fell through to next higher scope when local key is missing');
-
-  var node = $('<div react="within subobject, contain key"/>')[0];
-  react.update(node, {subobject: {}, key:'content'});
-  equal($(node).html(), 'content', 'key fell through to next higher scope when local key is not in object undefined');
-
-  var node = $('<div react="within subobject, contain key"/>')[0];
-  react.update(node, {subobject: {key: undefined}, key:'content'});
-  equal($(node).html(), '', 'key did not fall through when local key is in object, but undefined');
+  equal(nodes.$petAlergy.anchor(scopes.bob).html(), 'chocolate', 'content was correct from within a subobject');
+  equal(nodes.$petAlergy.anchor(scopes.alice).html(), '', 'key did not fall through when local key is in object, but undefined');
+  equal(nodes.$petAlergy.anchor(scopes.charlie).html(), '', 'key fell through fell through to next higher scope when local key is missing');
 });
 
 test('within directive works well with changed method', function(){

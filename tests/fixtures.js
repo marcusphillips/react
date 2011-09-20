@@ -24,6 +24,9 @@ var makeFixtureScopes = function(){
       name: 'alice',
       isAdmin: true,
       email: 'alice@startup.com',
+      pet: {
+        alergy: undefined
+      },
       address: {
         street: 'cornell'
       },
@@ -43,12 +46,18 @@ var makeFixtureScopes = function(){
 
     bob: {
       name: 'bob',
+      alergy: 'wheat',
+      pet: {
+        alergy: 'chocolate'
+      },
       isVerified: true,
       email: 'bob@webmail.com'
     },
 
     charlie: {
-      name: 'charlie'
+      name: 'charlie',
+      pet: {
+      }
     },
 
     david: {
