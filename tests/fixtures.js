@@ -1,42 +1,5 @@
 var makeFixtures = function(){
 
-  var addAccessors = function(focus){
-
-    focus.anchor = function(node){
-      $(node).anchor(this);
-      return this;
-    };
-
-    focus.set = function(key, value){
-      if(typeof key === 'object'){
-        var newValues = key;
-      } else {
-        newValues = {};
-        newValues[key] = value;
-      }
-      for(key in newValues){
-        focus[key] = newValues[key];
-      }
-      react.changed(focus, js.keys(newValues));
-    };
-
-    focus.del = function(keys){
-      keys = js.isArray(keys) ? keys : [keys];
-      for(var i = 0; i < keys.length; i++){
-        delete focus[keys[i]];
-      }
-      react.changed(focus, keys);
-    };
-
-    for(var key in focus){
-      if(key !== 'set' && focus[key] && typeof focus[key] === 'object' && !focus[key].set){
-        addAccessors(focus[key]);
-      }
-    }
-
-    return focus;
-  };
-
   var fixtures = {
 
     inert: {},
@@ -137,5 +100,5 @@ var makeFixtures = function(){
     if(fixtures.people[i+1]){ person.neighbor = fixtures.people[i+1]; }
   }
 
-  return addAccessors(fixtures);
+  return react.helpers(fixtures, true);
 }

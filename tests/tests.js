@@ -437,26 +437,6 @@ test('index key binding is still available at change response time', function(){
   same($withinItemContainWhich.item(1).html(), '1', 'which is still available after a change response');
 });
 
-test('a withinEach inside a for will not get duplicate bindings', function(){
-  // regression test
-  var object = [[{prop:'a'}, {prop:'b'}]];
-  var $node = $('\
-    <div react="for which item">\
-      <div react="within item, withinEach">\
-        <span react="contain which"></span>\
-        <span></span>\
-      </div>\
-    <span></span></div>\
-  ').anchor(object);
-  same($node.item(0).item(0).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
-  react.set(object, 0, [{prop:'c'}, {prop:'d'}]);
-  // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
-  // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
-  same($node.item(0).item(0).html(), '0', 'index substitution is still set to 0');
-  react.set(object, 0, [{which:'foo'}, {which:'bar'}]);
-  same($node.item(0).item(1).html(), 'bar', 'index substitution changes to the masking property');
-});
-
 test('loop items get bound to their indices', function(){
   var object = ['a', 'b'];
   var node = $('\
@@ -620,5 +600,32 @@ test('regression test - values at various depths are correctly bound and updated
   alice.neighbor.neighbor.neighbor.set('points', 1000);
   same($neighborsPoints.children().map(function(){return $(this).html();}).join(','), '1,10,100,1000', 'correct values set at all levels');
 });
+
+
+/*
+ * regression tests
+ */
+
+test('a withinEach inside a for will not get duplicate bindings', function(){
+  // regression test
+  var matrix = [[]];
+  react.set(matrix, 0, [{}, {}]);
+  var $node = $('\
+    <div react="for which item">\
+      <div react="within item, withinEach">\
+        <span react="contain which"></span>\
+        <span></span>\
+      </div>\
+    <span></span></div>\
+  ').anchor(matrix);
+  same($node.item(0).item(0).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
+  react.set(matrix, 0, [{}, {}]);
+  // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
+  same($node.item(0).item(0).html(), '0', 'index substitution is still set to 0');
+  react.set(matrix, 0, [{}, {which:'bar'}]);
+  same($node.item(0).item(1).html(), 'bar', 'index substitution changes to the masking property');
+});
+
 
 }());
