@@ -274,34 +274,8 @@
       return options.node;
     },
 
-    helpers: function(focus, deeply){
-      js.extend(focus, {
-        anchor: function(node){
-          $(node).anchor(this);
-          return this;
-        },
-
-        set: function(key, value){
-          if(typeof key === 'object'){
-            var newValues = key;
-          } else {
-            newValues = {};
-            newValues[key] = value;
-          }
-          for(key in newValues){
-            this[key] = newValues[key];
-          }
-          react.changed(this, js.keys(newValues));
-        },
-
-        del: function(keys){
-          keys = js.isArray(keys) ? keys : [keys];
-          for(var i = 0; i < keys.length; i++){
-            delete this[keys[i]];
-          }
-          react.changed(this, keys);
-        }
-      });
+    helpers: js.extend(function(focus, deeply){
+      js.extend(focus, react.helpers);
 
       if(deeply){
         for(var key in focus){
@@ -312,7 +286,35 @@
       }
 
       return focus;
-    },
+    },{
+
+      anchor: function(node){
+        $(node).anchor(this);
+        return this;
+      },
+
+      set: function(key, value){
+        if(typeof key === 'object'){
+          var newValues = key;
+        } else {
+          newValues = {};
+          newValues[key] = value;
+        }
+        for(key in newValues){
+          this[key] = newValues[key];
+        }
+        react.changed(this, js.keys(newValues));
+      },
+
+      del: function(keys){
+        keys = js.isArray(keys) ? keys : [keys];
+        for(var i = 0; i < keys.length; i++){
+          delete this[keys[i]];
+        }
+        react.changed(this, keys);
+      }
+
+    }),
 
     integrate: {
       jQuery: function(){
