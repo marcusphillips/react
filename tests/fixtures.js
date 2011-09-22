@@ -1,18 +1,39 @@
 var makeFixtures = function(){
+
   var addAccessors = function(focus){
+
+    focus.anchor = function(node){
+      $(node).anchor(this);
+      return this;
+    };
+
     focus.set = function(key, value){
-      focus[key] = value;
-      react.changed(focus, key);
+      if(typeof key === 'object'){
+        var newValues = key;
+      } else {
+        newValues = {};
+        newValues[key] = value;
+      }
+      for(key in newValues){
+        focus[key] = newValues[key];
+      }
+      react.changed(focus, js.keys(newValues));
     };
-    focus.del = function(key){
-      delete focus[key];
-      react.changed(focus, key);
+
+    focus.del = function(keys){
+      keys = js.isArray(keys) ? keys : [keys];
+      for(var i = 0; i < keys.length; i++){
+        delete focus[keys[i]];
+      }
+      react.changed(focus, keys);
     };
+
     for(var key in focus){
       if(key !== 'set' && focus[key] && typeof focus[key] === 'object' && !focus[key].set){
         addAccessors(focus[key]);
       }
     }
+
     return focus;
   };
 
@@ -31,6 +52,7 @@ var makeFixtures = function(){
     people: [{
 
       name: 'alice',
+      username: 'alice00',
       isAdmin: true,
       email: 'alice@startup.com',
       pet: {

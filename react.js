@@ -208,6 +208,10 @@
       this.scopes[name] = object;
     },
 
+    reset: function(){
+      this.scopes.length = this.nodes.length = 0;
+    },
+
     // convenience method for setting object values and automatically calling changed on them
     set: function(object, key, value){
       object[key] = value;

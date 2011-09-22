@@ -43,6 +43,8 @@ QUnit.testStart = function(){
 
 QUnit.testDone = function(){
   $('#qunit-fixture')[0].innerHTML = '';
+  $('#qunit-fixture')[0].innerHTML = '';
+  react.reset();
 };
 
 /*
@@ -382,16 +384,8 @@ test('anchored nodes are prepended to scope chains on render', function(){
 });
 
 test('anchored nodes re-render on object change', function(){
-  var object = {foo:1, bar:1};
-  var node1 = $('<div react="contain foo"></div>')[0];
-  var node2 = $('<div react="contain bar"></div>')[0];
-  react.anchor(node1, object);
-  react.update(node1);
-  react.anchor(node2, object);
-  react.update(node2);
-  object.foo = object.bar = 2;
-  react.changed(object);
-  same([node1.innerHTML, node2.innerHTML], ['2','2'], 'anchored nodes were updated when relevant object was changed');
+  alice.anchor($name).anchor($username).set({name: 'alison', username: 'crazygrrl'});
+  same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
 });
 
 test('changing values on an anchored object results in automatic change to the view', function(){
