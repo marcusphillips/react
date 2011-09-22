@@ -771,7 +771,7 @@ function done() {
 		].join('');
 
 	if ( banner ) {
-		banner.className = (config.stats.bad ? "qunit-fail" : "qunit-pass");
+		banner.className = document.body.className = (config.stats.bad ? "qunit-fail" : "qunit-pass");
 	}
 
 	if ( tests ) {

@@ -24,6 +24,7 @@
         <div data-fixture="broken"                     react="nonexistentcommand">orig</div>
         <div data-fixture="containingStringLiteral"    react="contain 'example'">orig</div>
         <div data-fixture="name"                       react="contain name">orig</div>
+        <div data-fixture="popularity"                 react="contain popularity">orig</div>
         <div data-fixture="containingWidget"           react="contain widget">orig</div>
         <div data-fixture="addressDotStreet"           react="contain address.street">orig</div>
         <div data-fixture="withinAddress"              react="within address, contain street">orig</div>
@@ -41,6 +42,10 @@
 
         <div data-fixture="adminEmail"                 react="if isAdmin, attr 'data-email' email" data-email="orig">
           <a data-fixture="adminEmailLink" react="contain email">orig</a>
+        </div>
+
+        <div data-fixture="visitor" react="anchored visitor">
+          <div data-fixture="visitorName" react="contain name">orig</div>
         </div>
 
         <div data-fixture="containerlessLoop" react="for item">
@@ -66,9 +71,17 @@
           <div data-fixture="navItemsContainer">orig</div>
         </ul>
 
-        <ul data-fixture="withinFriends" react="withinEach friend">
+        <ul data-fixture="withinFriends" react="withinEach">
           <li data-fixture="withinFriend" react="attr 'data-name' name" data-name="orig"></li>
           <div data-fixture="withinFriendResults"></div>
+        </ul>
+
+        <ul data-fixture="ticTacToe" react="withinEach">
+          <ul react="withinEach">
+            <li react="attr 'data-symbol' symbol" data-symbol="orig"></li>
+            <div></div>
+          </ul>
+          <div></div>
         </ul>
 
         <div data-fixture="businessStreet"  react="attr 'name' name, within business, within address, contain street"></div>

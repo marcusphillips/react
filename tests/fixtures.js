@@ -22,6 +22,12 @@ var makeFixtures = function(){
 
     shopping: ['cheese', 'eggs', 'milk'],
 
+    ticTacToe: [
+      [{symbol:'x'}, {symbol:'o'}, {symbol:'x'}],
+      [{symbol:'o'}, {symbol:'x'}, {symbol:'o'}],
+      [{symbol:'x'}, {symbol:'o'}, {symbol:'x'}]
+    ],
+
     people: [{
 
       name: 'alice',
@@ -91,6 +97,7 @@ var makeFixtures = function(){
     var person = fixtures.people[i];
     fixtures[person.name] = person;
     person.capsName = function(){ return this.name.toUpperCase(); };
+    person.popularity = function(){ return this.friends.length; }; // must use 'this' keyword
 
     person.friends = [];
     // each fixture person is friends with all lower-indexed people

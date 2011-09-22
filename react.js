@@ -769,6 +769,7 @@
   js.extend(react.commands, {
 
     log: function(){
+      this.ifDirty();
       var inputs = {}, that = this;
       js.map(arguments, function(which, argument){
         inputs[argument] = that.lookup(argument);

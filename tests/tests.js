@@ -71,11 +71,11 @@ test('errors on unknown commands', function(){
 });
 
 test('calling update returns the root', function(){
-  equal(react.update($inert[0], {}), $inert[0], 'same node was returned');
+  ok(react.update($inert[0], {}) === $inert[0], 'same node was returned');
 });
 
 test('calling update with a jQuery object returns the same object', function(){
-  equal($inert.anchor({}), $inert, 'same jQuery object was returned');
+  ok($inert.anchor({}) === $inert, 'same jQuery object was returned');
 });
 
 test('keys can use dot operator', function(){
@@ -112,7 +112,7 @@ test('containing variables', function(){
 });
 
 test('containing node variables', function(){
-  equal($containingWidget.anchor({widget:$inert[0]}).children()[0], $inert[0], 'contain directive inserted a node variable');
+  ok($containingWidget.anchor({widget:$inert[0]}).children()[0] === $inert[0], 'contain directive inserted a node variable');
 });
 
 test('containing react nodes', function(){
@@ -264,7 +264,7 @@ test('originally rendered nodes are preserved on rerender', function(){
   var updatedChildren = $navItems.anchor(['c', 'd']).items();
   for(var i = 0; i < 2; i++){
     ok(originalChildren[i], 'found a dom node in position '+i);
-    equal(originalChildren[i], updatedChildren[i], 'dom node '+i+' was reused');
+    ok(originalChildren[i] === updatedChildren[i], 'dom node '+i+' was reused');
   }
 });
 
@@ -302,32 +302,13 @@ test('looping several times on different sized arrays results in different amoun
 });
 
 test('withinEach implies a within statement on item nodes', function(){
-  var $node = $('\
-    <div react="withinEach">\
-      <div react="contain foo"></div>\
-    <span></span></div>\
-  ');
-  var list = [{foo:'a'}, {foo:'b'}, {foo:'c'}];
-  $node.anchor(list);
-  same($node.items().map(function(){ return $(this).html(); }).join(','), 'a,b,c', 'children took their values from item objects\' foo properties');
-  list[0].foo = 'new a';
-  react.changed(list[0], 'foo');
-  same($node.items().eq(0).html(), 'new a', 'regression test: withinItem directive still applies after change event');
+  same($friends.anchor(charlie.friends).items().map(function(){ return $(this).attr('data-name'); }).join(','), 'alice,bob', 'children took their values from item objects\' foo properties');
+  charlie.friends[0].set('name', 'ann');
+  same($friends.items().eq(0).children().html(), 'ann', 'regression test: withinItem directive still applies after change event');
 });
 
 test('nested withinEachs', function(){
-  var $node = $('\
-    <div react="withinEach">\
-      <div react="withinEach">\
-        <div react="contain foo"></div>\
-      <span></span></div>\
-    <span></span></div>\
-  ');
-  react.update($node[0], [[{foo:'a'}]]);
-  var $outerResultsHolder = $node.children().last();
-  var $innerLoop = $outerResultsHolder.children().first();
-  var $innerResultsHolder = $innerLoop.children().last();
-  same($innerResultsHolder.children().first().html(), 'a', 'doubly nested children took their values from item objects\' foo properties');
+  same($ticTacToe.anchor(ticTacToe).items().first().items().first().attr('data-symbol'), 'x', 'doubly nested children took their values from item objects\' foo properties');
 });
 
 /*
@@ -368,47 +349,20 @@ test('within directive doesn\'t halt updates to the changed loop', function(){
  * function properties
  */
 
-test('functions get evaluated', function(){
-  var node = $('<div react="contain foo"></div>')[0];
-  react.update(node, {
-    foo:function(){
-      return 'bar';
-    }
-  });
-  same(node.innerHTML, 'bar', 'function result was inserted');
-});
-
-test('functions evaluate in correct context', function(){
-  var node = $('<div react="contain foo"></div>')[0];
-  react.update(node, {
-    bar: 'right',
-    foo:function(){
-      return this.bar;
-    }
-  });
-  same(node.innerHTML, 'right', 'function evaluated with the correct this object');
+test('functions get evaluated, with correct context', function(){
+  same($popularity.anchor(charlie).html(), '2', 'function result was inserted, with this keyword resolving correctly');
 });
 
 test('functions bound at loop time evaluate in correct context', function(){
-  $shopping.anchor(['a', function(){return this[0];}]);
-  same($shoppingItems.children().map(function(){ return $(this).html() }).join(','), 'a,a', 'children\'s innerHTML is set to array key\'s contents');
+  same($shopping.anchor(['a', function(){return this[0];}]).items().map(function(){ return $(this).html() }).join(','), 'a,a', 'children\'s innerHTML is set to array key\'s contents');
 });
 
-test('functions can be dot accessed', function(){
-  var node = $('<div react="contain foo.bar"></div>')[0];
-  var didRun = false;
-  var object = {
-    foo: function(){
-      didRun = true;
-      return 'wrong';
-    }
-  };
-  object.foo.bar = function(){
-    return 'right';
-  };
-  react.update(node, object);
-  ok(!didRun, 'namespacing functions are not run');
-  same(node.innerHTML, 'right', 'function result was inserted');
+test('functions can be used as namespaces without running', function(){
+  same($addressDotStreet.anchor({
+    address: js.extend(js.error, {
+      street: 'cornell'
+    })
+  }).html(), 'cornell', 'function result was inserted');
 });
 
 
@@ -419,19 +373,12 @@ test('functions can be dot accessed', function(){
 module('anchor');
 
 test('can name objects', function(){
-  var obj = {};
-
-  react.name('foo', obj);
-  equal(react.scopes.foo, obj, 'react.scopes held the specified object at the specified name');
+  react.name('visitor', alice);
+  ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
 });
 
 test('anchored nodes are prepended to scope chains on render', function(){
-  var outer = $('<div react="anchored obj"></div>')[0];
-  var inner = $('<div react="contain foo"></div>')[0];
-  $(outer).html(inner);
-  react.name('obj', {foo:'bar'});
-  react.update(outer, {});
-  equal($(inner).html(), 'bar', 'inner node had access to outer node\'s anchor object');
+  equal($visitorName.anchor({}).html(), 'alice', 'inner node had access to outer node\'s anchor object');
 });
 
 test('anchored nodes re-render on object change', function(){

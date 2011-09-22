@@ -1,4 +1,5 @@
 --- goals for next version ---
+- add a readiness flag for objects
 - test that integrate.jQuery.items() works, as well as .itemTemplate(). also, error when called on non-looping nodes
 - anchor command also updates
 - contain must be the final directive in the list
