@@ -310,11 +310,11 @@ test('looping several times on different sized arrays results in different amoun
 test('withinEach implies a within statement on item nodes', function(){
   same($friends.anchor(charlie.friends).items().map(function(){ return $(this).attr('data-name'); }).join(','), 'alice,bob', 'children took their values from item objects\' foo properties');
   charlie.friends[0].set('name', 'ann');
-  same($friends.items().eq(0).children().html(), 'ann', 'regression test: withinItem directive still applies after change event');
+  same($friends.item(0).children().html(), 'ann', 'regression test: withinItem directive still applies after change event');
 });
 
 test('nested withinEachs', function(){
-  same($ticTacToe.anchor(ticTacToe).items().first().items().first().attr('data-symbol'), 'x', 'doubly nested children took their values from item objects\' foo properties');
+  same($ticTacToe.anchor(ticTacToe).item(0).item(0).attr('data-symbol'), 'x', 'doubly nested children took their values from item objects\' foo properties');
 });
 
 /*
@@ -423,47 +423,38 @@ test('updating anchored nodes does not revisit all nodes', function(){
  */
 
 test('calling changed on an array updates associated list items', function(){
-  var object = ['foo'];
-  var node = $('\
-    <div react="for which item">\
-      <div class="item" react="contain item"></div>\
-    <span id="container"></span></div>\
-  ')[0];
-  react.update({node: node, scope: object, anchor: true});
-  same($('#container .item', node).first().html(), 'foo', 'item substitution starts out as foo');
-  react.set(object, 0, 'baz');
-  same($('#container .item', node).first().html(), 'baz', 'item substitution got changed');
+  $shopping.anchor(shopping);
+  same($shopping.item(0).html(), 'cheese', 'item substitution starts out as foo');
+  shopping.set(0, 'fruit');
+  same($shopping.item(0).html(), 'fruit', 'item substitution got changed');
 });
 
-test('regression test: index key binding is still available at change response time', function(){
-  var object = [{}, {}];
-  var node = $('<div react="for which item">\
-      <div class="item" react="within item, contain which"></div>\
-  <span id="container"></span></div>')[0];
-  react.update({node: node, scope: object, anchor: true});
-  same($($('#container .item', node)[1]).html(), '1', 'which is available after an update operation');
-  react.set(object, 1, {});
-  same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
+test('index key binding is still available at change response time', function(){
+  // regression test
+  $withinItemContainWhich.anchor(people);
+  same($withinItemContainWhich.item(1).html(), '1', 'which is available after an update operation');
+  people.set(1, {name:'zane'});
+  same($withinItemContainWhich.item(1).html(), '1', 'which is still available after a change response');
 });
 
-test('regression test: a withinEach inside a for will not get duplicate bindings', function(){
+test('a withinEach inside a for will not get duplicate bindings', function(){
+  // regression test
   var object = [[{prop:'a'}, {prop:'b'}]];
-  var node = $('\
+  var $node = $('\
     <div react="for which item">\
-      <div class="item" react="within item, withinEach">\
-        <span class="innerTemplate" react="contain which"></span>\
-        <span class="innerContainer"></span>\
+      <div react="within item, withinEach">\
+        <span react="contain which"></span>\
+        <span></span>\
       </div>\
-    <span id="container"></span></div>\
-  ')[0];
-  react.update({node: node, scope: object, anchor: true});
-  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
+    <span></span></div>\
+  ').anchor(object);
+  same($node.item(0).item(0).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
   react.set(object, 0, [{prop:'c'}, {prop:'d'}]);
   // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
   // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
-  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), '0', 'index substitution is still set to 0');
+  same($node.item(0).item(0).html(), '0', 'index substitution is still set to 0');
   react.set(object, 0, [{which:'foo'}, {which:'bar'}]);
-  same($($('#container .innerContainer .innerTemplate', node)[1]).html(), 'bar', 'index substitution changes to the masking property');
+  same($node.item(0).item(1).html(), 'bar', 'index substitution changes to the masking property');
 });
 
 test('loop items get bound to their indices', function(){

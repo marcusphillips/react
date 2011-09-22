@@ -281,10 +281,13 @@
             return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
           },
           items: function(){
-            return $(this).children().eq(1).children();
+            return this.children().eq(1).children();
+          },
+          item: function(which){
+            return this.items().eq(which);
           },
           itemTemplate: function(){
-            return $(this).children().eq(0);
+            return this.children().eq(0);
           }
         });
       }
