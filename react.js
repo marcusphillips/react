@@ -272,9 +272,17 @@
 
     integrate: {
       jQuery: function(){
-        jQuery.fn.anchor = function(scope){
-          return react.update(this, scope, {anchor: true});
-        };
+        jQuery.fn.extend({
+          anchor: function(scope){
+            return react.update(this, scope, {anchor: true});
+          },
+          items: function(){
+            return $(this).children().eq(1).children();
+          },
+          itemTemplate: function(){
+            return $(this).children().eq(0);
+          }
+        });
       }
     }
 

@@ -1,4 +1,4 @@
-var makeFixtureScopes = function(){
+var makeFixtures = function(){
   var addAccessors = function(focus){
     focus.set = function(key, value){
       focus[key] = value;
@@ -16,11 +16,14 @@ var makeFixtureScopes = function(){
     return focus;
   };
 
-  var scopes = {
+  var fixtures = {
 
     inert: {},
 
-    alice: {
+    shopping: ['cheese', 'eggs', 'milk'],
+
+    people: [{
+
       name: 'alice',
       isAdmin: true,
       email: 'alice@startup.com',
@@ -42,34 +45,39 @@ var makeFixtureScopes = function(){
         name: 'chitty',
         value: '$4000'
       }
-    },
 
-    bob: {
+    },{
+
       name: 'bob',
+      address: {
+        street: 'cherry'
+      },
       alergy: 'wheat',
       pet: {
         alergy: 'chocolate'
       },
       isVerified: true,
       email: 'bob@webmail.com'
-    },
 
-    charlie: {
+    },{
+
       name: 'charlie',
       pet: {
       }
-    },
 
-    david: {
+    },{
+
       name: 'david'
-    },
 
-    ellen: {
+    },{
+
       name: 'ellen'
-    },
 
-    hacker: {
-    },
+    },{
+
+      name: 'hacker'
+
+    }],
 
     navItems: [
       {text:'home'},
@@ -79,11 +87,18 @@ var makeFixtureScopes = function(){
 
   };
 
-  scopes.people = [scopes.alice, scopes.bob, scopes.charlie, scopes.david, scopes.ellen];
-  for(var i = 0; i < scopes.people.length; i++){
-    if(i){ scopes.alice.friends.push(scopes.people[i]); }
-    if(i !== scopes.people.length){ scopes.people[i].neighbor = scopes.people[i+1]; }
+  for(var i = 0; i < fixtures.people.length; i++){
+    var person = fixtures.people[i];
+    fixtures[person.name] = person;
+    person.capsName = function(){ return this.name.toUpperCase(); };
+
+    person.friends = [];
+    // each fixture person is friends with all lower-indexed people
+    for(var whichFriend = 0; whichFriend < i; whichFriend++){
+      person.friends.push(fixtures.people[whichFriend]);
+    }
+    if(fixtures.people[i+1]){ person.neighbor = fixtures.people[i+1]; }
   }
 
-  return addAccessors(scopes);
+  return addAccessors(fixtures);
 }

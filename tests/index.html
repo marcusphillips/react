@@ -48,13 +48,16 @@
           <!-- to prevent debeloper surprise, the missing container tag here is required -->
         </div>
 
+        <div data-fixture="shopping" react="for which item">
+          <div data-fixture="shoppingItem" react="contain item">orig</div><span data-fixture="shoppingItems"></span>
+        </div>
+
         <div data-fixture="friends" react="for which friend">
           <div data-fixture="friendTemplate" react="attr 'data-name' friend.name" data-name="orig">
-            <div data-fixture="friendName" react="contain name">orig</div>
+            <div data-fixture="friendName" react="contain friend.name">orig</div>
           </div>
           <div data-fixture="friendsContainer">orig</div>
         </div>
-
 
         <ul data-fixture="navItems" react="for which item">
           <li data-fixture="navItemTemplate"><!-- tests require this tag not to have a react attribute -->
@@ -63,11 +66,20 @@
           <div data-fixture="navItemsContainer">orig</div>
         </ul>
 
+        <ul data-fixture="withinFriends" react="withinEach friend">
+          <li data-fixture="withinFriend" react="attr 'data-name' name" data-name="orig"></li>
+          <div data-fixture="withinFriendResults"></div>
+        </ul>
+
         <div data-fixture="businessStreet"  react="attr 'name' name, within business, within address, contain street"></div>
 
         <div data-fixture="indexIterator" react="for which item">
           <div data-fixture="indexIteratorTemplate" react="contain which"></div>
         <div data-fixture="indexIteratorResults"></div></div>
+
+        <div data-fixture="addressCard" react="within address">
+          <div data-fixture="street" react="contain street">orig</div>
+        </div>
 
         <!-- gap -->
 

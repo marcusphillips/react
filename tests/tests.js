@@ -21,8 +21,9 @@ var refreshNodes = function(){
   for(var i = 0; i < 5; i++){
     $originalFixtureNodes.clone().find('[data-fixture]').each(function(which, node){
       var key = $(node).attr('data-fixture') + (i ? (i+1).toString() : '');
+      js.errorIf(nodes[key], 'Two fixture nodes have the same name, "'+key+'"');
       $(node).attr('data-fixture', key);
-      nodes['$'+key] = $(node);
+      nodes['$'+key] = window['$'+key] = $(node);
       nodes[key] = node;
     });
   }
@@ -33,7 +34,11 @@ var refreshNodes = function(){
  */
 QUnit.testStart = function(){
   refreshNodes();
-  scopes = makeFixtureScopes();
+  scopes = makeFixtures();
+  // make all scope objects available in the global scope
+  for(var key in scopes){
+    window[key] = scopes[key];
+  }
 };
 
 QUnit.testDone = function(){
@@ -62,30 +67,30 @@ var throws = function(block, description){
 module("basics");
 
 test('errors on unknown commands', function(){
-  throws(function(){ nodes.$broken.anchor({}); }, 'throws at nonexistent command');
+  throws(function(){ $broken.anchor({}); }, 'throws at nonexistent command');
 });
 
 test('calling update returns the root', function(){
-  equal(react.update(nodes.inert, {}), nodes.inert, 'same node was returned');
+  equal(react.update($inert[0], {}), $inert[0], 'same node was returned');
 });
 
 test('calling update with a jQuery object returns the same object', function(){
-  equal(nodes.$inert.anchor({}), nodes.$inert, 'same jQuery object was returned');
+  equal($inert.anchor({}), $inert, 'same jQuery object was returned');
 });
 
 test('keys can use dot operator', function(){
-  equal(nodes.$addressDotStreet.anchor(scopes.alice).html(), 'cornell', 'key resolved while using a dot operator');
+  equal($addressDotStreet.anchor(alice).html(), 'cornell', 'key resolved while using a dot operator');
 });
 
 test('reactive nodes need not be at the top level', function(){
-  nodes.$inert.html(nodes.name).anchor(scopes.alice);
-  equal(nodes.$name.html(), 'alice', 'the child node got the appropriate content');
+  $inert.html($name).anchor(alice);
+  equal($name.html(), 'alice', 'the child node got the appropriate content');
 });
 
 test('rendering to nodes that are nested in others still works, an additional layer deep', function(){
-  nodes.$inert.html(nodes.inert2);
-  nodes.$inert2.html(nodes.name).anchor(scopes.alice);
-  equal(nodes.name.innerHTML, 'alice', 'the child node got the appropriate content');
+  $inert.html($inert2);
+  $inert2.html($name).anchor(alice);
+  equal($name.html(), 'alice', 'the child node got the appropriate content');
 });
 
 /*
@@ -95,25 +100,24 @@ test('rendering to nodes that are nested in others still works, an additional la
 module("contain");
 
 test('containing strings', function(){
-  equal(nodes.$containingStringLiteral.anchor(scopes.inert).html(), 'example', 'contain directive inserted a string');
+  equal($containingStringLiteral.anchor(inert).html(), 'example', 'contain directive inserted a string');
 });
 
 test('containing variables', function(){
-  equal(nodes.$name.anchor(scopes.alice).html(), 'alice', 'contain directive inserted a string variable');
-  scopes.alice.set('name', 'alison');
-  same(nodes.$name.html(), 'alison', 'new name is inserted');
-  scopes.alice.del('name');
-  same(nodes.$name.html(), '', 'deleting a property of an anchored scope causes a rerender');
+  equal($name.anchor(alice).html(), 'alice', 'contain directive inserted a string variable');
+  alice.set('name', 'alison');
+  same($name.html(), 'alison', 'new name is inserted');
+  alice.del('name');
+  same($name.html(), '', 'deleting a property of an anchored scope causes a rerender');
 });
 
 test('containing node variables', function(){
-  react.update(nodes.containingWidget, {widget:nodes.inert});
-  equal(nodes.$containingWidget.children()[0], nodes.inert, 'contain directive inserted a node variable');
+  equal($containingWidget.anchor({widget:$inert[0]}).children()[0], $inert[0], 'contain directive inserted a node variable');
 });
 
 test('containing react nodes', function(){
-  nodes.$containingWidget.anchor({widget:nodes.name, name:'nobody'});
-  equal(nodes.$name.html(), 'orig', 'react directive of contained node was not followed');
+  $containingWidget.anchor({widget:$name[0], name:'nobody'});
+  equal($name.html(), 'orig', 'react directive of contained node was not followed');
 });
 
 
@@ -124,23 +128,19 @@ test('containing react nodes', function(){
 module("attributes");
 
 test('setting string attributes', function(){
-  react.update(nodes.withAttributesFromStrings, scopes.inert);
-  equal(nodes.$withAttributesFromStrings.attr('name'), 'value', 'attribute was written correctly');
+  equal($withAttributesFromStrings.anchor(inert).attr('name'), 'value', 'attribute was written correctly');
 });
 
 test('substituting variables in attribute names', function(){
-  react.update(nodes.withDynamicAttributeName, scopes.alice.car);
-  equal(nodes.$withDynamicAttributeName.attr('chitty'), 'value', 'attribute was written correctly');
+  equal($withDynamicAttributeName.anchor(alice.car).attr('chitty'), 'value', 'attribute was written correctly');
 });
 
 test('substituting variables in attribute names', function(){
-  react.update(nodes.withDynamicAttributeValue, scopes.alice.car);
-  equal(nodes.$withDynamicAttributeValue.attr('name'), '$4000', 'attribute was written correctly');
+  equal($withDynamicAttributeValue.anchor(alice.car).attr('name'), '$4000', 'attribute was written correctly');
 });
 
 test('substituting variables in attribute values', function(){
-  react.update(nodes.mugshot, scopes.alice);
-  equal(nodes.$mugshot.attr('src'), 'example.com', 'attribute was written correctly');
+  equal($mugshot.anchor(alice).attr('src'), 'example.com', 'attribute was written correctly');
 });
 
 /*
@@ -150,51 +150,51 @@ test('substituting variables in attribute values', function(){
 module("conditionals");
 
 test('conditional display', function(){
-  equal(nodes.$adminIcon.anchor(scopes.bob).css('display'), 'none', 'node is hidden when key is false');
-  equal(nodes.$adminIcon.anchor(scopes.alice).css('display') || 'block' /*chrome returns an empty string for default display value*/, 'block', 'node is shown again when key is changed to true');
+  equal($adminIcon.anchor(bob).css('display'), 'none', 'node is hidden when key is false');
+  equal($adminIcon.anchor(alice).css('display') || 'block' /*chrome returns an empty string for default display value*/, 'block', 'node is shown again when key is changed to true');
 });
 
 test('conditional visibility', function(){
-  equal(nodes.$verifiedBadge.anchor(scopes.hacker).css('visibility'), 'hidden', 'node is invisible when key is false');
-  equal(nodes.$verifiedBadge.anchor(scopes.bob).css('visibility'), 'visible', 'node is visible again when key is changed to true');
+  equal($verifiedBadge.anchor(hacker).css('visibility'), 'hidden', 'node is invisible when key is false');
+  equal($verifiedBadge.anchor(bob).css('visibility'), 'visible', 'node is visible again when key is changed to true');
 });
 
 test('conditional classes', function(){
-  var originalClassRemains = function(){ return nodes.$adminIcon.hasClass('icon'); };
-  ok(originalClassRemains() && !nodes.$adminIcon.anchor(scopes.bob).hasClass('active'), 'class was not added when condition is false');
-  ok(originalClassRemains() && nodes.$adminIcon.anchor(scopes.alice).hasClass('active'), 'class was added when condition is true');
-  ok(originalClassRemains() && !nodes.$adminIcon.anchor({}).hasClass('active'), 'class was removed when condition is undefined');
+  var originalClassRemains = function(){ return $adminIcon.hasClass('icon'); };
+  ok(originalClassRemains() && !$adminIcon.anchor(bob).hasClass('active'), 'class was not added when condition is false');
+  ok(originalClassRemains() && $adminIcon.anchor(alice).hasClass('active'), 'class was added when condition is true');
+  ok(originalClassRemains() && !$adminIcon.anchor({}).hasClass('active'), 'class was removed when condition is undefined');
   originalClassRemains();
 });
 
 test('conditionally adding attributes', function(){
-  equal(nodes.$adminIcon.anchor(scopes.alice).attr('data-admin'), 'true', 'attribute was added when condition is true');
-  equal(nodes.$adminIcon.anchor(scopes.hacker).attr('data-admin'), undefined, 'attribute was not added when condition is false');
-  equal(nodes.$adminIcon.anchor(scopes.bob).attr('data-admin'), undefined, 'attribute was not added when condition is undefined');
-  equal(nodes.$adminIcon.anchor(scopes.alice).attr('data-admin'), 'true', 'attribute was re-added when condition is true');
+  equal($adminIcon.anchor(alice).attr('data-admin'), 'true', 'attribute was added when condition is true');
+  equal($adminIcon.anchor(hacker).attr('data-admin'), undefined, 'attribute was not added when condition is false');
+  equal($adminIcon.anchor(bob).attr('data-admin'), undefined, 'attribute was not added when condition is undefined');
+  equal($adminIcon.anchor(alice).attr('data-admin'), 'true', 'attribute was re-added when condition is true');
 });
 
 
 test('conditions can be negated', function(){
-  equal(nodes.$adminIcon.anchor(scopes.bob).attr('data-user'), 'true', 'attribute was added when negated condition is false');
+  equal($adminIcon.anchor(bob).attr('data-user'), 'true', 'attribute was added when negated condition is false');
   ok($('<div react="classIf ! condition \'activated\'"/>').anchor({condition:false}).hasClass('activated'), 'with a space, attribute was added when negated condition is false');
 });
 
 test('if directives turn off recursion in subsequent directives of the same node', function(){
-  equal(nodes.$adminEmail.attr('data-email'), 'orig', 'node starts out with original value');
-  equal(nodes.$adminEmail.anchor(scopes.alice).attr('data-email'), 'alice@startup.com', 'contents get set when condition is true');
-  equal(nodes.$adminEmail.anchor(scopes.bob).attr('data-email'), 'alice@startup.com', 'contents went unchanged when condition is false');
-  scopes.bob.set('isAdmin', true);
-  equal(nodes.$adminEmail.attr('data-email'), 'bob@webmail.com', 'contents changed when property was updated to true');
+  equal($adminEmail.attr('data-email'), 'orig', 'node starts out with original value');
+  equal($adminEmail.anchor(alice).attr('data-email'), 'alice@startup.com', 'contents get set when condition is true');
+  equal($adminEmail.anchor(bob).attr('data-email'), 'alice@startup.com', 'contents went unchanged when condition is false');
+  bob.set('isAdmin', true);
+  equal($adminEmail.attr('data-email'), 'bob@webmail.com', 'contents changed when property was updated to true');
 });
 
 test('if directives turn off recursion in child nodes', function(){
-  react.update(nodes.$adminEmail, scopes.alice);
-  equal(nodes.$adminEmailLink.html(), 'alice@startup.com', 'contents get set when condition is true');
-  nodes.$adminEmail.anchor(scopes.bob);
-  equal(nodes.$adminEmailLink.html(), 'alice@startup.com', 'contents went unchanged when condition is false');
-  scopes.bob.set('isAdmin', true);
-  equal(nodes.$adminEmailLink.html(), 'bob@webmail.com', 'contents changed when property was updated to true');
+  react.update($adminEmail, alice);
+  equal($adminEmailLink.html(), 'alice@startup.com', 'contents get set when condition is true');
+  $adminEmail.anchor(bob);
+  equal($adminEmailLink.html(), 'alice@startup.com', 'contents went unchanged when condition is false');
+  bob.set('isAdmin', true);
+  equal($adminEmailLink.html(), 'bob@webmail.com', 'contents changed when property was updated to true');
 });
 
 
@@ -204,70 +204,50 @@ test('if directives turn off recursion in child nodes', function(){
 
 module("within");
 
-test('works with a missing key alias', function(){/*...*/});
-
 test('requires at least an item template node and a contents node inside the loop node', function(){
-  throws(function(){ nodes.$containerlessLoop.anchor([]); }, 'omitting second loop child is not allowed');
+  throws(function(){ $containerlessLoop.anchor([]); }, 'omitting second loop child is not allowed');
 });
 
 test('template node is not visible after render', function(){
-  $('#qunit-fixture').html(nodes.friends);
-  ok(nodes.$friendTemplate.is(':visible'), 'template started out visible');
-  nodes.$friends.anchor(scopes.alice.friends);
-  ok(nodes.$friendTemplate.is(':not(:visible)'), 'template was no longer visible');
+  $('#qunit-fixture').html($friends);
+  ok($friends.itemTemplate().is(':visible'), 'template started out visible');
+  ok($friends.anchor(charlie.friends).itemTemplate().is(':not(:visible)'), 'template was no longer visible');
 });
 
 test('can loop across values in an array', function(){
-  react.update(nodes.friends, scopes.alice.friends);
-  equal(nodes.$friendsContainer.children().length, 4, 'results container node contains three child elements');
-  same(nodes.$friendsContainer.children().map(function(){return $(this).attr('data-name');}).join(','), 'bob,charlie,david,ellen', 'children\'s innerHTML is set to array items\' contents');
+  equal($friends.anchor(charlie.friends).items().length, 2, 'results container node contains appropriate number of child elements');
+  same($friends.items().map(function(){return $(this).attr('data-name');}).join(','), 'alice,bob', 'children\'s innerHTML is set to array items\' contents');
 });
 
 test('does not operate on loop item template node', function(){
-  nodes.$friends.anchor(scopes.alice.friends);
-  equal(nodes.$friendTemplate.attr('data-name'), 'orig', 'item template was unchanged');
+  equal($friends.anchor(charlie.friends).itemTemplate().attr('data-name'), 'orig', 'item template was unchanged');
 });
 
 test('does not operate on descendants of loop item template node', function(){
-  nodes.$friends.anchor(scopes.alice.friends);
-  equal(nodes.$friendName.html(), 'orig', 'item template was unchanged');
+  $friends.anchor(charlie.friends);
+  equal($friendName.html(), 'orig', 'item template was unchanged');
 });
 
 test('does not operate on descendants of loop item template node, even when loop item template has no react attribute', function(){
-  nodes.$navItems.anchor(scopes.navItems);
-  same(nodes.$navItemText.html(), 'orig', 'the contained node\'s directives were ignored');
+  $navItems.anchor(navItems);
+  same($navItemText.html(), 'orig', 'the contained node\'s directives were ignored');
 });
 
 test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
-  nodes.$businessStreet.anchor(scopes.alice);
-  same(nodes.$businessStreet.attr('name'), 'alice', 'attr came from outer prop');
-  same(nodes.$businessStreet.html(), 'main', 'contents came from inner prop');
-  scopes.alice.name = 'alison';
-  scopes.alice.business.set('address', {street:'huffington'});
-  same(nodes.$businessStreet.attr('name'), 'alice', 'attr was not changed');
-  same(nodes.$businessStreet.html(), 'huffington', 'contents got updated');
+  $businessStreet.anchor(alice);
+  same($businessStreet.attr('name'), 'alice', 'attr came from outer prop');
+  same($businessStreet.html(), 'main', 'contents came from inner prop');
+  alice.name = 'alison';
+  alice.business.set('address', {street:'huffington'});
+  same($businessStreet.attr('name'), 'alice', 'attr was not changed');
+  same($businessStreet.html(), 'huffington', 'contents got updated');
 });
 
 test('can loop across keys in an array', function(){
-  nodes.$indexIterator.anchor(scopes.alice.friends);
-  same(nodes.$indexIteratorResults.children().map(function(){return this.innerHTML;}).join(','), '0,1,2,3', 'children\'s innerHTML is set to array key\'s contents');
+  same($indexIterator.anchor(charlie.friends).items().map(function(){return this.innerHTML;}).join(','), '0,1', 'children\'s innerHTML is set to array key\'s contents');
 });
 
-test('functions bound at loop time evaluate in correct context', function(){
-  var node = $('\
-    <div react="for which item">\
-      <div react="contain item"></div>\
-    <div></div></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
-  react.update(node, ['a', function(){return this[2];}, 'b']);
-  same([
-    $($(resultsHolder).children()[0]).html(),
-    $($(resultsHolder).children()[1]).html(),
-    $($(resultsHolder).children()[2]).html()
-  ], ['a','b','b'], 'children\'s innerHTML is set to array key\'s contents');
-});
-
+// doesnt need refactor, being replaced
 test('results are put in second dom node', function(){
   var node = $('<div react="for which item">\
     <div react="contain item"></div>\
@@ -280,46 +260,29 @@ test('results are put in second dom node', function(){
 });
 
 test('originally rendered nodes are preserved on rerender', function(){
-  var node = $('\
-    <div react="for which item">\
-      <div react="contain item"></div>\
-    <span></span></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
-  react.update(node, ['a', 'b', 'c']);
-  var originalChildren = $(resultsHolder).children();
-  react.update(node, ['d', 'e', 'f']);
-  var updatedChildren = $(resultsHolder).children();
-  for(var i = 0; i < 3; i++){
+  var originalChildren = $navItems.anchor(['a', 'b']).items();
+  var updatedChildren = $navItems.anchor(['c', 'd']).items();
+  for(var i = 0; i < 2; i++){
+    ok(originalChildren[i], 'found a dom node in position '+i);
     equal(originalChildren[i], updatedChildren[i], 'dom node '+i+' was reused');
   }
 });
 
 test('loops can be changed()', function(){
-  var node = $('<div react="for which item">\
-    <div react="contain item"></div>\
-  <span class="resultsHolder"></span></div>')[0];
-
-  var testItems = function(node, data){
-    var resultsHolder = $(node).children()[1];
-    var children =  $(resultsHolder).children();
-    for(var i = 0; i < data.length; i++){
-      equal($(children[i]).html(), data[i], 'dom node '+i+' contains expected value');
-    }
-    equal(children.length, data.length, 'list item length is the same as dom node count');
+  var testItems = function(){
+    equal($shopping.anchor(shopping).items().map(function(){ return $(this).html(); }).join(','), shopping.join(','), 'dom nodes contain expected value');
+    equal($shopping.items().length, shopping.length, 'list item length is the same as dom node count');
   };
 
-  var data = ['a', 'b'];
-  react.anchor( node, data );
-  react.update( node );
-  testItems(node, data);
-  data.push('c');
-  react.changed(data);
-  testItems(node, data);
-  data.pop();
-  data.pop();
-  react.changed(data);
-  testItems(node, data);
+  $shopping.anchor(shopping);
+  testItems();
+  shopping.push('coffee');
+  react.changed(shopping);
+  testItems();
+  shopping.pop();
+  shopping.pop();
+  react.changed(shopping);
+  testItems();
 });
 
 
@@ -330,37 +293,26 @@ test('loops can be changed()', function(){
 module("withinEach");
 
 test('looping several times on different sized arrays results in different amounts of result contents nodes', function(){
-  var node = $('\
-    <div react="withinEach">\
-      <div react="contain foo"></div>\
-    <span></span></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
-  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}]);
-  same($(resultsHolder).children().length, 3, '3 children for inital render');
-  react.update(node, [{foo:'a'}, {foo:'b'}]);
-  same($(resultsHolder).children().length, 2, '2 children for inital render');
-  react.update(node, [{foo:'a'}, {foo:'b'}, {foo:'c'}, {foo:'d'}]);
-  same($(resultsHolder).children().length, 4, '4 children for inital render');
+  same([alice.friends.length, bob.friends.length, charlie.friends.length, david.friends.length, ellen.friends.length], [0,1,2,3,4]);
+  same($withinFriends.anchor(bob.friends).items().length, 1, '2 children for inital render');
+  same($withinFriends.anchor(david.friends).items().length, 3, '3 children for inital render');
+  same($withinFriends.anchor(charlie.friends).items().length, 2, '2 children for inital render');
+  same($withinFriends.anchor(alice.friends).items().length, 0, '2 children for inital render');
+  same($withinFriends.anchor(ellen.friends).items().length, 4, '4 children for inital render');
 });
 
 test('withinEach implies a within statement on item nodes', function(){
-  var node = $('\
+  var $node = $('\
     <div react="withinEach">\
       <div react="contain foo"></div>\
     <span></span></div>\
-  ')[0];
-  var resultsHolder = $(node).children()[1];
+  ');
   var list = [{foo:'a'}, {foo:'b'}, {foo:'c'}];
-  react.update({node:node, scope:list, anchor:true});
-  same([
-    $($(resultsHolder).children()[0]).html(),
-    $($(resultsHolder).children()[1]).html(),
-    $($(resultsHolder).children()[2]).html()
-  ], ['a','b','c'], 'children took their values from item objects\' foo properties');
+  $node.anchor(list);
+  same($node.items().map(function(){ return $(this).html(); }).join(','), 'a,b,c', 'children took their values from item objects\' foo properties');
   list[0].foo = 'new a';
   react.changed(list[0], 'foo');
-  same($($(resultsHolder).children()[0]).html(), 'new a', 'regression test: withinItem directive still applies after change event');
+  same($node.items().eq(0).html(), 'new a', 'regression test: withinItem directive still applies after change event');
 });
 
 test('nested withinEachs', function(){
@@ -385,25 +337,30 @@ test('nested withinEachs', function(){
 module("within");
 
 test('scope can be shifted within a property', function(){
-  equal(nodes.$petAlergy.anchor(scopes.bob).html(), 'chocolate', 'content was correct from within a subobject');
-  equal(nodes.$petAlergy.anchor(scopes.alice).html(), '', 'key did not fall through when local key is in object, but undefined');
-  equal(nodes.$petAlergy.anchor(scopes.charlie).html(), '', 'key fell through fell through to next higher scope when local key is missing');
+  ok( bob.pet.alergy === 'chocolate' &&
+   'alergy' in alice.pet && alice.pet.alergy === undefined &&
+    !('alergy' in charlie.pet)
+  );
+  equal($petAlergy.anchor(alice).html(), '', 'key did not fall through when local key is in object, but undefined');
+  equal($petAlergy.anchor(bob).html()  , 'chocolate', 'content was correct from within a subobject');
+  equal($petAlergy.anchor(charlie).html(), '', 'key fell through fell through to next higher scope when local key is missing');
 });
 
 test('within directive works well with changed method', function(){
-  same(nodes.$withinAddress.anchor(scopes.alice).html(), 'cornell', 'street gets set');
-  scopes.alice.set('street', 'promenade');
-  same(nodes.$withinAddress.html(), 'cornell', 'address stays the same because it\'s looking at .address.street, not on .street');
-  scopes.alice.address.set('street', 'ashbury');
-  same(nodes.$withinAddress.html(), 'ashbury', 'when address\'s street changes, the output changes');
+  $addressCard.anchor(alice);
+  same($street.html(), 'cornell', 'street gets set');
+  alice.set('street', 'promenade');
+  same($street.html(), 'cornell', 'address stays the same because it\'s looking at .address.street, not on .street');
+  alice.address.set('street', 'ashbury');
+  same($street.html(), 'ashbury', 'when address\'s street changes, the output changes');
 });
 
 test('within directive doesn\'t halt updates to the changed loop', function(){
   // regression test: https://github.com/marcusphillips/react/issues/3
-  nodes.$multipleWithins.anchor(scopes.alice);
-  $(scopes.alice.address.set('street', 'ashbury'));
-  same(nodes.$firstDescendant.html(), 'ashbury', 'first descendant gets set');
-  same(nodes.$secondDescendant.html(), 'ashbury', 'second descendant gets set');
+  $multipleWithins.anchor(alice);
+  $(alice.address.set('street', 'ashbury'));
+  same($firstDescendant.html(), 'ashbury', 'first descendant gets set');
+  same($secondDescendant.html(), 'ashbury', 'second descendant gets set');
 });
 
 
@@ -432,6 +389,11 @@ test('functions evaluate in correct context', function(){
   same(node.innerHTML, 'right', 'function evaluated with the correct this object');
 });
 
+test('functions bound at loop time evaluate in correct context', function(){
+  $shopping.anchor(['a', function(){return this[0];}]);
+  same($shoppingItems.children().map(function(){ return $(this).html() }).join(','), 'a,a', 'children\'s innerHTML is set to array key\'s contents');
+});
+
 test('functions can be dot accessed', function(){
   var node = $('<div react="contain foo.bar"></div>')[0];
   var didRun = false;
@@ -458,6 +420,7 @@ module('anchor');
 
 test('can name objects', function(){
   var obj = {};
+
   react.name('foo', obj);
   equal(react.scopes.foo, obj, 'react.scopes held the specified object at the specified name');
 });
@@ -470,8 +433,6 @@ test('anchored nodes are prepended to scope chains on render', function(){
   react.update(outer, {});
   equal($(inner).html(), 'bar', 'inner node had access to outer node\'s anchor object');
 });
-
-// todo: test support for anchoring to whole scope chains
 
 test('anchored nodes re-render on object change', function(){
   var object = {foo:1, bar:1};
@@ -547,10 +508,6 @@ test('regression test: index key binding is still available at change response t
   same($($('#container .item', node)[1]).html(), '1', 'which is still available after a change response');
 });
 
-test('', function(){
-// todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)
-});
-
 test('regression test: a withinEach inside a for will not get duplicate bindings', function(){
   var object = [[{prop:'a'}, {prop:'b'}]];
   var node = $('\
@@ -571,44 +528,6 @@ test('regression test: a withinEach inside a for will not get duplicate bindings
   same($($('#container .innerContainer .innerTemplate', node)[1]).html(), 'bar', 'index substitution changes to the masking property');
 });
 
-test('when a list item is removed, associated loop item nodes disappear', function(){
-/* todo
-  var object = ['a', 'b'];
-  var node = $('\
-    <div react="for which item">\
-      <span class="item" react="contain item"></span>\
-    <span id="container"></span></div>\
-  ')[0];
-  react.update({node: node, scope: object, anchor: true});
-  same($($('#container .item', node)[1]).html(), 'b', 'second item got set');
-  object.slice(0,1);
-  react.changed(object, 1);
-  // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
-  // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
-  same($('#container .item', node).length, 1, 'redundant node got deleted');
-*/
-});
-
-test('increasing the length property of a list appends extra nodes', function(){
-});
-
-test('reducing the length property of a list deletes extra nodes', function(){
-
-});
-
-test('lookups to loop items don\'t fall through past the top scope if that item holds undefined', function(){
-  // not yet tested
-});
-
-test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){
-//  ok(false, 'not yet written');
-});
-
-test('recomputes all subnodes when changing the value stored at some index of an observed array that was looped over', function(){
-//  ok(false, 'not yet written');
-});
-
-///*
 test('loop items get bound to their indices', function(){
   var object = ['a', 'b'];
   var node = $('\
@@ -741,42 +660,20 @@ test('updating anchored nodes does not revisit all nodes', function(){
   same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
 });
 
-test('changing object strucutre invalidates change propogation to the view', function(){
-  var object = {
-    foo: {
-      bar: 1
-    }
-  };
-  var node = $('<div react="within foo">\
-    <div react="contain bar"></div>\
-  </div>')[0];
-  react.update({node: node, scope: object, anchor: true});
-  var foo = object.foo;
-  object.foo = { bar: 'wrong' };
-  react.set(foo, 'bar', 'alsowrong');
-  same($(node).children().first().html(), '1', 'the property linked to the replaced object was not re-rendered');
-  object.foo = foo;
-  react.set(foo, 'bar', 'right');
-  same($(node).children().first().html(), 'right', 'the property linked to the replaced object was re-rendered after the object was put back');
-});
-
-test('changing dom strucutre invalidates change propogation to the view', function(){
-  var object = {
-    foo: {
-      bar: 1
-    }
-  };
-  var node = $('<div react="within foo">\
-    <div react="contain bar"></div>\
-  </div>')[0];
-  var $child = $(node).children();
-  react.update({node: node, scope: object, anchor: true});
-  $(node).html('');
-  react.set(object.foo, 'bar', 2);
-  same($child.html(), '1', 'the property linked to the replaced object was not re-rendered');
-  $(node).html($child);
-  react.set(object.foo, 'bar', 3);
-  same($child.html(), '3', 'the property linked to the replaced object was re-rendered after the object was put back');
+test('changing dom or object strucutre invalidates change propogation to the view', function(){
+  $addressCard.anchor(alice).html('');
+  alice.address.set('street', 'oak');
+  same($street.html(), 'cornell', 'the property linked to the replaced object was not re-rendered');
+  $addressCard.html($street);
+  alice.address.set('street', 'ashbury');
+  same($street.html(), 'ashbury', 'the property linked to the replaced object was re-rendered after the object was put back');
+  var oldAddress = alice.address;
+  alice.address = bob.address;
+  oldAddress.set('street', 'irrelevant');
+  same($street.html(), 'ashbury', 'the property linked to the replaced object was not re-rendered');
+  alice.address = oldAddress;
+  alice.address.set('street', '5th');
+  same($street.html(), '5th', 'the property linked to the replaced object was re-rendered after the object was put back');
 });
 
 
@@ -787,12 +684,12 @@ test('changing dom strucutre invalidates change propogation to the view', functi
 
 test('regression test - values at various depths are correctly bound and updated when dot syntax was used', function(){
   // https://github.com/marcusphillips/react/issues/2
-  nodes.$neighborsPoints.anchor(scopes.alice);
-  scopes.alice.set('points', 1);
-  scopes.alice.neighbor.set('points', 10);
-  scopes.alice.neighbor.neighbor.set('points', 100);
-  scopes.alice.neighbor.neighbor.neighbor.set('points', 1000);
-  same(nodes.$neighborsPoints.children().map(function(){return $(this).html();}).join(','), '1,10,100,1000', 'correct values set at all levels');
+  $neighborsPoints.anchor(alice);
+  alice.set('points', 1);
+  alice.neighbor.set('points', 10);
+  alice.neighbor.neighbor.set('points', 100);
+  alice.neighbor.neighbor.neighbor.set('points', 1000);
+  same($neighborsPoints.children().map(function(){return $(this).html();}).join(','), '1,10,100,1000', 'correct values set at all levels');
 });
 
 }());
