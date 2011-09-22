@@ -400,13 +400,11 @@ test('changing values on an anchored object results in automatic change to the v
 });
 
 test('calling changed on anchored objects doesn\'t re-render properties on anchored nodes that are listening to other scopes', function(){
-  var o1 = {foo:true}, o2 = {bar:true};
-  var node = $('<div react="classIf foo \'foo\', classIf bar \'bar\'"></div>')[0];
-  react.update({node: node, scopes: [o1,o2], anchor: true});
-  same([$(node).hasClass('foo'), $(node).hasClass('bar')], [true, true], 'anchored nodes were initialized correctly');
-  o1.foo = o2.bar = false;
-  react.changed(o1);
-  same([$(node).hasClass('foo'), $(node).hasClass('bar')], [false, true], 'anchored nodes were updated when relevant object was changed, but not for properties on objects not notified of change');
+  $post.anchor(alice, posts.havingFun);
+  same([$post.hasClass('adminPost'), $post.hasClass('published')], [true, true], 'anchored nodes was initialized correctly');
+  posts.havingFun.isPublished = false;
+  alice.set('isAdmin', false);
+  same([$post.hasClass('adminPost'), $post.hasClass('published')], [false, true], 'anchored node was updated when relevant object was changed, but not for properties on objects not notified of change');
 });
 
 test('updating anchored nodes does not revisit all nodes', function(){

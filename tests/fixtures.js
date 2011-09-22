@@ -49,6 +49,12 @@ var makeFixtures = function(){
       [{symbol:'x'}, {symbol:'o'}, {symbol:'x'}]
     ],
 
+    posts: {
+      havingFun: {
+        isPublished: true
+      }
+    },
+
     people: [{
 
       name: 'alice',
@@ -100,7 +106,7 @@ var makeFixtures = function(){
 
     },{
 
-      name: 'ellen'
+      name: 'ellen',
 
     },{
 
