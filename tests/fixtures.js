@@ -61,6 +61,7 @@ var makeFixtures = function(){
       username: 'alice00',
       title: 'ms',
       isAdmin: true,
+      isVerified: true,
       email: 'alice@startup.com',
       pet: {
         alergy: undefined

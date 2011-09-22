@@ -41,7 +41,7 @@
                                                               " class="icon">orig</div>
         <div data-fixture="verifiedBadge"              react="visIf isVerified">orig</div>
 
-        <div data-fixture="post" react="classIf isAdmin 'adminPost', classIf isPublished 'published'"></div>
+        <div data-fixture="post" react="classIf isAdmin 'adminPost', classIf isVerified 'verifiedPost', classIf isPublished 'published'"></div>
 
         <div data-fixture="adminEmail"                 react="if isAdmin, attr 'data-email' email" data-email="orig">
           <a data-fixture="adminEmailLink" react="contain email">orig</a>
