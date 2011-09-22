@@ -166,7 +166,11 @@ test('conditional classes', function(){
   ok(originalClassRemains() && !$adminIcon.anchor(bob).hasClass('active'), 'class was not added when condition is false');
   ok(originalClassRemains() && $adminIcon.anchor(alice).hasClass('active'), 'class was added when condition is true');
   ok(originalClassRemains() && !$adminIcon.anchor({}).hasClass('active'), 'class was removed when condition is undefined');
-  originalClassRemains();
+  ok(originalClassRemains());
+});
+
+test('no non-string classes', function(){
+  ok(!$('<div react="classIf \'true\' number"></div>').anchor({number:5}).hasClass('5'), 'numeric class gets ignored');
 });
 
 test('conditionally adding attributes', function(){
@@ -388,14 +392,11 @@ test('anchored nodes re-render on object change', function(){
   same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
 });
 
-test('changing values on an anchored object results in automatic change to the view', function(){
-  var object = {foo:'bar'};
-  var node = $('<div react="classIf foo foo"></div>')[0];
-  react.update({node: node, scope: object, anchor: true});
-  ok($(node).hasClass('bar'), 'node got correct first class');
-  react.set(object, 'foo', 'baz');
-  ok(!$(node).hasClass('foo'), 'node does not have first class anymore');
-  ok($(node).hasClass('baz'), 'node got correct second class');
+test('changing values on an anchored object results in automatic change to the view for class properties', function(){
+  ok($name.anchor(alice).hasClass('ms'), 'node got correct first class');
+  alice.set('title', 'mrs');
+  ok(!$name.hasClass('ms'), 'node does not have first class anymore');
+  ok($name.hasClass('mrs'), 'node got correct second class');
 });
 
 test('calling changed on anchored objects doesn\'t re-render properties on anchored nodes that are listening to other scopes', function(){

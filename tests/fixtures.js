@@ -53,6 +53,7 @@ var makeFixtures = function(){
 
       name: 'alice',
       username: 'alice00',
+      title: 'ms',
       isAdmin: true,
       email: 'alice@startup.com',
       pet: {

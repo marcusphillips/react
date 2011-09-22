@@ -15,6 +15,7 @@
 - no loop items container node (all results get appended after template node)
 - must declare a node as a react widget
 - deprecate .set()
+- a 'class' directive
 
 - data-bound="rootScope"
 
@@ -52,6 +53,7 @@
 - make all observers write to a single string in some serialization format
 
 --- bugs ---
+- classIf is probably cumulative. the second time a class is added, the old one will not be cleaned up
 - if you pass scope objects into update(), and the target node is anchored, even the (unanchored) input objects get observers set up
 - negation breaks for dot access
 

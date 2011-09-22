@@ -277,8 +277,8 @@
     integrate: {
       jQuery: function(){
         jQuery.fn.extend({
-          anchor: function(scope){
-            return react.update(this, scope, {anchor: true});
+          anchor: function(){
+            return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
           },
           items: function(){
             return $(this).children().eq(1).children();
@@ -778,7 +778,17 @@
       js.map(arguments, function(which, argument){
         inputs[argument] = that.lookup(argument);
       });
-      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:inputs})
+      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:inputs});
+    },
+
+    debug: function(command){
+      debugger;
+      this[command].apply(this, Array.prototype.slice.call(arguments, 1));
+    },
+
+    debugIf: function(condition, command){
+      if(this.lookup(condition)){ debugger; }
+      this[command].apply(this, Array.prototype.slice.call(arguments, 2));
     },
 
     before: function(){
@@ -955,19 +965,20 @@
       this.ifDirty(function(){
         this.node.classIfs = this.node.classIfs || {};
         var condition = this.lookup(conditionKey);
-        var className;
         var persistence = conditionKey + ' ' + nameKey;
-        if(condition){
-          className = this.lookup(nameKey);
-          if(className){
+        var className = this.lookup(nameKey);
+
+        if(this.node.classIfs[persistence] && (!condition || this.node.classIfs[persistence] !== className)){
+          $(this.node).removeClass(this.node.classIfs[persistence]);
+          delete this.node.classIfs[persistence];
+        }
+
+        if(typeof className === 'string'){
+          if(condition){
             $(this.node).addClass(className);
             this.node.classIfs[persistence] = className;
-          }
-        } else {
-          className = this.node.classIfs[persistence] || this.lookup(nameKey);
-          if(className){
+          } else {
             $(this.node).removeClass(className);
-            delete this.node.classIfs[persistence];
           }
         }
       });
