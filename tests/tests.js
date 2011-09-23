@@ -307,12 +307,6 @@ test('looping several times on different sized arrays results in different amoun
   same($withinFriends.anchor(ellen.friends).items().length, 4, '4 children for inital render');
 });
 
-test('withinEach implies a within statement on item nodes', function(){
-  same($friends.anchor(charlie.friends).items().map(function(){ return $(this).attr('data-name'); }).join(','), 'alice,bob', 'children took their values from item objects\' foo properties');
-  charlie.friends[0].set('name', 'ann');
-  same($friends.item(0).children().html(), 'ann', 'regression test: withinItem directive still applies after change event');
-});
-
 test('nested withinEachs', function(){
   same($ticTacToe.anchor(ticTacToe).item(0).item(0).attr('data-symbol'), 'x', 'doubly nested children took their values from item objects\' foo properties');
 });
@@ -340,14 +334,6 @@ test('within directive works well with changed method', function(){
   same($street.html(), 'cornell', 'address stays the same because it\'s looking at .address.street, not on .street');
   alice.address.set('street', 'ashbury');
   same($street.html(), 'ashbury', 'when address\'s street changes, the output changes');
-});
-
-test('within directive doesn\'t halt updates to the changed loop', function(){
-  // regression test: https://github.com/marcusphillips/react/issues/3
-  $multipleWithins.anchor(alice);
-  $(alice.address.set('street', 'ashbury'));
-  same($firstDescendant.html(), 'ashbury', 'first descendant gets set');
-  same($secondDescendant.html(), 'ashbury', 'second descendant gets set');
 });
 
 
@@ -427,14 +413,6 @@ test('calling changed on an array updates associated list items', function(){
   same($shopping.item(0).html(), 'cheese', 'item substitution starts out as foo');
   shopping.set(0, 'fruit');
   same($shopping.item(0).html(), 'fruit', 'item substitution got changed');
-});
-
-test('index key binding is still available at change response time', function(){
-  // regression test
-  $withinItemContainWhich.anchor(people);
-  same($withinItemContainWhich.item(1).html(), '1', 'which is available after an update operation');
-  people.set(1, {name:'zane'});
-  same($withinItemContainWhich.item(1).html(), '1', 'which is still available after a change response');
 });
 
 test('loop items get bound to their indices', function(){
@@ -591,17 +569,6 @@ test('changing dom or object strucutre invalidates change propogation to the vie
  *
  */
 
-test('regression test - values at various depths are correctly bound and updated when dot syntax was used', function(){
-  // https://github.com/marcusphillips/react/issues/2
-  $neighborsPoints.anchor(alice);
-  alice.set('points', 1);
-  alice.neighbor.set('points', 10);
-  alice.neighbor.neighbor.set('points', 100);
-  alice.neighbor.neighbor.neighbor.set('points', 1000);
-  same($neighborsPoints.children().map(function(){return $(this).html();}).join(','), '1,10,100,1000', 'correct values set at all levels');
-});
-
-
 /*
  * regression tests
  */
@@ -610,7 +577,7 @@ test('a withinEach inside a for will not get duplicate bindings', function(){
   // regression test
   var matrix = [[]];
   react.set(matrix, 0, [{}, {}]);
-  var $node = $('\
+  var $forContainingWithinEach = $('\
     <div react="for which item">\
       <div react="within item, withinEach">\
         <span react="contain which"></span>\
@@ -618,13 +585,70 @@ test('a withinEach inside a for will not get duplicate bindings', function(){
       </div>\
     <span></span></div>\
   ').anchor(matrix);
-  same($node.item(0).item(0).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
+  same($forContainingWithinEach.item(0).item(0).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
   react.set(matrix, 0, [{}, {}]);
   // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
   // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
-  same($node.item(0).item(0).html(), '0', 'index substitution is still set to 0');
+  same($forContainingWithinEach.item(0).item(0).html(), '0', 'index substitution is still set to 0');
   react.set(matrix, 0, [{}, {which:'bar'}]);
-  same($node.item(0).item(1).html(), 'bar', 'index substitution changes to the masking property');
+  same($forContainingWithinEach.item(0).item(1).html(), 'bar', 'index substitution changes to the masking property');
+});
+
+test('regression test - values at various depths are correctly bound and updated when dot syntax was used', function(){
+  // https://github.com/marcusphillips/react/issues/2
+  var $neighborsPoints = $('\
+    <div>\
+      <div react="contain points">orig</div>\
+      <div react="contain neighbor.points">orig</div>\
+      <div react="contain neighbor.neighbor.points">orig</div>\
+      <div react="contain neighbor.neighbor.neighbor.points">orig</div>\
+    </div>\
+  ');
+
+  $neighborsPoints.anchor(alice);
+  alice.set('points', 1);
+  alice.neighbor.set('points', 10);
+  alice.neighbor.neighbor.set('points', 100);
+  alice.neighbor.neighbor.neighbor.set('points', 1000);
+  same($neighborsPoints.children().map(function(){return $(this).html();}).join(','), '1,10,100,1000', 'correct values set at all levels');
+});
+
+test('index key binding is still available at change response time', function(){
+  // regression test
+  // this node needs to have an operating directive preceeded by 'within item'
+  var $withinItemContainWhich = $('\
+    <div react="for which item">\
+      <div class="item" react="within item, contain which"></div>\
+    <span></span></div>\
+  ').anchor(people);
+  same($withinItemContainWhich.item(1).html(), '1', 'which is available after an update operation');
+  people.set(1, {});
+  same($withinItemContainWhich.item(1).html(), '1', 'which is still available after a change response');
+});
+
+test('within directive doesn\'t halt updates to the changed loop', function(){
+  // regression test: https://github.com/marcusphillips/react/issues/3
+  var $multipleWithins = $('\
+    <div>\
+      <div react="within address">\
+        <div id="firstDescendant" react="contain street">orig</div>\
+      </div>\
+      <div react="within address">\
+        <div id="secondDescendant" react="contain street">orig</div>\
+      </div>\
+    </div>\
+  ');
+  $multipleWithins.anchor(alice);
+  $(alice.address.set('street', 'ashbury'));
+  same($multipleWithins.find('#firstDescendant').html(), 'ashbury', 'first descendant gets set');
+  same($multipleWithins.find('#secondDescendant').html(), 'ashbury', 'second descendant gets set');
+});
+
+test('withinEach implies a within statement on item nodes', function(){
+  // regression test
+  same($friends.anchor(charlie.friends).items().map(function(){ return $(this).attr('data-name'); }).join(','), 'alice,bob', 'children took their values from item objects\' foo properties');
+  charlie.friends[0].set('name', 'ann');
+  same($friends.item(0).children().html(), 'ann', 'withinItem directive still applies after change event');
 });
 
 

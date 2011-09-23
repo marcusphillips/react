@@ -79,10 +79,6 @@
           <div data-fixture="withinFriendResults"></div>
         </ul>
 
-        <div data-fixture="withinItemContainWhich" react="for which item">
-          <div class="item" react="within item, contain which"></div> <!-- this node needs to have an operating directive preceeded by 'within item' -->
-        <span></span></div>
-
         <ul data-fixture="ticTacToe" react="withinEach">
           <ul react="withinEach">
             <li react="attr 'data-symbol' symbol" data-symbol="orig"></li>
@@ -102,22 +98,6 @@
         </div>
 
         <!-- gap -->
-
-        <div data-fixture="neighborsPoints">
-          <div react="contain points">orig</div>
-          <div react="contain neighbor.points">orig</div>
-          <div react="contain neighbor.neighbor.points">orig</div>
-          <div react="contain neighbor.neighbor.neighbor.points">orig</div>
-        </div>
-
-        <div data-fixture="multipleWithins">
-          <div react="within address">
-            <div data-fixture="firstDescendant" react="contain street">orig</div>
-          </div>
-          <div react="within address">
-            <div data-fixture="secondDescendant" react="contain street">orig</div>
-          </div>
-        </div>
 
       </div>
     </div>
