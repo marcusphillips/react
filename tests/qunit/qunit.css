@@ -179,6 +179,7 @@
 #qunit-tests .pass .test-expected           { color: #999999; }
 
 #qunit-banner.qunit-pass                    { background-color: #C6E746; }
+body.qunit-pass                    { background-color: #C6E746; }
 
 /*** Failing Styles */
 
@@ -203,6 +204,7 @@
 #qunit-tests .fail .test-expected           { color: green;   }
 
 #qunit-banner.qunit-fail                    { background-color: #EE5757; }
+body.qunit-fail                    { background-color: #EE5757; }
 
 
 /** Result */

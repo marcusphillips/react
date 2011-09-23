@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 1.2, http://github.com/marcusphillips/react
+ * Version 1.2.1, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
@@ -205,7 +205,11 @@
     name: function(name, object){
       js.errorIf(object.reactKey, 'You tried to name a scope object that already had a name');
       object.reactKey = name;
-      this.scopes[name] = object;
+      return this.scopes[name] = object;
+    },
+
+    reset: function(){
+      this.scopes.length = this.nodes.length = 0;
     },
 
     // convenience method for setting object values and automatically calling changed on them
@@ -228,12 +232,12 @@
           scope: arguments[1]
         }, arguments[2] || {});
       }
+      var nodeInput = options.node;
       if(options.node instanceof jQuery){
-        if(options.node.length !== 1){
-          js.error('you cannot pass a jquery object containing many nodes to react.update()');
-        }
+        js.errorIf(options.node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
         options.node = options.node[0];
       }
+      js.errorIf(!options.node, 'you did not pass a valid node to react.update()');
 
       js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
 
@@ -246,7 +250,7 @@
       var operation = makeOperation();
       operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).contageous();
       operation.run();
-      return options.node;
+      return nodeInput;
     },
 
     anchor: function(options){
@@ -270,11 +274,87 @@
       return options.node;
     },
 
+    helpers: js.extend(function(focus, deeply){
+      js.extend(focus, react.helpers);
+
+      if(deeply){
+        for(var key in focus){
+          if(key !== 'set' && focus[key] && typeof focus[key] === 'object' && !focus[key].set){
+            react.helpers(focus[key], deeply);
+          }
+        }
+      }
+
+      return focus;
+    },{
+
+      anchor: function(node){
+        $(node).anchor(this);
+        return this;
+      },
+
+      set: function(key, value){
+        if(typeof key === 'object'){
+          var newValues = key;
+        } else {
+          newValues = {};
+          newValues[key] = value;
+        }
+        for(key in newValues){
+          this[key] = newValues[key];
+        }
+        react.changed(this, js.keys(newValues));
+      },
+
+      del: function(keys){
+        keys = js.isArray(keys) ? keys : [keys];
+        for(var i = 0; i < keys.length; i++){
+          delete this[keys[i]];
+        }
+        react.changed(this, keys);
+      },
+
+      changed: function(){
+        react.changed(this);
+      }
+
+    }),
+
     integrate: {
       jQuery: function(){
-        jQuery.fn.update = function(scope){
-          react.update(this, scope);
+        var singularize = function(which, method){
+          return function(){
+            js.errorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
+            return method.apply(this, arguments);
+          };
         };
+
+        jQuery.fn.extend(js.map({
+          anchor: function(){
+            if(arguments.length){
+              return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
+            }else{
+              var scopes = this.anchors();
+              js.errorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
+              return scopes[0];
+            }
+          },
+          anchors: function(){
+            return js.map(makeOperation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
+              return react.scopes[scopeName];
+            });
+          },
+          items: function(){
+            return this.children().eq(1).children();
+          },
+          item: function(which){
+            return this.items().eq(which);
+          },
+          itemTemplate: function(){
+            return this.children().eq(0);
+          }
+
+        }, singularize));
       }
     }
 
@@ -761,11 +841,22 @@
   js.extend(react.commands, {
 
     log: function(){
+      this.ifDirty();
       var inputs = {}, that = this;
       js.map(arguments, function(which, argument){
         inputs[argument] = that.lookup(argument);
       });
-      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:inputs})
+      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:inputs});
+    },
+
+    debug: function(command){
+      debugger;
+      this[command].apply(this, Array.prototype.slice.call(arguments, 1));
+    },
+
+    debugIf: function(condition, command){
+      if(this.lookup(condition)){ debugger; }
+      this[command].apply(this, Array.prototype.slice.call(arguments, 2));
     },
 
     before: function(){
@@ -942,19 +1033,20 @@
       this.ifDirty(function(){
         this.node.classIfs = this.node.classIfs || {};
         var condition = this.lookup(conditionKey);
-        var className;
         var persistence = conditionKey + ' ' + nameKey;
-        if(condition){
-          className = this.lookup(nameKey);
-          if(className){
+        var className = this.lookup(nameKey);
+
+        if(this.node.classIfs[persistence] && (!condition || this.node.classIfs[persistence] !== className)){
+          $(this.node).removeClass(this.node.classIfs[persistence]);
+          delete this.node.classIfs[persistence];
+        }
+
+        if(typeof className === 'string'){
+          if(condition){
             $(this.node).addClass(className);
             this.node.classIfs[persistence] = className;
-          }
-        } else {
-          className = this.node.classIfs[persistence] || this.lookup(nameKey);
-          if(className){
+          } else {
             $(this.node).removeClass(className);
-            delete this.node.classIfs[persistence];
           }
         }
       });

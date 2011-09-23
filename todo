@@ -1,17 +1,32 @@
 --- goals for next version ---
+- add a readiness flag for objects
+- test that integrate.jQuery.items() works, as well as .itemTemplate(). also, error when called on non-looping nodes
+- anchor command also updates
+- contain must be the final directive in the list
+- don't allow iterating over strings
+- deprecate ability to see index (- 'for' directive cannot do index binding. "for item" rather than "for which item")
 - don't recurse into widget nodes
 - deprecate the .update() function
 - provide .render() that anchors and associates all listeners
 - when should listeners relink?
+- when a jquery object is passed in, pass it back out
 
 - loop item template must be labeled
 - no loop items container node (all results get appended after template node)
 - must declare a node as a react widget
 - deprecate .set()
+- a 'class' directive
 
 - data-bound="rootScope"
 
 --- random todos ---
+- harden all operations after run() has completed
+- make contain work with jquery objects
+- harden getParent() operations after first call, and ensure complete correctness of all parent data after the first time
+- add monitoring support for run operations
+  - how many nodes were visted
+  - how many directives were processed
+  - if directives were ever re-visted
 - get rid of _conditionalShow(), rely on classes
 - get rid of 'do not recurse'
 - switch from 'pre/postmutate' object to multiple functions
@@ -38,6 +53,7 @@
 - make all observers write to a single string in some serialization format
 
 --- bugs ---
+- classIf is probably cumulative. the second time a class is added, the old one will not be cleaned up
 - if you pass scope objects into update(), and the target node is anchored, even the (unanchored) input objects get observers set up
 - negation breaks for dot access
 
@@ -55,10 +71,19 @@
 - in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
 
 --- improvements ---
+- binding syntax and dynamic partial inclusion, to allow code sharing in templates
+- a 'waiting' flag on objects that delays updates to their corresponding directives until it is cleared
+- make sure iteration works over jquery objects and other array-likes
 - clean up a directive's observers when it gets bound to new properties
 - in pre-lookups, restrict all keys to valid alphanumerics
 - allow a containEach directive?
 - when adding nodes to the 'consider' list, keep a reference to the root that entailed considering them. if it's not among the ancestors, the consideration should be skipped (to mimic recursion)
+- make some timing tests
+
+--- ideas ---
+- jquery selection syntax for finding child directives that reference properties available in the current directive's scope
+- converter for a simpler abstraction language that generates react nodes
+- an in-javascript syntax for defining bound relationships of objects and nodes
 
 --- refactors ---
 - remove .anchorKey from scope chains
@@ -87,8 +112,52 @@
 - verify that responses to change events don't result in new observers
 - can use dot access on bound items
 - updates to items in a list (associated with the key or value of a bindItem) change appropriately. consider listener.check(), which might not have updated unless the fallthrough registration just worked
+// todo: test support for anchoring to whole scope chains
+
+test('increasing the length property of a list appends extra nodes', function(){
+});
+
+test('reducing the length property of a list deletes extra nodes', function(){
+
+});
+
+test('lookups to loop items don\'t fall through past the top scope if that item holds undefined', function(){
+  // not yet tested
+});
+
+test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){
+//  ok(false, 'not yet written');
+});
+
+test('recomputes all subnodes when changing the value stored at some index of an observed array that was looped over', function(){
+//  ok(false, 'not yet written');
+});
+
+test('when a list item is removed, associated loop item nodes disappear', function(){
+/* todo
+  var object = ['a', 'b'];
+  var node = $('\
+    <div react="for which item">\
+      <span class="item" react="contain item"></span>\
+    <span id="container"></span></div>\
+  ')[0];
+  react.update({node: node, scope: object, anchor: true});
+  same($($('#container .item', node)[1]).html(), 'b', 'second item got set');
+  object.slice(0,1);
+  react.changed(object, 1);
+  // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
+  // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
+  same($('#container .item', node).length, 1, 'redundant node got deleted');
+*/
+});
+
+test('', function(){
+// todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)
+});
+
+test('works with a missing key alias', function(){/*...*/});
+
 
 --- asdf ---
-! make observers lazy-register, and only if in mutation mode
 - multiple calls to follow() probably follow over and over
 - directive.getParent() seems to run its while loop no less than twice
