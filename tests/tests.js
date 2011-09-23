@@ -418,46 +418,10 @@ test('loop items get bound to their indices', function(){
 });
 
 test('can anchor in update operation with three arguments', function(){
-  var object = {foo:'bar'};
-  var node = react.update($('<div react="contain foo"></div>')[0], object, {anchor: true});
-  object.foo = 'baz';
+  var node = $name.anchor(alice);
+  alice.name = 'alison';
   react.update(node);
-  same(node.innerHTML, 'baz', 'node got the new value from the anchored object');
-});
-
-test('event handlers don\'t get lost by loop insertion', function(){
-  var wasClicked;
-  var insertion = $('<div></div>').click(function(){
-    wasClicked = true;
-  })[0];
-  var node = react.update($('<div react="for item">\
-    <div react="contain item"></div>\
-    <div></div>\
-  </div>')[0], [insertion]);
-
-  $(insertion).click();
-  ok(wasClicked, 'click was noticed, even though node was inserted by a looping construct');
-});
-
-test('event handlers don\'t get lost by loop item creation', function(){
-  var wasClicked;
-  var insertion = $('<div class="insertion"></div>').click(function(){
-    wasClicked = true;
-  })[0];
-  var insertions = [insertion];
-  var node = react.update($('<div react="for item">\
-    <div react="contain item"></div>\
-    <div></div>\
-  </div>')[0], insertions, {anchor: true});
-
-  $(node).find('.insertion').click();
-  ok(wasClicked, 'click was noticed, even though node was inserted by a looping construct');
-  insertions.push($(insertion).clone()[0]);
-  wasClicked = false;
-
-  react.changed(insertions);
-  $(node).find('.insertion').click();
-  ok(wasClicked, 'click was noticed after list changed and contents of loop results node were updated');
+  same($name.html(), 'alison', 'node got the new value from the anchored object');
 });
 
 test('anchors are not followed for contained nodes of an input node', function(){
@@ -635,6 +599,32 @@ test('event handlers don\'t dissapear on call to changed()', function(){
   same($node.find('#foo').html(), '2', 'foo got updated');
   $subnode.find('#clicker').click();
   same($node.find('#foo').html(), '3', 'foo got updated after changed');
+});
+
+test('event handlers don\'t get lost by loop insertion or creation', function(){
+  // regression test
+  var wasClicked = false;
+
+  var items = react.helpers([
+    $inert.click(function(){ wasClicked = true; })[0]
+  ]);
+
+  $('\
+    <div react="for item">\
+      <div react="contain item"></div>\
+     <div></div>\
+    </div>\
+  ').anchor(items);
+
+  $inert.click();
+  ok(wasClicked, 'click was noticed, even though node was inserted by a looping construct');
+
+  wasClicked = false;
+
+  items.push($inert2[0]);
+  react.changed(items);
+  $inert.click();
+  ok(wasClicked, 'click was noticed after list changed and contents of loop results node were updated');
 });
 
 
