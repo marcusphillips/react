@@ -71,6 +71,7 @@
 - in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
 
 --- improvements ---
+- binding syntax and dynamic partial inclusion, to allow code sharing in templates
 - a 'waiting' flag on objects that delays updates to their corresponding directives until it is cleared
 - make sure iteration works over jquery objects and other array-likes
 - clean up a directive's observers when it gets bound to new properties
