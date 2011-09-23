@@ -416,23 +416,17 @@ test('calling changed on an array updates associated list items', function(){
 });
 
 test('loop items get bound to their indices', function(){
-  var object = ['a', 'b'];
-  var node = $('\
-    <div react="for which item">\
-      <div class="item" react="contain item"></div>\
-    <span id="container"></span></div>\
-  ')[0];
-  react.update({node: node, scope: object, anchor: true});
-  same($($('#container .item', node)[1]).html(), 'b', 'substitution starts out as b');
-  react.set(object, 1, 'bPrime');
-  same($($('#container .item', node)[1]).html(), 'bPrime', 'substitution gets set to b prime');
+  $shopping.anchor(react.helpers(['a', 'b']));
+  same($shopping.item(1).html(), 'b', 'substitution starts out as b');
+  $shopping.anchor().set(1, 'bPrime');
+  same($shopping.item(1).html(), 'bPrime', 'substitution gets set to b prime');
 });
 //*/
 
 test('event handlers don\'t dissapear on call to changed()', function(){
   var subNode = $('<div><div id="clicker">increment</div></div>')[0];
   var object  = {foo:1, 'subNode':subNode};
-  jQuery( '#clicker', subNode).bind('click', function(){
+  $( '#clicker', subNode).bind('click', function(){
     object.foo += 1;
     react.changed(object);
   });
@@ -442,11 +436,11 @@ test('event handlers don\'t dissapear on call to changed()', function(){
     <div react="contain subNode"></div>\
   </div>')[0];
   react.update({node: node, scope: object, anchor: true});
-  same(jQuery( '#foo', node)[0].innerHTML, '1', 'foo got set');
+  same($( '#foo', node)[0].innerHTML, '1', 'foo got set');
   $('#clicker', subNode).trigger( 'click' );
-  same(jQuery( '#foo', node).html(), '2', 'foo got updated');
+  same($( '#foo', node).html(), '2', 'foo got updated');
   $('#clicker', subNode).trigger( 'click' );
-  same(jQuery( '#foo', node).html(), '3', 'foo got updated after changed');
+  same($( '#foo', node).html(), '3', 'foo got updated after changed');
 });
 
 test('can anchor in update operation with three arguments', function(){

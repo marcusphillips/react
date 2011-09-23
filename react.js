@@ -318,9 +318,27 @@
 
     integrate: {
       jQuery: function(){
-        jQuery.fn.extend({
+        var singularize = function(which, method){
+          return function(){
+            js.errorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
+            return method.apply(this, arguments);
+          };
+        };
+
+        jQuery.fn.extend(js.map({
           anchor: function(){
-            return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
+            if(arguments.length){
+              return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
+            }else{
+              var scopes = this.anchors();
+              js.errorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
+              return scopes[0];
+            }
+          },
+          anchors: function(){
+            return js.map(makeOperation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
+              return react.scopes[scopeName];
+            });
           },
           items: function(){
             return this.children().eq(1).children();
@@ -331,7 +349,8 @@
           itemTemplate: function(){
             return this.children().eq(0);
           }
-        });
+
+        }, singularize));
       }
     }
 
