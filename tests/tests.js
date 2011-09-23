@@ -195,7 +195,7 @@ test('if directives turn off recursion in subsequent directives of the same node
 });
 
 test('if directives turn off recursion in child nodes', function(){
-  react.update($adminEmail, alice);
+  $adminEmail.anchor(alice);
   equal($adminEmailLink.html(), 'alice@startup.com', 'contents get set when condition is true');
   $adminEmail.anchor(bob);
   equal($adminEmailLink.html(), 'alice@startup.com', 'contents went unchanged when condition is false');
@@ -418,30 +418,23 @@ test('loop items get bound to their indices', function(){
 });
 
 test('can anchor in update operation with three arguments', function(){
-  var node = $name.anchor(alice);
+  $name.anchor(alice);
   alice.name = 'alison';
-  react.update(node);
-  same($name.html(), 'alison', 'node got the new value from the anchored object');
+  same($name.anchor(alice).html(), 'alison', 'node got the new value from the anchored object');
 });
 
 test('anchors are not followed for contained nodes of an input node', function(){
-  var innerNode = $('<span react="contain foo, attr \'foo\' foo">original</span>')[0];
-  var innerNodeObject = {foo: 'inner anchor property'};
-  react.anchor(innerNode, innerNodeObject);
-  var outerNode = $('<span react="contain innerNode, attr \'foo\' foo"></span>')[0];
-  var outerNodeObject = {innerNode: innerNode, foo:'outer anchor property'};
-  react.anchor(outerNode, outerNodeObject);
-
-  react.update(outerNode);
-  same(innerNode.innerHTML, 'original', 'substitution in contained node did not get updated for update of outer node');
-  react.update(outerNode);
-  same(innerNode.innerHTML, 'original', 'substitution in contained node stil did not get updated for update of outer node, even after having been contained already at update time');
-  react.update(innerNode);
-  same($(innerNode).attr('foo'), 'inner anchor property', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
-  delete innerNodeObject.foo;
-  react.update(innerNode);
-  same(innerNode.innerHTML, '', 'substitution in contained node does not inherit containing scope');
-  same($(innerNode).attr('foo'), 'inner anchor property', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
+  $name.anchor(alice).anchor().name = 'alison';
+  var app = react.helpers({widget: $name, name:'MyApp'});
+  var $outer = $('<span react="contain widget"></span>').anchor(app);
+  same($name.html(), 'alice', 'substitution in contained node did not get updated for update of outer node');
+  app.changed();
+  same($name.html(), 'alice', 'substitution in contained node stil did not get updated for update of outer node, even after having been contained already at update time');
+  alice.changed();
+  same($name.attr('name'), 'alison', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
+  alice.del('name');
+  same($name.html(), '', 'substitution in contained node does not inherit containing scope');
+  same($name.attr('name'), 'alison', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
 });
 
 test('anchored nodes within root get operated on, even if root does not', function(){

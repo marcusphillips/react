@@ -312,6 +312,10 @@
           delete this[keys[i]];
         }
         react.changed(this, keys);
+      },
+
+      changed: function(){
+        react.changed(this);
       }
 
     }),
