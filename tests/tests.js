@@ -598,5 +598,19 @@ test('event handlers don\'t get lost by loop insertion or creation', function(){
   ok(wasClicked, 'click was noticed after list changed and contents of loop results node were updated');
 });
 
+test('templates are not rerendered when inserted in to the dom', function () {
+  // regression test
+  $containingWidget.anchor(react.helpers({}));
+  same($name.anchor(react.helpers({
+    name: function(){
+      didRun = true;
+      return 'henry';
+    }
+  })).html(), 'henry', 'inner node exercised function');
+  var didRun = false;
+
+  $containingWidget.anchor().set('widget', $name);
+  ok(!didRun, "function did not run, so inner node was not visited again");
+});
 
 }());
