@@ -445,31 +445,9 @@ test('anchored nodes within root get operated on, even if root does not', functi
 });
 
 test('unanchored nodes can have properties set with no side effects', function(){
-  var object = {foo:1, bar:1};
-  var node = $('<div>\
-    <div react="contain foo"></div>\
-    <div react="contain bar"></div>\
-  </div>')[0];
-  react.update(node, object);
-  object.bar = 2;
-  react.set(object, 'foo', 2);
-  same($(node).children()[0].innerHTML, '1', 'for unanchored nodes, properties that are set using react.set() are not updated');
-  same($(node).children()[1].innerHTML, '1', 'properties changed manually are alos not rerendered');
-});
-
-test('updating anchored nodes does not revisit all nodes', function(){
-  var object = {foo:1, bar:{
-    baz: 1
-  }};
-  var node = $('<div>\
-    <div react="contain foo"></div>\
-    <div react="within bar">\
-      <div react="contain baz"></div>\
-    </div>\
-  </div>')[0];
-  react.update({node: node, scope: object, anchor: true});
-  react.set(object.bar, 'baz', 2);
-  same($(node).children().last().children().first().html(), '2', 'when properties within properties get changed, their corresponding nodes are changed as well');
+  react.update($name, alice);
+  alice.set('name', 'alison');
+  same($name.html(), 'alice', 'even after notifying react of the change to the object with .set(), property changes do not result in rerenders');
 });
 
 test('changing dom or object strucutre invalidates change propogation to the view', function(){

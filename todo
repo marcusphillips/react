@@ -71,12 +71,18 @@
 - in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
 
 --- improvements ---
+- a 'waiting' flag on objects that delays updates to their corresponding directives until it is cleared
 - make sure iteration works over jquery objects and other array-likes
 - clean up a directive's observers when it gets bound to new properties
 - in pre-lookups, restrict all keys to valid alphanumerics
 - allow a containEach directive?
 - when adding nodes to the 'consider' list, keep a reference to the root that entailed considering them. if it's not among the ancestors, the consideration should be skipped (to mimic recursion)
 - make some timing tests
+
+--- ideas ---
+- jquery selection syntax for finding child directives that reference properties available in the current directive's scope
+- converter for a simpler abstraction language that generates react nodes
+- an in-javascript syntax for defining bound relationships of objects and nodes
 
 --- refactors ---
 - remove .anchorKey from scope chains
