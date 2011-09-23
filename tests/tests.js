@@ -215,14 +215,16 @@ test('requires at least an item template node and a contents node inside the loo
 });
 
 test('template node is not visible after render', function(){
-  $('#qunit-fixture').html($friends);
-  ok($friends.itemTemplate().is(':visible'), 'template started out visible');
+  ok($friends.appendTo('#qunit-fixture').itemTemplate().is(':visible'), 'template started out visible');
   ok($friends.anchor(charlie.friends).itemTemplate().is(':not(:visible)'), 'template was no longer visible');
 });
 
 test('can loop across values in an array', function(){
-  equal($friends.anchor(charlie.friends).items().length, 2, 'results container node contains appropriate number of child elements');
-  same($friends.items().map(function(){return $(this).attr('data-name');}).join(','), 'alice,bob', 'children\'s innerHTML is set to array items\' contents');
+  same($friends.anchor(charlie.friends).items().map(function(){return $(this).attr('data-name');}).join(','), 'alice,bob', 'children\'s innerHTML is set to array items\' contents');
+});
+
+test('can loop across keys in an array', function(){
+  same($indexIterator.anchor(charlie.friends).items().map(function(){return this.innerHTML;}).join(','), '0,1', 'children\'s innerHTML is set to array key\'s contents');
 });
 
 test('does not operate on loop item template node', function(){
@@ -240,17 +242,12 @@ test('does not operate on descendants of loop item template node, even when loop
 });
 
 test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
-  $businessStreet.anchor(alice);
-  same($businessStreet.attr('name'), 'alice', 'attr came from outer prop');
+  same($businessStreet.anchor(alice).attr('name'), 'alice', 'attr came from outer prop');
   same($businessStreet.html(), 'main', 'contents came from inner prop');
   alice.name = 'alison';
   alice.business.set('address', {street:'huffington'});
   same($businessStreet.attr('name'), 'alice', 'attr was not changed');
   same($businessStreet.html(), 'huffington', 'contents got updated');
-});
-
-test('can loop across keys in an array', function(){
-  same($indexIterator.anchor(charlie.friends).items().map(function(){return this.innerHTML;}).join(','), '0,1', 'children\'s innerHTML is set to array key\'s contents');
 });
 
 // doesnt need refactor, being replaced
@@ -300,10 +297,10 @@ module("withinEach");
 
 test('looping several times on different sized arrays results in different amounts of result contents nodes', function(){
   same([alice.friends.length, bob.friends.length, charlie.friends.length, david.friends.length, ellen.friends.length], [0,1,2,3,4]);
-  same($withinFriends.anchor(bob.friends).items().length, 1, '2 children for inital render');
+  same($withinFriends.anchor(bob.friends).items().length, 1, '1 child for inital render');
   same($withinFriends.anchor(david.friends).items().length, 3, '3 children for inital render');
   same($withinFriends.anchor(charlie.friends).items().length, 2, '2 children for inital render');
-  same($withinFriends.anchor(alice.friends).items().length, 0, '2 children for inital render');
+  same($withinFriends.anchor(alice.friends).items().length, 0, '0 children for inital render');
   same($withinFriends.anchor(ellen.friends).items().length, 4, '4 children for inital render');
 });
 
@@ -365,8 +362,7 @@ test('functions can be used as namespaces without running', function(){
 module('anchor');
 
 test('can name objects', function(){
-  react.name('visitor', alice);
-  ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
+  ok(react.name('visitor', alice) === react.scopes.visitor, 'react.scopes held the specified object at the specified name');
 });
 
 test('anchored nodes are prepended to scope chains on render', function(){
@@ -409,8 +405,7 @@ test('updating anchored nodes does not revisit all nodes', function(){
  */
 
 test('calling changed on an array updates associated list items', function(){
-  $shopping.anchor(shopping);
-  same($shopping.item(0).html(), 'cheese', 'item substitution starts out as foo');
+  same($shopping.anchor(shopping).item(0).html(), 'cheese', 'item substitution starts out as foo');
   shopping.set(0, 'fruit');
   same($shopping.item(0).html(), 'fruit', 'item substitution got changed');
 });
@@ -420,27 +415,6 @@ test('loop items get bound to their indices', function(){
   same($shopping.item(1).html(), 'b', 'substitution starts out as b');
   $shopping.anchor().set(1, 'bPrime');
   same($shopping.item(1).html(), 'bPrime', 'substitution gets set to b prime');
-});
-//*/
-
-test('event handlers don\'t dissapear on call to changed()', function(){
-  var subNode = $('<div><div id="clicker">increment</div></div>')[0];
-  var object  = {foo:1, 'subNode':subNode};
-  $( '#clicker', subNode).bind('click', function(){
-    object.foo += 1;
-    react.changed(object);
-  });
-
-  var node = $('<div>\
-    <div id="foo" react="contain foo"></div>\
-    <div react="contain subNode"></div>\
-  </div>')[0];
-  react.update({node: node, scope: object, anchor: true});
-  same($( '#foo', node)[0].innerHTML, '1', 'foo got set');
-  $('#clicker', subNode).trigger( 'click' );
-  same($( '#foo', node).html(), '2', 'foo got updated');
-  $('#clicker', subNode).trigger( 'click' );
-  same($( '#foo', node).html(), '3', 'foo got updated after changed');
 });
 
 test('can anchor in update operation with three arguments', function(){
@@ -559,11 +533,6 @@ test('changing dom or object strucutre invalidates change propogation to the vie
 
 
 /*
- * changed
- *
- */
-
-/*
  * regression tests
  */
 
@@ -643,6 +612,29 @@ test('withinEach implies a within statement on item nodes', function(){
   same($friends.anchor(charlie.friends).items().map(function(){ return $(this).attr('data-name'); }).join(','), 'alice,bob', 'children took their values from item objects\' foo properties');
   charlie.friends[0].set('name', 'ann');
   same($friends.item(0).children().html(), 'ann', 'withinItem directive still applies after change event');
+});
+
+test('event handlers don\'t dissapear on call to changed()', function(){
+  // regression test
+  var $subnode = $('<div><div id="clicker">increment</div></div>');
+  $subnode.find('#clicker').click(function(){
+    object.set('foo', object.foo+1);
+  });
+
+  var object = react.helpers({foo:1, subnode:$subnode[0]});
+
+  var $node = $('\
+    <div>\
+      <div id="foo" react="contain foo"></div>\
+      <div react="contain subnode"></div>\
+    </div>\
+  ').anchor(object);
+
+  same($node.find('#foo').html(), '1', 'foo got set');
+  $subnode.find('#clicker').click();
+  same($node.find('#foo').html(), '2', 'foo got updated');
+  $subnode.find('#clicker').click();
+  same($node.find('#foo').html(), '3', 'foo got updated after changed');
 });
 
 

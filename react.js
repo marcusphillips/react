@@ -205,7 +205,7 @@
     name: function(name, object){
       js.errorIf(object.reactKey, 'You tried to name a scope object that already had a name');
       object.reactKey = name;
-      this.scopes[name] = object;
+      return this.scopes[name] = object;
     },
 
     reset: function(){
@@ -462,7 +462,7 @@
     // Overriding jQuery to provide supplemental functionality to DOM node wrappers
     // Within the scope of makeOperation, all calls to $() return a customized jQuery object. For access to the original, use jQuery()
     var $ = function(node){
-      js.debugIf(arguments.length !== 1 || !node || node.nodeType !== 1 || js.isArray[arguments[0]] || arguments[0] instanceof jQuery, 'overridden $ can only accept one input, which must be a DOM node');
+      js.errorIf(arguments.length !== 1 || !node || node.nodeType !== 1 || js.isArray[arguments[0]] || arguments[0] instanceof jQuery, 'overridden $ can only accept one input, which must be a DOM node');
       if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
 
       var $node = js.create(jQuery(node), {
