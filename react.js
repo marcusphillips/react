@@ -330,6 +330,7 @@
         };
 
         jQuery.fn.extend(js.map({
+
           anchor: function(){
             if(arguments.length){
               return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
@@ -339,17 +340,45 @@
               return scopes[0];
             }
           },
+
           anchors: function(){
             return js.map(makeOperation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
               return react.scopes[scopeName];
             });
           },
-          items: function(){
-            return this.children().eq(1).children();
+
+/*
+          boundChildren: function(directiveString){
+            var $ceiling = $(this);
+            var $boundChildren = $ceiling.find('[react]').filter(function(which, item){
+              var $ancestor = $(item);
+              while(($ancestor = $ancestor.parent()).length){
+                if($ancestor[0] === $ceiling[0]){ return true; }
+                else if($ancestor.is('[react]') || $ancestor.isAnchored()){ return false; }
+              }
+            });
+            return directiveString ? $boundChildren.boundFilter(directiveString) : $boundChildren;
           },
+
+          boundFilter: function(directiveString){
+            var directive = makeDirective(directiveString);
+            return this.filter(function(item){
+              var directives = $(item).boundDirectives();
+              for(var i = 0; i < directives.length; i++){
+                if(directive.inputs ? directive.matches(each) : directive.command === each.command){ return true; }
+              }
+            });
+          },
+*/
+
+          items: function(){
+            return this.children().slice(1);
+          },
+
           item: function(which){
             return this.items().eq(which);
           },
+
           itemTemplate: function(){
             return this.children().eq(0);
           }
@@ -473,12 +502,14 @@
         key: getNodeKey(node),
 
         getDirectiveStrings: function(){
-          return ($node.attr('react')||'').split(matchers.directiveDelimiter);
+          return js.map(($node.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
+            return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
+          });
         },
 
         getDirectiveArrays: function(){
           return js.reduce($node.getDirectiveStrings(), [], function(which, string, memo){
-            return string ? memo.concat([js.trim(string).replace(matchers.negation, '!').split(matchers.space)]) : memo;
+            return string ? memo.concat([string.split(matchers.space)]) : memo;
           });
         },
 
@@ -869,10 +900,11 @@
     after: function(){ this.ifDirty(); },
 
     anchored: function(/*token1, ...tokenN */){
+      //this.resetScopeChain();
       for(var i = 0; i < arguments.length; i++){
         var token = arguments[i];
         if(this.scopes[token]){
-         this.pushScope('anchor', this.scopes[token], {key:token});
+          this.pushScope('anchor', this.scopes[token], {key:token});
         }else{
           this.dead();
           debug('anchored directive failed to find a scope for the key "'+key+'"');
@@ -954,40 +986,30 @@
     },
 
     _createItemNodes: function(callback){
-      var $loopChildren = jQuery(this.node).children();
-      js.errorIf($loopChildren.length < 2, 'looping nodes must contain at least 2 children - one item template and one results container');
-      var $itemTemplate = $loopChildren.first();
-      //js.errorIf(this.$($itemTemplate[0]).directives[0].join(' ') !== 'itemTemplate', 'the item template must declare itself with an item directive');
-      $itemTemplate.addClass('reactItemTemplate');
-      var $resultsContainer = $($loopChildren[1]);
-      var $resultsContents = $resultsContainer.children();
+      var $children = this.$node.children();
+      var $itemTemplate = $children.first().addClass('reactItemTemplate');
+      if(!$itemTemplate.length){ return; }
 
-      // todo: ignore binding scopes when looking for scope to iterate over
       var collection = this.getScope();
-      if(!js.isArray(collection)){
-        this.dead();
-        debug('no collection found');
-        return;
-      }
-      if(this.getScopeChain().anchorKey){
-        this.lookup('length');
-      }
+      if(!js.isArray(collection)){ return this.dead(); }
+      // this ensures that the directive will depend upon any changes to the length of the array
+      this.lookup('length');
 
-      var itemNodes = [];
-      for(var i = 0; i < collection.length; i++){
-        var itemNode = $resultsContents[i];
-        if(!itemNode){
-          itemNode = $itemTemplate.clone().removeClass('reactItemTemplate')[0];
-          callback.call(this, i, itemNode);
-          this.$(itemNode).directives.before.considerDescendants();
+      var itemNodes = [], pregeneratedItemCount = 0, lastPregeneratedItem = $itemTemplate, itemsToRemove = [];
+      for(var i = 1; i < $children.length; i++){
+        if(this.$($children[i]).hasClass('reactItem')){
+          pregeneratedItemCount++;
+          collection.length < pregeneratedItemCount ? itemsToRemove.push($children[i]) : (lastPregeneratedItem = $children[i]);
         }
-        itemNodes.push(itemNode);
       }
-      if(collection.length !== $resultsContents.length){
-        // we set innerHTML here to prevent jQuery fron detaching all event handlers (automatic in an .html() call)
-        $resultsContainer[0].innerHTML = '';
-        $resultsContainer.html(itemNodes);
+      var newItems = [], newItem;
+      for(i = pregeneratedItemCount; i < collection.length; i++){
+        callback.call(this, i, newItem = $itemTemplate.clone().removeClass('reactItemTemplate').addClass('reactItem')[0]);
+        this.$(newItem).directives.before.considerDescendants();
+        newItems.push(newItem);
       }
+      $(itemsToRemove).detach();
+      $(newItems).insertAfter(lastPregeneratedItem);
     },
 
     contain: function(key){

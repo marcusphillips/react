@@ -51,51 +51,37 @@
           <div data-fixture="visitorName" react="contain name">orig</div>
         </div>
 
-        <div data-fixture="containerlessLoop" react="for item">
-          <span class="exampleTemplate"></span>
-          <!-- to prevent debeloper surprise, the missing container tag here is required -->
-        </div>
-
-        <div data-fixture="containItems" react="for item">
-          <span react="contain item">
-        <span></span></div>
-
         <div data-fixture="shopping" react="for which item">
-          <div data-fixture="shoppingItem" react="contain item">orig</div><span data-fixture="shoppingItems"></span>
+          <div data-fixture="shoppingItem" react="contain item">orig</div>
         </div>
 
         <div data-fixture="friends" react="for which friend">
           <div data-fixture="friendTemplate" react="attr 'data-name' friend.name" data-name="orig">
             <div data-fixture="friendName" react="contain friend.name">orig</div>
           </div>
-          <div data-fixture="friendsContainer">orig</div>
         </div>
 
         <ul data-fixture="navItems" react="for which item">
           <li data-fixture="navItemTemplate"><!-- tests require this tag not to have a react attribute -->
             <div data-fixture="navItemText" react="contain text">orig</div>
           </li>
-          <div data-fixture="navItemsContainer">orig</div>
         </ul>
 
         <ul data-fixture="withinFriends" react="withinEach">
           <li data-fixture="withinFriend" react="attr 'data-name' name" data-name="orig"></li>
-          <div data-fixture="withinFriendResults"></div>
         </ul>
 
         <ul data-fixture="ticTacToe" react="withinEach">
           <ul react="withinEach">
             <li react="attr 'data-symbol' symbol" data-symbol="orig"></li>
-            <div></div>
           </ul>
-          <div></div>
         </ul>
 
         <div data-fixture="businessStreet"  react="attr 'name' name, within business, within address, contain street"></div>
 
         <div data-fixture="indexIterator" react="for which item">
           <div data-fixture="indexIteratorTemplate" react="contain which"></div>
-        <div data-fixture="indexIteratorResults"></div></div>
+        </div>
 
         <div data-fixture="addressCard" react="within address">
           <div data-fixture="street" react="contain street">orig</div>

@@ -1,3 +1,7 @@
+local
+---
+- results container no longer used for iteration directives
+
 1.2.1
 ---
 - new directive 'debug' halts at a debugger breakpoint as soon as the directive gets followed

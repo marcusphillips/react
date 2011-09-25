@@ -1,101 +1,87 @@
---- goals for next version ---
-- add a readiness flag for objects
-- test that integrate.jQuery.items() works, as well as .itemTemplate(). also, error when called on non-looping nodes
+--- upcomming goals ---
+- jquery syntax for finding subnodes
+  - fix it so it filters out bound children
+- jquery syntax for finding anchored children
+- move toward recursion simulation
+- bug: treat lookup failures on dot access and within directives as if they were if blocks (by turning them off)? Case: if you negate a failed lookup, do you want it to be truthy?
+- change queryselectorall to $.find() for compatibility (calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
+  - also see if there's a more efficient way to build an array other than iterating over the array like object
+- don't recurse into anchored nodes
 - anchor command also updates
-- contain must be the final directive in the list
-- don't allow iterating over strings
-- deprecate ability to see index (- 'for' directive cannot do index binding. "for item" rather than "for which item")
-- don't recurse into widget nodes
+- phase out 'for' directive
+- add each directive, which doesn't get an index
 - deprecate the .update() function
-- provide .render() that anchors and associates all listeners
-- when should listeners relink?
-- when a jquery object is passed in, pass it back out
-
-- loop item template must be labeled
-- no loop items container node (all results get appended after template node)
-- must declare a node as a react widget
-- deprecate .set()
-- a 'class' directive
-
-- data-bound="rootScope"
-
---- random todos ---
-- harden all operations after run() has completed
+- rename to bound
+- allow in-js syntax for data binding
 - make contain work with jquery objects
-- harden getParent() operations after first call, and ensure complete correctness of all parent data after the first time
-- add monitoring support for run operations
+
+--- quick refactors ---
+- get rid of _conditionalShow(), rely on classes
+- automatically lookup the tokens provided to a command. offer the option of defining a resolve() function when users want to do the lookup work manually
+
+--- improvements to existing ---
+- mutation of loop nodes should be persistent
+  - deleting a node means no update happens
+  - re-ordering nodes in a loop remains the same
+  - add a class to every generated node for easy lookup/modification in the tree
+- make sure iteration works over jquery objects and other array-likes
+
+--- new features ---
+- allow delayed updates that wait until a flag is turned on (add a readiness flag for objects)
+- monitoring support for run operations
   - how many nodes were visted
   - how many directives were processed
   - if directives were ever re-visted
-- get rid of _conditionalShow(), rely on classes
-- get rid of 'do not recurse'
-- switch from 'pre/postmutate' object to multiple functions
-- get rid of .scopes and .nodes
-- get rid of getScopeKey()
-- change queryselectorall to $.find() for compatibility (calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
-  - also see if there's a more efficient way to build an array other than iterating over the array like object
-- todo: without using .data(), IE copies expando properties over, breaking loop behaviors and other cloning operations. write a test for the failing behavior and implement replacement to .data()
-- Make lookups fail when property isn't defined on the object ('prop' in obj), rather than when it has a value of undefined
-- Make a changed event on any numeric property of an array result in a changed event on the associated loop directives
-- make every node in a loop listen to it's associated key
-- remove update context?
-- allow delayed updates that wait until a flag is turned on
-- what if a listened-to property is stored somewhere up the prototype chain? how can listeners be registered there?
-- add a jsonified output of any object in debug mode
-- attrIf needs the same persistence behavior as classIf, write test for it first
-- make inherited scope chains materialize only when used by a call to lookup()
-- keep track of which directive shave already had all subtrees queued for visiting, so visitBranch() can pass for repeat calls
-- after an if directive evaluates to false, setting it to true and activating the listener should update subtree
-- scope observers per node-object anchoring, for easy cleanup of memory references
-- clean up any pre-existing observers (lookup time? observation time?)
-- give a warning when dot access lookup fails
-- treat lookup failures on dot access and within directives as if they were if blocks (by turning them off)? Case: if you negate a failed lookup, do you want it to be truthy?
-- make all observers write to a single string in some serialization format
+- 'class' and 'classes' directive
+- binding syntax and dynamic partial inclusion, to allow code sharing in templates
+- allow a containEach directive?
+- jquery selection syntax for finding child directives that reference properties available in the current directive's scope
 
---- bugs ---
-- classIf is probably cumulative. the second time a class is added, the old one will not be cleaned up
-- if you pass scope objects into update(), and the target node is anchored, even the (unanchored) input objects get observers set up
-- negation breaks for dot access
+--- new major features ---
+- converter for a simpler abstraction language that generates react nodes (sort of like handlebars)
+- an in-javascript syntax for defining bound relationships of objects and nodes
 
 --- safeguards ---
-- in createItemNodes, don't allow looping over static native objects (like strings - this is almost certainly an error)
 - whenever a directive might insert a node, verify that the node has not been rendered for a different context already during this update
+- harden all operations after run() has completed
+- harden getParent() operations after first call, and ensure complete correctness of all parent data after the first time
+- in pre-lookups, restrict all keys to valid alphanumerics
+
+--- open questions ---
+- what if a listened-to property is stored somewhere up the prototype chain? how can listeners be registered there?
+
+--- bugs ---
+- progressive rendering: type check in iteration, and only allow arrays (especially not strings)
+  - in createItemNodes, don't allow looping over static native objects (like strings - this is almost certainly an error)
+- when the check for "key in object" for lookup() happens, it errors on non-object primitives like strings
+- attrIf needs the same persistence behavior as classIf, write test for it first
+- check if this issue exists: after an if directive evaluates to false, setting it to true and activating the listener should update subtree
+- should ignore binding scopes when looking for scope to iterate over
 
 --- optimizations ---
+- *disassociate listeners when node gets updated against new object
+- clean up any pre-existing observers (lookup time? observation time?)
+  - store observers in on a per-anchoring basis, for easy cleanup of memory references
+- make all observers write to a single string in some serialization format
 - possible: when selecting react nodes to visit, generate a :not() selector that excludes children of other react nodes. works in all but IE<=8 (http://www.quirksmode.org/css/contents.html), and is no slower there (since we have to visit all nodes anyway). have to check that selection behavior is same as jquery though, and doesn't consider parents of the selection context.
-- earmark any nodes that have been found in a querySelectorAll call, so we don't have to add their children again when they show up in the 'branchesToConsider' list
 - for compressability, rework error messages to be shorter and described more fully in comments
 - make directive.consider() add to a keyed hash of reasons, rather than a list, and check 'force' first
 
---- shortcuts ---
-- in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
-
---- improvements ---
-- binding syntax and dynamic partial inclusion, to allow code sharing in templates
-- a 'waiting' flag on objects that delays updates to their corresponding directives until it is cleared
-- make sure iteration works over jquery objects and other array-likes
-- clean up a directive's observers when it gets bound to new properties
-- in pre-lookups, restrict all keys to valid alphanumerics
-- allow a containEach directive?
-- when adding nodes to the 'consider' list, keep a reference to the root that entailed considering them. if it's not among the ancestors, the consideration should be skipped (to mimic recursion)
-- make some timing tests
-
---- ideas ---
-- jquery selection syntax for finding child directives that reference properties available in the current directive's scope
-- converter for a simpler abstraction language that generates react nodes
-- an in-javascript syntax for defining bound relationships of objects and nodes
-
 --- refactors ---
+- fix this: in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
 - remove .anchorKey from scope chains
-- factor .lookup() into .lookup() and .lookupDetails(), then deprecate options object
 - don't think we need matchingBaseObject in the return details of a lookup, maybe just check if it's contained in the scope chain
 - prefix probably doesn't need to be stored in scopeChain, it can be passed via potentialObservers. this would allow .observe() to be taken off the scopeChain object
 - deprecate options from makeScopeChain
-- automatically lookup the tokens provided to a command. offer the option of defining a resolve() function when users want to do the lookup work manually
-- resolve ambiguous language around 'observer' and 'listener'
-- make listener objects a universal property of each directive, and give them a 'verified' or 'checked' status to indicate the validity of their object/key path
 
---- write tests ---
+--- tests ---
+- performance tests
+- test iteration count to ensure this behavior is working: earmark any nodes that have been found in a querySelectorAll call, so we don't have to add their children again when they show up in the 'branchesToConsider' list
+- negation doesnt break for dot access
+- classIf is not cumulative. the second time a class is added, the old one will not be cleaned up
+- test that when a directive has already had all subtrees queued for visiting, visitBranch() passes for repeat calls
+- without using .data(), IE copies expando properties over, breaking loop behaviors and other cloning operations. write a test for the failing behavior and implement replacement to .data()
+- test that integrate.jQuery.items() works, as well as .itemTemplate(). also, error when called on non-looping nodes
 - second descendants of a deadDescendants branch and a dirtyDescendants branch should inherit the state
 - when a directive is marked for consideration, then removed from the tree by a contain or withinEach directive, the node still works if another directive swapps it in. probably doesnt matter since substituted nodes don't get recursed onto
 - empty react attribute string doesnt break universe
@@ -112,28 +98,15 @@
 - verify that responses to change events don't result in new observers
 - can use dot access on bound items
 - updates to items in a list (associated with the key or value of a bindItem) change appropriately. consider listener.check(), which might not have updated unless the fallthrough registration just worked
-// todo: test support for anchoring to whole scope chains
-
-test('increasing the length property of a list appends extra nodes', function(){
-});
-
-test('reducing the length property of a list deletes extra nodes', function(){
-
-});
-
-test('lookups to loop items don\'t fall through past the top scope if that item holds undefined', function(){
-  // not yet tested
-});
-
-test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){
-//  ok(false, 'not yet written');
-});
-
-test('recomputes all subnodes when changing the value stored at some index of an observed array that was looped over', function(){
-//  ok(false, 'not yet written');
-});
-
-test('when a list item is removed, associated loop item nodes disappear', function(){
+- test support for anchoring to whole scope chains
+- test('increasing the length property of a list appends extra nodes', function(){});
+- test('reducing the length property of a list deletes extra nodes', function(){});
+- test('lookups to loop items don\'t fall through past the top scope if that item holds undefined', function(){});
+- test('don\'t allow looping within non-enumerable (or non-observable) objects', function(){});
+- test('recomputes all subnodes when changing the value stored at some index of an observed array that was looped over', function(){});
+- test('when a list item is removed, associated loop item nodes disappear', function(){
+- test('todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)', function(){});
+- test('works with a missing key alias', function(){/*...*/});
 /* todo
   var object = ['a', 'b'];
   var node = $('\
@@ -151,13 +124,3 @@ test('when a list item is removed, associated loop item nodes disappear', functi
 */
 });
 
-test('', function(){
-// todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)
-});
-
-test('works with a missing key alias', function(){/*...*/});
-
-
---- asdf ---
-- multiple calls to follow() probably follow over and over
-- directive.getParent() seems to run its while loop no less than twice
