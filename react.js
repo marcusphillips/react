@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 1.2.1, http://github.com/marcusphillips/react
+ * Version 1.2.2, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.

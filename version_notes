@@ -1,6 +1,6 @@
-local
+1.2.2
 ---
-- results container no longer used for iteration directives
+- results container no longer used for iteration directives. results are now stored as siblings of the template node
 
 1.2.1
 ---
