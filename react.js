@@ -12,16 +12,8 @@
    * Library-wide helpers
    */
 
-  var debugging = true;
-
   var noop = function(){};
   var undefined; // safeguard, undefined can be overwritten in the global scope
-
-  var debug = function(){
-    if(debugging && console !== undefined && console.warn && console.warn.apply){
-      console.warn.apply(console, arguments);
-    }
-  };
 
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
@@ -150,7 +142,7 @@
           // for dot access
           if(path.length){
             if(value === undefined || value === null){
-              debug('Could not find '+key+' on a null or undefined object at path '+scopeChain.prefix+baseKey+' from', scopeChain.scope);
+              // Could not find the key on a null or undefined object at path scopeChain.prefix+baseKey from scopeChain.scope
               return extendDetails();
             }
             return extendDetails(emptyScopeChain.extend('dotAccess', value, {
@@ -195,11 +187,6 @@
 
     nodes: {},
     scopes: {},
-
-    setDebugging: function(setting){
-      if(setting === undefined){ setting = true; }
-      debugging = setting;
-    },
 
     // for giving scope objects meaningful names, which appear in the anchor directives on nodes. not yet ready for external consumption
     name: function(name, object){
@@ -248,7 +235,7 @@
       }
 
       var operation = makeOperation();
-      operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).contageous();
+      operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).updateBranch();
       operation.run();
       return nodeInput;
     },
@@ -349,6 +336,11 @@
 
 /*
           boundChildren: function(directiveString){
+            return this.find(':not(.'+this.boundKey()+' [react] [react])[react]').filter(function(){
+               return !isAnchored(somehow...); // this might also be doable in a not selector
+            }).boundFilter(directiveString);
+
+            manual implementation
             var $ceiling = $(this);
             var $boundChildren = $ceiling.find('[react]').filter(function(which, item){
               var $ancestor = $(item);
@@ -357,10 +349,11 @@
                 else if($ancestor.is('[react]') || $ancestor.isAnchored()){ return false; }
               }
             });
-            return directiveString ? $boundChildren.boundFilter(directiveString) : $boundChildren;
+            return $boundChildren.boundFilter(directiveString);
           },
 
           boundFilter: function(directiveString){
+            if(!directiveString){ return this; }
             var directive = makeDirective(directiveString);
             return this.filter(function(item){
               var directives = $(item).boundDirectives();
@@ -405,12 +398,13 @@
     var $nodes = {};
     var proxies = [];
 
+    // directives we plan to visit, by key
     // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-    var descendantsToConsider = {};
-    var directivesToConsider = {};
-    var consideredDirectives = {};
-    var deferredDirectives = {};
-    var encompassedBranches = {};
+    var toVisit = {};
+    // visited directives, by key
+    var visited = {};
+    // branches from which we have already collected all bound descendants
+    var searched = {};
 
     /*
      * Proxy
@@ -540,15 +534,14 @@
 
       // provides an object representing the directive itself (for example, "contain user.name")
       var makeDirective = function(index, tokens){
-        var parent;
+        var isDead;
+        var shouldUpdate;
+        var shouldUpdateBranch;
         var dirtyObservers = {};
-        var isDirty, isContageous, isDead;
-        var gotIsDirty, gotIsContageous, gotIsDead;
-        var followed;
         var scopeChain;
         var scopeInjectionArgLists = [];
-        var didCallIfDirty;
-
+        var didCallOnUpdate;
+        var potentialObservers = [];
         var directive = js.create(commands, {
           $: $,
           $node: $node,
@@ -556,7 +549,6 @@
           isDirective: true,
           command: tokens[0],
           inputs: tokens.slice(1),
-          reasonsToFollow: [],
 
           setIndex: function(newIndex){
             index = directive.index = newIndex;
@@ -565,12 +557,7 @@
 
           lookup: function(key){
             var details = directive.getScopeChain().detailedLookup(key);
-            for(var i = 0; i < details.potentialObservers.length; i++){
-              var potentialObserver = details.potentialObservers[i];
-              if(directive.isDirty() && potentialObserver.scopeChain.anchorKey){
-                makeProxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
-              }
-            }
+            potentialObservers = potentialObservers.concat(details.potentialObservers);
             return details.value;
           },
 
@@ -590,44 +577,43 @@
           },
 
           getScopeChain: function(){
-            if(scopeChain){ return scopeChain; }
-            scopeChain = js.reduce(scopeInjectionArgLists, directive.getParent().getScopeChain(), function(which, scopeChainArguments, memo){
+            return scopeChain = scopeChain || directive.getParentScopeChain();
+          },
+
+          getParentScopeChain: js.memoizing(function(){
+            return js.reduce(scopeInjectionArgLists, directive.getParent().getScopeChain(), function(which, scopeChainArguments, memo){
               return memo.extend.apply(memo, scopeChainArguments);
             });
-            scopeChainInjectionArgLists = [];
-            return scopeChain;
-          },
+          }),
 
           getScope: function(){
             return directive.getScopeChain().scope;
           },
 
-          // state starts undefined, and can be set to 'dead' or 'dirty'
-          // if it is left in an undefined state, and it does not inherit a dirty state from some ancestor, it is not rendered
-          // a directive is 'dirty' if the currently rendered output needs to be updated based on the new inputs
-          // when a directive is 'dead', it isn't rendered. 'dead' trumps any inherited state, and is passed on to all descendants
           dirtyObserver: function(observer){
-            js.errorIf(isDirty === false, 'tried to add a dirty observer after checking isDirty');
             dirtyObservers[observer.key] = observer;
-            directive.consider();
-            return directive;
+            return directive.consider();
           },
 
-          dirty: function(){
-            js.errorIf(isDirty === false, 'tried to set to isDirty twice');
-            js.errorIf(gotIsDirty && isDirty !== true, 'tried to set to isDirty after checking');
-            directive.consider();
-            isDirty = true;
-            return directive;
-           },
+          dirtyObserverPertains: function(){
+            for(var key in dirtyObservers){
+              if(dirtyObservers[key].pertains()){ return true; }
+            }
+          },
 
-          contageous: function(){
-            js.errorIf(isContageous === false, 'tried to set to isContageous twice');
-            js.errorIf(gotIsContageous && isContageous !== true, 'tried to set to isContageous after checking');
-            directive.dirty();
-            directive.considerDescendants();
-            isContageous = true;
-            return directive;
+          // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
+          consider: function(){
+            return toVisit[directive.key] = directive;
+          },
+
+          update: function(){
+            shouldUpdate = true;
+            return directive.consider();
+          },
+
+          updateBranch: function(){
+            shouldUpdateBranch = true;
+            return directive.update();
           },
 
           dead: function(){
@@ -635,103 +621,89 @@
             return directive;
           },
 
-          isDirty: function(){
-            gotIsDirty = true;
-            return (isDirty = directive.isDead() ? false : isDirty || directive.getParent().isContageous() || directive.dirtyObserverPertains());
-          },
-
-          isContageous: function(){
-            gotIsContageous = true;
-            return (isContageous = directive.isDead() ? false : isContageous || directive.getParent().isContageous());
-          },
-
-          isDead: function(){
-            gotIsDead = true;
-            return (isDead = isDead || directive.getParent().isDead());
-          },
-
-          dirtyObserverPertains: function(){
-            return js.reduce(js.toArray(dirtyObservers), false, function(which, observer, memo){
-              return memo || observer.pertains();
-            });
-          },
-
-          // calling this method ensures that the directive (and all its parents) will be visited in the operation, and considered for a rendering update
-          consider: function(reason){
-            (directivesToConsider[directive.key] = directive).reasonsToFollow.push(reason || 'force');
+          onUpdate: function(callback){
+            didCallOnUpdate = true;
+            if(shouldUpdate && callback){
+              callback.apply(directive);
+            }
             return directive;
           },
 
-          considerDescendants: function(){
-            directive.consider();
-            return (descendantsToConsider[directive.key] = directive);
-          },
-
-          hasReasonToConsider: function(){
-            return js.reduce(directive.reasonsToFollow, false, function(which, each, memo){
-              return memo || each === 'force' || directive.isAmongAncestors(each);
-            });
-          },
-
-          isAmongAncestors: function(potentialAncestor){
-            return potentialAncestor === directive.getParent() || directive.getParent().isAmongAncestors(potentialAncestor);
-          },
-
-          ifDirty: function(callback){
-            didCallIfDirty = true;
-            if(directive.isDirty() && callback){
-              callback.apply(directive);
-            }
-          },
-
           // the directive's command (for example, 'contain') will be executed with a 'this' context of that directive
-          follow: function(){
-            js.errorIf(!isRunning, 'An internal error occurred: someone tried to .follow() a directive outside of operation.run()');
-            if(followed){ return; }
-            followed = true;
-            directive.getParent().follow();
+          visit: js.memoizing(function(){
+            directive.getParent().visit();
+            var willUpdate = directive.shouldUpdate();
             describeErrors(function(){
-              js.errorIf(!commands[directive.command], directive.command+' is not a valid react command');
+              js.errorIf(!isRunning, 'tried to .visit() a directive outside of operation.run()');
+              js.errorIf(!commands[directive.command], 'not a valid react command: '+directive.command);
               commands[directive.command].apply(directive, directive.inputs);
-              js.errorIf(!didCallIfDirty, 'all directives must run a section of their code in a block passed to this.ifDirty(), even if the block is empty. Put any code that will mutate state there, and leave code that manipulates scope chains, etc outside of it.'+ directive.command);
-              if(descendantsToConsider[directive.key] && !directive.isDead() && !encompassedBranches[directive.$node.key]){
-                // visit the after directive of all descendant react nodes (including the root)
-                var $nodes = $node.getReactNodes();
-                for(var which = 0; which < $nodes.length; which++){
-                  encompassedBranches[$nodes[which].key] = true;
-                  $nodes[which].directives.after.consider(directive);
+              // all directives must run a section of their code in a block passed to this.onUpdate(), even if the block is empty. Put any code that will mutate state there, and leave code that manipulates scope chains, etc outside of it
+              js.debugIf(!didCallOnUpdate, 'directives must run this.onUpdate()');
+            });
+            if(willUpdate){
+              for(var i = 0; i < potentialObservers.length; i++){
+                var potentialObserver = potentialObservers[i];
+                if(potentialObserver.scopeChain.anchorKey){
+                  makeProxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
                 }
               }
-            });
+              if(directive.shouldUpdateBranch() && !searched[directive.$node.key]){
+                directive.search();
+              }
+            }
+          }),
+
+          search: function(){
+            // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
+            var $nodes = $node.getReactNodes();
+            for(var which = 0; which < $nodes.length; which++){
+              // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
+              searched[$nodes[which].key] = true;
+              $nodes[which].directives.after.consider();
+            }
           },
 
-          getParent: function(){
-            if(parent){ return parent; }
-            var getCurrentParent = function(){
-              return (
-                directive.index === 'before' ? ($node.wrappedParent() ? $node.wrappedParent().directives.after : nullDirective) :
-                directive.index === 'anchored' ? directives.before :
-                directive.index.toString() === '0' ? directives.anchored :
-                directive.index.toString().match(matchers.isNumber) ? directives[directive.index-1] :
-                directive.index === 'after' ? (directives.length ? directives[directives.length-1] : directives.anchored) :
-                js.error('invalid directive key')
-              );
-            };
-            var repeatLimit = 10000;
-            while(parent !== (parent = getCurrentParent())){
-              if(parent){ parent.follow(); }
-              js.errorIf(!(repeatLimit--), 'You\'ve done something really crazy in your directives. Probably mutated state in a way that changes the dom structure. Don\'t do that.');
+          shouldUpdate: function(){
+            return !directive.isDead() && (shouldUpdate = shouldUpdate || directive.shouldUpdateParentBranch() || directive.dirtyObserverPertains());
+          },
+
+          shouldUpdateBranch: function(){
+            return directive.shouldUpdate() && (shouldUpdateBranch || directive.shouldUpdateParentBranch());
+          },
+
+          shouldUpdateParentBranch: js.memoizing(function(){
+            return directive.getParent().shouldUpdateBranch();
+          }),
+
+          isDead: function(){
+            return isDead || directive.parentIsDead();
+          },
+
+          parentIsDead: js.memoizing(function(){
+            directive.getParent().isDead();
+          }),
+
+          getParent: js.memoizing(function(){
+            var repeatLimit = 10000, parent;
+            while(parent !== (parent = directive._potentialParent())){
+              parent && parent.visit();
+              js.errorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
             }
             return parent;
+          }),
+
+          _potentialParent: function(){
+            return (
+              directive.index === 'before' ? ($node.wrappedParent() ? $node.wrappedParent().directives.after : nullDirective) :
+              directive.index === 'anchored' ? directives.before :
+              directive.index.toString() === '0' ? directives.anchored :
+              directive.index.toString().match(matchers.isNumber) ? directives[directive.index-1] :
+              directive.index === 'after' ? (directives.length ? directives[directives.length-1] : directives.anchored) :
+              js.error('invalid directive key')
+            );
           },
 
-          setParent: function(directive){
-            parent = directive;
-          },
-
-          toString: function(){
-            return [directive.command].concat(directive.inputs).join(' ');
-          }
+          toString: function(){ return [directive.command].concat(directive.inputs).join(' '); }
 
         });
 
@@ -744,7 +716,9 @@
               'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
               'while processing node': node,
               'index of failed directive': directive.index,
-              'directive call': directive.command+'('+directive.inputs.join(', ')+')',
+              'directive call': directive.command+'('+directive.inputs.join(', ')+')'
+            }, '(Supplemental dynamic data follows)');
+            js.log('Supplemental: ', {
               'scope chain description': directive.getScopeChain().describe(),
               '(internal scope chain object) ': directive.getScopeChain()
             });
@@ -756,8 +730,7 @@
       };
 
       var nullDirective = makeDirective(null, [], null);
-      nullDirective.follow = noop;
-      nullDirective.isDirty = nullDirective.isContageous = nullDirective.isAmongAncestors = nullDirective.isDead = function(){ return false; };
+      nullDirective.visit = nullDirective.shouldUpdate = nullDirective.shouldUpdateBranch = nullDirective.isDead = nullDirective.visit = noop;
       nullDirective.getParent = function(){ js.error('internal error: cannot get the parent of a null directive'); };
       nullDirective.getScopeChain = function(){ return emptyScopeChain; };
 
@@ -820,36 +793,14 @@
     var operation = {
       $: $,
 
-      updateBranch: function(node, fromDirective){
-        $(node).directives[fromDirective||'after'].contageous();
-      },
-
       run: function(){
         js.errorIf(hasRun, 'An operation cannot be run twice');
         isRunning = true;
-        var repeatLimit = 100000;
-        // iterating over the directivesToConsider list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
-        while(js.hasKeys(directivesToConsider)){
-          js.errorIf(!(repeatLimit--), 'we seem to be checking quite a few directives here...');
-          for(var key in directivesToConsider){
-            js.errorIf(consideredDirectives[key], 'internal error: react tried to consider the same directive twice');
-            var directive = directivesToConsider[key];
-            if( directive.hasReasonToConsider() ){
-              directive.follow();
-              consideredDirectives[key] = directive;
-            } else {
-              // if the reasons for considering a directive are no longer valid (IE the ancestry path changed), defer the directive until all valid directives have been processed, so we can try again when the path might have become valid again
-              deferredDirectives[key] = directive;
-            }
-            delete directivesToConsider[key];
-          }
-          for(key in deferredDirectives){
-            if(deferredDirectives[key].hasReasonToConsider()){
-              directivesToConsider[key] = deferredDirectives[key];
-              delete deferredDirectives[key];
-            }
-          }
-        }
+        // iterating over the toVisit list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
+        js.exhaust(toVisit, function(key, directive){
+          js.errorIf(visited[key], 'tried to consider the same directive twice');
+          visited[key] = toVisit[key].visit();
+        });
         isRunning = false;
         hasRun = true;
      },
@@ -872,7 +823,7 @@
   js.extend(react.commands, {
 
     log: function(){
-      this.ifDirty();
+      this.onUpdate();
       var inputs = {}, that = this;
       js.map(arguments, function(which, argument){
         inputs[argument] = that.lookup(argument);
@@ -894,10 +845,10 @@
       if(this.$node.hasClass('reactItemTemplate')){
         this.dead();
       }
-      this.ifDirty();
+      this.onUpdate();
     },
 
-    after: function(){ this.ifDirty(); },
+    after: function(){ this.onUpdate(); },
 
     anchored: function(/*token1, ...tokenN */){
       //this.resetScopeChain();
@@ -906,12 +857,12 @@
         if(this.scopes[token]){
           this.pushScope('anchor', this.scopes[token], {key:token});
         }else{
+          // anchored directive failed to find a scope for the key
           this.dead();
-          debug('anchored directive failed to find a scope for the key "'+key+'"');
         }
       }
-      this.ifDirty(function(){
-        this.contageous();
+      this.onUpdate(function(){
+        this.updateBranch();
       });
     },
 
@@ -921,35 +872,28 @@
 
     _withScope: function(type, key){
       var scope = this.lookup(key);
-      if(!scope){
-        this.lookup(key);
-      }
-      if(scope){
-        this.pushScope(type, scope, {key:key});
-      }else{
-        this.dead();
-        debug('within directive failed to find a scope for the key "'+key+'"');
-      }
-      this.ifDirty(function(){
-        this.contageous();
+      this.onUpdate(function(){
+        this.updateBranch();
       });
+      scope ? this.pushScope(type, scope, {key:key}) : this.dead();
     },
 
     withinItem: function(key){
       // todo: add a rule to only allow getting items from last scope (check if key < scope.length?)
       // todo: add a rule to make sure the last scope object is an array
-      if(!js.isArray(this.getScope()) || this.getScope().length-1 < +key || !this.getScope()[key]){
-        this.dead();
+      if(js.isArray(this.getScope()) && +key < this.getScope().length && this.getScope()[key]){
+        this._withScope('withinItem', key);
+      }else{
+        this.onUpdate().dead();
       }
-      this._withScope('withinItem', key);
     },
 
     withinEach: function(){
       this._createItemNodes(function(index, itemNode){
         this.$(itemNode).directives.prepend(['withinItem', index]);
       });
-      this.ifDirty(function(){
-        this.contageous();
+      this.onUpdate(function(){
+        this.updateBranch();
       });
     },
 
@@ -969,19 +913,19 @@
 
       this.pushScope('bindItem', itemBindings, {key:key});
 
-      this.ifDirty(function(){
-        this.contageous();
+      this.onUpdate(function(){
+        this.updateBranch();
       });
     },
 
     'for': function(keyAlias, valueAlias){
       var aliases = Array.prototype.slice.call(arguments);
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         // todo: return here (and everywhere else) if collection is undefined.  test for this
         this._createItemNodes(function(index, itemNode){
           this.$(itemNode).directives.prepend( ['bindItem', index].concat(aliases) );
         });
-        this.contageous();
+        this.updateBranch();
       });
     },
 
@@ -1005,7 +949,7 @@
       var newItems = [], newItem;
       for(i = pregeneratedItemCount; i < collection.length; i++){
         callback.call(this, i, newItem = $itemTemplate.clone().removeClass('reactItemTemplate').addClass('reactItem')[0]);
-        this.$(newItem).directives.before.considerDescendants();
+        this.$(newItem).directives.before.updateBranch();
         newItems.push(newItem);
       }
       $(itemsToRemove).detach();
@@ -1013,13 +957,13 @@
     },
 
     contain: function(key){
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         // using innerHTML to clear the node because the jQuery convenience functions unbind event handlers. This would be an unexpected side effect for most React user consumption cases.
         this.node.innerHTML = '';
         var insertion = this.lookup(key);
         // if the insertion is a node, use the dom appending method, but insert other items as text
         jQuery(this.node)[insertion && insertion.nodeType ? 'append' : 'text'](insertion);
-        // note: .dead() can't happen outside ifDirty() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
+        // note: .dead() can't happen outside onUpdate() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
         this.$node.directives.after.dead();
       });
       this.$node.directives.after.resetScopeChain();
@@ -1028,10 +972,10 @@
     'if': function(condition){
       var conditional = this.lookup(condition);
       if(!conditional){ this.dead(); }
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         $(this.node)[conditional ? 'removeClass' : 'addClass']('reactConditionallyHidden');
         this._conditionalShow(conditional);
-        this.contageous();
+        this.updateBranch();
       });
     },
 
@@ -1040,19 +984,19 @@
     },
 
     showIf: function(condition){
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         this._conditionalShow(this.lookup(condition));
       });
     },
 
     visIf: function(condition){
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         jQuery(this.node).css('visibility', this.lookup(condition) ? 'visible' : 'hidden');
       });
     },
 
     classIf: function(conditionKey, nameKey){
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         this.node.classIfs = this.node.classIfs || {};
         var condition = this.lookup(conditionKey);
         var persistence = conditionKey + ' ' + nameKey;
@@ -1076,7 +1020,7 @@
 
     attr: function(name, value){
       js.errorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
-      this.ifDirty(function(){
+      this.onUpdate(function(){
 
         name = this.lookup(name);
         value = this.lookup(value);
@@ -1094,13 +1038,13 @@
     },
 
     attrIf: function(condition, name, value){
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         this.lookup(condition) ? $(this.node).attr(this.lookup(name), this.lookup(value)) : $(this.node).removeAttr(this.lookup(name));
       });
     },
 
     checkedIf: function(condition){
-      this.ifDirty(function(){
+      this.onUpdate(function(){
         $(this.node).attr('checked', !!this.lookup(condition));
       });
     }

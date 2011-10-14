@@ -471,7 +471,7 @@ test('a withinEach inside a for will not get duplicate bindings', function(){
   // before the bug fix, the binding instruction from the outer 'for' directive never got blown away as the scope chain got built up
   // thus, there would have been an extra key binding scope, instead of the normal withinEach style scope change into a property
   same($forContainingWithinEach.item(0).item(0).html(), '0', 'index substitution is still set to 0');
-  react.set(matrix, 0, [{}, {which:'bar'}]);
+  react.set(matrix[0][1], 'which', 'bar');
   same($forContainingWithinEach.item(0).item(1).html(), 'bar', 'index substitution changes to the masking property');
 });
 

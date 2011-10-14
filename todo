@@ -1,7 +1,4 @@
 --- upcomming goals ---
-- jquery syntax for finding subnodes
-  - fix it so it filters out bound children
-- jquery syntax for finding anchored children
 - move toward recursion simulation
 - bug: treat lookup failures on dot access and within directives as if they were if blocks (by turning them off)? Case: if you negate a failed lookup, do you want it to be truthy?
 - change queryselectorall to $.find() for compatibility (calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
@@ -14,6 +11,9 @@
 - rename to bound
 - allow in-js syntax for data binding
 - make contain work with jquery objects
+- jquery syntax for finding subnodes
+  - fix it so it filters out bound children
+- jquery syntax for finding anchored children
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes
