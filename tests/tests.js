@@ -210,10 +210,6 @@ test('if directives turn off recursion in child nodes', function(){
 
 module("within");
 
-test('requires at least an item template node and a contents node inside the loop node', function(){
-  throws(function(){ $containerlessLoop.anchor([]); }, 'omitting second loop child is not allowed');
-});
-
 test('template node is not visible after render', function(){
   ok($friends.appendTo('#qunit-fixture').itemTemplate().is(':visible'), 'template started out visible');
   ok($friends.anchor(charlie.friends).itemTemplate().is(':not(:visible)'), 'template was no longer visible');
@@ -248,18 +244,6 @@ test('calling changed on a subobject that\'s associated with a within directive 
   alice.business.set('address', {street:'huffington'});
   same($businessStreet.attr('name'), 'alice', 'attr was not changed');
   same($businessStreet.html(), 'huffington', 'contents got updated');
-});
-
-// doesnt need refactor, being replaced
-test('results are put in second dom node', function(){
-  var node = $('<div react="for which item">\
-    <div react="contain item"></div>\
-    <div id="intended_destination"></div>\
-    <div id="decoy"></div>\
-  </div>')[0];
-  var resultsHolder = $(node).find('#intended_destination');
-  react.update(node, ['a']);
-  same($($(resultsHolder).children()[0]).html(), 'a', 'child\'s innerHTML is set to array elemnt\'s value');
 });
 
 test('originally rendered nodes are preserved on rerender', function(){
@@ -479,9 +463,8 @@ test('a withinEach inside a for will not get duplicate bindings', function(){
     <div react="for which item">\
       <div react="within item, withinEach">\
         <span react="contain which"></span>\
-        <span></span>\
       </div>\
-    <span></span></div>\
+    </div>\
   ').anchor(matrix);
   same($forContainingWithinEach.item(0).item(0).html(), '0', 'there is only one element in the outer array, so index substitution (binding to the key "which") should always be 0');
   react.set(matrix, 0, [{}, {}]);
@@ -517,7 +500,7 @@ test('index key binding is still available at change response time', function(){
   var $withinItemContainWhich = $('\
     <div react="for which item">\
       <div class="item" react="within item, contain which"></div>\
-    <span></span></div>\
+    </div>\
   ').anchor(people);
   same($withinItemContainWhich.item(1).html(), '1', 'which is available after an update operation');
   people.set(1, {});
@@ -583,7 +566,6 @@ test('event handlers don\'t get lost by loop insertion or creation', function(){
   $('\
     <div react="for item">\
       <div react="contain item"></div>\
-     <div></div>\
     </div>\
   ').anchor(items);
 
