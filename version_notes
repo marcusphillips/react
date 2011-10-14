@@ -1,3 +1,7 @@
+1.2.3
+---
+- no interface changes
+
 1.2.2
 ---
 - results container no longer used for iteration directives. results are now stored as siblings of the template node
