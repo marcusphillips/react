@@ -59,7 +59,7 @@
   var emptyScopeChain = (function(){
 
     // helper for creating the result (emptyScopeChain) and future scope chains returned from .extend()
-    var makeScopeChain = function(type, previousLink, additionalScope, options){
+    var ScopeChain = function(type, previousLink, additionalScope, options){
       options = options || {};
 
       var scopeChain = {
@@ -76,7 +76,7 @@
         },
 
         extend: function(type, additionalScope, options){
-          return makeScopeChain(type, scopeChain, additionalScope, options);
+          return new ScopeChain(type, scopeChain, additionalScope, options);
         },
 
         extendWithMany: function(type, scopes, options){
@@ -174,7 +174,7 @@
       return scopeChain;
     };
 
-    var emptyScopeChain = makeScopeChain('empty');
+    var emptyScopeChain = new ScopeChain('empty');
     return emptyScopeChain;
   }());
 
