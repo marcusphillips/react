@@ -207,7 +207,7 @@
 
     // allows user to notify react that an object's property has changed, so the relevant nodes may be updated
     changed: function(){
-      makeOperation().changed.apply({}, arguments).run();
+      new Operation().changed.apply({}, arguments).run();
     },
 
     update: function(/*[node, scope,]*/ options){
@@ -234,7 +234,7 @@
         scopes = [];
       }
 
-      var operation = makeOperation();
+      var operation = new Operation();
       operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).updateBranch();
       operation.run();
       return nodeInput;
@@ -253,7 +253,7 @@
 
       this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      makeOperation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
+      new Operation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
         var scopeKey = getScopeKey(scopes[i]);
         react.scopes[scopeKey] = scopes[i];
         return scopeKey;
@@ -329,7 +329,7 @@
           },
 
           anchors: function(){
-            return js.map(makeOperation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
+            return js.map(new Operation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
               return react.scopes[scopeName];
             });
           },
@@ -393,7 +393,7 @@
 
   // An operation provides a shared context where complex interactions may rely upon shared state
 
-  var makeOperation = function(){
+  var Operation = function(){
     // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
     var $nodes = {};
     var proxies = [];
