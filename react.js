@@ -354,7 +354,7 @@
 
           boundFilter: function(directiveString){
             if(!directiveString){ return this; }
-            var directive = makeDirective(directiveString);
+            var directive = new Directive(directiveString);
             return this.filter(function(item){
               var directives = $(item).boundDirectives();
               for(var i = 0; i < directives.length; i++){
@@ -487,7 +487,7 @@
     };
 
     // Overriding jQuery to provide supplemental functionality to DOM node wrappers
-    // Within the scope of makeOperation, all calls to $() return a customized jQuery object. For access to the original, use jQuery()
+    // Within the scope of the Operation constructor, all calls to $() return a customized jQuery object. For access to the original, use jQuery()
     var $ = function(node){
       js.errorIf(arguments.length !== 1 || !node || node.nodeType !== 1 || js.isArray[arguments[0]] || arguments[0] instanceof jQuery, 'overridden $ can only accept one input, which must be a DOM node');
       if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
@@ -533,7 +533,7 @@
       });
 
       // provides an object representing the directive itself (for example, "contain user.name")
-      var makeDirective = function(index, tokens){
+      var Directive = function(index, tokens){
         var isDead;
         var shouldUpdate;
         var shouldUpdateBranch;
@@ -729,7 +729,7 @@
         return directive;
       };
 
-      var nullDirective = makeDirective(null, [], null);
+      var nullDirective = new Directive(null, [], null);
       nullDirective.visit = nullDirective.shouldUpdate = nullDirective.shouldUpdateBranch = nullDirective.isDead = nullDirective.visit = noop;
       nullDirective.getParent = function(){ js.error('internal error: cannot get the parent of a null directive'); };
       nullDirective.getScopeChain = function(){ return emptyScopeChain; };
@@ -737,21 +737,21 @@
       // build up directives
       var directives = js.reduce($node.getDirectiveArrays(), [], function(which, tokens, memo){
         which === 0 && tokens[0] === 'anchored' ?
-          memo.anchored = makeDirective('anchored', tokens) :
-          memo.push(makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
+          memo.anchored = new Directive('anchored', tokens) :
+          memo.push(new Directive((memo.anchored ? which-1 : which).toString(), tokens));
         return memo;
       });
 
-      directives.anchored = directives.anchored || makeDirective('anchored', ['anchored']);
+      directives.anchored = directives.anchored || new Directive('anchored', ['anchored']);
 
       $node.directives = js.extend(directives,{
 
-        before: makeDirective('before', ['before']),
-        after: makeDirective('after', ['after']),
+        before: new Directive('before', ['before']),
+        after: new Directive('after', ['after']),
 
         // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
         set: function(key, directive){
-          directives[key] = makeDirective(''+key, directive);
+          directives[key] = new Directive(''+key, directive);
           directives.write();
         },
 
@@ -771,7 +771,7 @@
         },
 
         prepend: function(directive){
-          directive = directive.isDirective ? directive : makeDirective('0', directive);
+          directive = directive.isDirective ? directive : new Directive('0', directive);
           directives.unshift(directive);
           js.map(directives, function(which, directive){
             directive.setIndex(which.toString());
