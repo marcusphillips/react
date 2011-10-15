@@ -1,8 +1,5 @@
 --- upcomming goals ---
-- move toward recursion simulation
 - bug: treat lookup failures on dot access and within directives as if they were if blocks (by turning them off)? Case: if you negate a failed lookup, do you want it to be truthy?
-- change queryselectorall to $.find() for compatibility (calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
-  - also see if there's a more efficient way to build an array other than iterating over the array like object
 - don't recurse into anchored nodes
 - anchor command also updates
 - phase out 'for' directive
@@ -73,6 +70,9 @@
 - don't think we need matchingBaseObject in the return details of a lookup, maybe just check if it's contained in the scope chain
 - prefix probably doesn't need to be stored in scopeChain, it can be passed via potentialObservers. this would allow .observe() to be taken off the scopeChain object
 - deprecate options from makeScopeChain
+- moving away from jquery dependency
+  - change $.find() back to queryselectorall $.find() (note calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
+- see if there's a more efficient way to build an array other than iterating over the array like object
 
 --- tests ---
 - performance tests

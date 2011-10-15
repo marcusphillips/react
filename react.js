@@ -521,7 +521,7 @@
 
         // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
         getReactDescendants: function(){
-          return js.map(makeArrayFromArrayLikeObject(node.querySelectorAll('[react]')), function(which, node){
+          return js.map(makeArrayFromArrayLikeObject($node.find('[react]')), function(which, node){
             return $(node);
           });
         },
