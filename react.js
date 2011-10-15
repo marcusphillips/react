@@ -418,7 +418,7 @@
         // writes an association between a directive and a property on an object by annotating the object
         observe: function(key, directive, prefix){
           directive.$node.store();
-          makeObserver(key, directive.$node.key, directive.index, prefix).write();
+          new Observer(key, directive.$node.key, directive.index, prefix).write();
         },
 
         changed: function(keys){
@@ -435,14 +435,14 @@
             var key = keys[whichKey];
             if(!object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
             for(var keyObserverString in object.observers[key]){
-              makeObserver(key, keyObserverString).dirty();
+              new Observer(key, keyObserverString).dirty();
             }
           }
         }
       };
 
       var cachedObservers = {};
-      var makeObserver = function(propertyKey, nodeKey, directiveIndex, prefix){
+      var Observer = function(propertyKey, nodeKey, directiveIndex, prefix){
         if(arguments.length === 2){
           var tokens = arguments[1].split(matchers.space);
           nodeKey = tokens[0];
