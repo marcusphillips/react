@@ -412,7 +412,7 @@
 
     // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
 
-    var makeProxy = function(object){
+    var Proxy = function(object){
 
       var proxy = {
         // writes an association between a directive and a property on an object by annotating the object
@@ -644,7 +644,7 @@
               for(var i = 0; i < potentialObservers.length; i++){
                 var potentialObserver = potentialObservers[i];
                 if(potentialObserver.scopeChain.anchorKey){
-                  makeProxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
+                  new Proxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
                 }
               }
               if(directive.shouldUpdateBranch() && !searched[directive.$node.key]){
@@ -806,7 +806,7 @@
      },
 
       changed: function(object, keys){
-        makeProxy(object).changed(keys);
+        new Proxy(object).changed(keys);
         return operation;
       }
 
