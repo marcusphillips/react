@@ -763,41 +763,41 @@
 
   // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
   var Proxy = function(operation, object){
-
-    var proxy = {
-      // writes an association between a directive and a property on an object by annotating the object
-      observe: function(key, directive, prefix){
-        directive.$node.store();
-        new Observer(operation, cachedObservers, object, key, directive.$node.key, directive.index, prefix).write();
-      },
-
-      changed: function(keys){
-        // if no key is supplied, check every key
-        if(!object || !object.observers){ return; }
-        keys = (
-          js.isArray(keys) ? keys :
-          keys !== undefined ? [keys] :
-          js.keys(object).concat('length' in object && !object.propertyIsEnumerable('length') ? ['length'] : [])
-        );
-
-        // we first need to collect all the observers of the changed keys
-        var whichKey;
-        for(whichKey = 0; whichKey < keys.length; whichKey+=1){
-          var key = keys[whichKey];
-          if(!object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
-          var keyObserverString;
-          for(keyObserverString in object.observers[key]){
-            new Observer(operation, cachedObservers, object, key, keyObserverString).dirty();
-          }
-        }
-      }
-    };
-
-    var cachedObservers = {};
-
-    return proxy;
+    js.extend(this, {
+      _operation: operation,
+      _object: object,
+      _cachedObservers: {}
+    });
   };
 
+  js.extend(Proxy.prototype, {
+    // writes an association between a directive and a property on an object by annotating the object
+    observe: function(key, directive, prefix){
+      directive.$node.store();
+      new Observer(this._operation, this._cachedObservers, this._object, key, directive.$node.key, directive.index, prefix).write();
+    },
+
+    changed: function(keys){
+      // if no key is supplied, check every key
+      if(!this._object || !this._object.observers){ return; }
+      keys = (
+        js.isArray(keys) ? keys :
+        keys !== undefined ? [keys] :
+        js.keys(this._object).concat('length' in this._object && !this._object.propertyIsEnumerable('length') ? ['length'] : [])
+      );
+
+      // we first need to collect all the observers of the changed keys
+      var whichKey;
+      for(whichKey = 0; whichKey < keys.length; whichKey+=1){
+        var key = keys[whichKey];
+        if(!this._object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
+        var keyObserverString;
+        for(keyObserverString in this._object.observers[key]){
+          new Observer(this._operation, this._cachedObservers, this._object, key, keyObserverString).dirty();
+        }
+      }
+    }
+  });
 
 
 
