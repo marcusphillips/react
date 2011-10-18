@@ -6,14 +6,13 @@
  * Dual licensed under the MIT or GPL Version 2 licenses.
  */
 
-(function() {
+(function(undefined) {
 
   /*
    * Library-wide helpers
    */
 
   var noop = function(){};
-  var undefined; // safeguard, undefined can be overwritten in the global scope
 
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
@@ -38,8 +37,8 @@
   };
 
   var makeArrayFromArrayLikeObject = function(arrayLikeObject){
-    var array = [];
-    for(var i = 0, length = arrayLikeObject.length; i < length ; i++){
+    var array = [], i, length;
+    for(i = 0, length = arrayLikeObject.length; i < length ; i+=1){
       array.push(arrayLikeObject[i]);
     }
     return array;
@@ -69,7 +68,7 @@
         key: options.key,
         prefix: options.prefix || '',
 // asdf this shouldn't need a prefix
-        anchorKey: options.anchorKey ? options.anchorKey : type === 'anchor' ? options.key : (previousLink||{}).anchorKey,
+        anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
 
         contains: function(scope){
           return scopeChain.scope === scope || (scopeChain.parent && scopeChain.parent.contains(scope));
@@ -82,7 +81,8 @@
         extendWithMany: function(type, scopes, options){
           scopes = scopes || [];
           var lastLink = scopeChain;
-          for(var which = 0; which < scopes.length; which++){
+          var which;
+          for(which = 0; which < scopes.length; which+=1){
             lastLink = lastLink.extend(type, scopes[which], options);
           }
           return lastLink;
@@ -90,10 +90,11 @@
 
         // provides the value at a given key by looking through the scope chain from this leaf up
         detailedLookup: function(key, options){
+          var negate;
           options = options || {};
           key = key.toString();
           if(key[0] === '!'){
-            var negate = true;
+            negate = true;
             key = key.slice(1);
           }
           // the details object will contain all interesting aspects of this lookup
@@ -101,7 +102,8 @@
           var details = {potentialObservers: []};
           // extend details must be called on any return values, since it handles the final step of negation
           var extendDetails = function(moreDetails){
-            for(var key in moreDetails||{}){
+            var key;
+            for(key in moreDetails||{}){
               details[key] = (
                 key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
                 key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
@@ -265,7 +267,8 @@
       js.extend(focus, react.helpers);
 
       if(deeply){
-        for(var key in focus){
+        var key;
+        for(key in focus){
           if(key !== 'set' && focus[key] && typeof focus[key] === 'object' && !focus[key].set){
             react.helpers(focus[key], deeply);
           }
@@ -294,8 +297,9 @@
       },
 
       del: function(keys){
+        var i;
         keys = js.isArray(keys) ? keys : [keys];
-        for(var i = 0; i < keys.length; i++){
+        for(i = 0; i < keys.length; i+=1){
           delete this[keys[i]];
         }
         react.changed(this, keys);
@@ -353,11 +357,12 @@
           },
 
           boundFilter: function(directiveString){
+            var i;
             if(!directiveString){ return this; }
             var directive = new Directive(directiveString);
             return this.filter(function(item){
               var directives = $(item).boundDirectives();
-              for(var i = 0; i < directives.length; i++){
+              for(i = 0; i < directives.length; i+=1){
                 if(directive.inputs ? directive.matches(each) : directive.command === each.command){ return true; }
               }
             });
@@ -396,7 +401,6 @@
   var Operation = function(){
     // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
     var $nodes = {};
-    var proxies = [];
 
     // directives we plan to visit, by key
     // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
@@ -405,86 +409,6 @@
     var visited = {};
     // branches from which we have already collected all bound descendants
     var searched = {};
-
-    /*
-     * Proxy
-     */
-
-    // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
-
-    var Proxy = function(object){
-
-      var proxy = {
-        // writes an association between a directive and a property on an object by annotating the object
-        observe: function(key, directive, prefix){
-          directive.$node.store();
-          new Observer(key, directive.$node.key, directive.index, prefix).write();
-        },
-
-        changed: function(keys){
-          // if no key is supplied, check every key
-          if(!object || !object.observers){ return; }
-          keys = (
-            js.isArray(keys) ? keys :
-            keys !== undefined ? [keys] :
-            js.keys(object).concat('length' in object && !object.propertyIsEnumerable('length') ? ['length'] : [])
-          );
-
-          // we first need to collect all the observers of the changed keys
-          for(var whichKey = 0; whichKey < keys.length; whichKey++){
-            var key = keys[whichKey];
-            if(!object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
-            for(var keyObserverString in object.observers[key]){
-              new Observer(key, keyObserverString).dirty();
-            }
-          }
-        }
-      };
-
-      var cachedObservers = {};
-      var Observer = function(propertyKey, nodeKey, directiveIndex, prefix){
-        if(arguments.length === 2){
-          var tokens = arguments[1].split(matchers.space);
-          nodeKey = tokens[0];
-          directiveIndex = tokens[1];
-          prefix = tokens[2];
-        }
-
-        var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
-        var observerKey = propertyKey+' '+observerDetailsString;
-        if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
-
-        var observer = {
-          object: object,
-
-          directive: $(react.nodes[nodeKey]).directives[directiveIndex],
-
-          key: observerKey,
-
-          write: function(){
-            object.observers = object.observers || {};
-            object.observers[propertyKey] = object.observers[propertyKey] || {};
-            object.observers[propertyKey][observerDetailsString] = true;
-          },
-
-          dirty: function(){
-            if(observer.isDirty){ return; }
-            observer.isDirty = true;
-            observer.directive.dirtyObserver(observer);
-          },
-
-          pertains: function(){
-            // ignore the object if it's not in the same path that lead to registration of the observer
-            return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
-          }
-        };
-
-        return (cachedObservers[observerKey] = observer);
-      };
-
-      proxies.push(proxy);
-      return proxy;
-    };
 
     // Overriding jQuery to provide supplemental functionality to DOM node wrappers
     // Within the scope of the Operation constructor, all calls to $() return a customized jQuery object. For access to the original, use jQuery()
@@ -596,7 +520,8 @@
           },
 
           dirtyObserverPertains: function(){
-            for(var key in dirtyObservers){
+            var key;
+            for(key in dirtyObservers){
               if(dirtyObservers[key].pertains()){ return true; }
             }
           },
@@ -641,10 +566,11 @@
               js.debugIf(!didCallOnUpdate, 'directives must run this.onUpdate()');
             });
             if(willUpdate){
-              for(var i = 0; i < potentialObservers.length; i++){
+              var i;
+              for(i = 0; i < potentialObservers.length; i+=1){
                 var potentialObserver = potentialObservers[i];
                 if(potentialObserver.scopeChain.anchorKey){
-                  new Proxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
+                  new Proxy(operation, potentialObserver.scopeChain.scope).observe(potentialObserver.key, directive, potentialObserver.scopeChain.prefix);
                 }
               }
               if(directive.shouldUpdateBranch() && !searched[directive.$node.key]){
@@ -655,8 +581,8 @@
 
           search: function(){
             // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
-            var $nodes = $node.getReactNodes();
-            for(var which = 0; which < $nodes.length; which++){
+            var $nodes = $node.getReactNodes(), which;
+            for(which = 0; which < $nodes.length; which+=1){
               // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
               searched[$nodes[which].key] = true;
               $nodes[which].directives.after.consider();
@@ -806,7 +732,7 @@
      },
 
       changed: function(object, keys){
-        new Proxy(object).changed(keys);
+        new Proxy(operation, object).changed(keys);
         return operation;
       }
 
@@ -815,6 +741,86 @@
     return operation;
   };
 
+
+  /*
+   * Proxy
+   */
+
+  // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
+  var Proxy = function(operation, object){
+
+    var proxy = {
+      // writes an association between a directive and a property on an object by annotating the object
+      observe: function(key, directive, prefix){
+        directive.$node.store();
+        new Observer(key, directive.$node.key, directive.index, prefix).write();
+      },
+
+      changed: function(keys){
+        // if no key is supplied, check every key
+        if(!object || !object.observers){ return; }
+        keys = (
+          js.isArray(keys) ? keys :
+          keys !== undefined ? [keys] :
+          js.keys(object).concat('length' in object && !object.propertyIsEnumerable('length') ? ['length'] : [])
+        );
+
+        // we first need to collect all the observers of the changed keys
+        var whichKey;
+        for(whichKey = 0; whichKey < keys.length; whichKey+=1){
+          var key = keys[whichKey];
+          if(!object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
+          var keyObserverString;
+          for(keyObserverString in object.observers[key]){
+            new Observer(key, keyObserverString).dirty();
+          }
+        }
+      }
+    };
+
+    var cachedObservers = {};
+    var Observer = function(propertyKey, nodeKey, directiveIndex, prefix){
+      if(arguments.length === 2){
+        var tokens = arguments[1].split(matchers.space);
+        nodeKey = tokens[0];
+        directiveIndex = tokens[1];
+        prefix = tokens[2];
+      }
+
+      var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
+      var observerKey = propertyKey+' '+observerDetailsString;
+      if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
+
+      var observer = {
+        object: object,
+
+        directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
+
+        key: observerKey,
+
+        write: function(){
+          object.observers = object.observers || {};
+          object.observers[propertyKey] = object.observers[propertyKey] || {};
+          object.observers[propertyKey][observerDetailsString] = true;
+        },
+
+        dirty: function(){
+          if(observer.isDirty){ return; }
+          observer.isDirty = true;
+          observer.directive.dirtyObserver(observer);
+        },
+
+        pertains: function(){
+          // ignore the object if it's not in the same path that lead to registration of the observer
+          return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
+        }
+      };
+
+      return (cachedObservers[observerKey] = observer);
+    };
+
+    return proxy;
+  };
 
   /*
    * commands
@@ -852,7 +858,8 @@
 
     anchored: function(/*token1, ...tokenN */){
       //this.resetScopeChain();
-      for(var i = 0; i < arguments.length; i++){
+      var i;
+      for(i = 0; i < arguments.length; i+=1){
         var token = arguments[i];
         if(this.scopes[token]){
           this.pushScope('anchor', this.scopes[token], {key:token});
@@ -939,15 +946,15 @@
       // this ensures that the directive will depend upon any changes to the length of the array
       this.lookup('length');
 
-      var itemNodes = [], pregeneratedItemCount = 0, lastPregeneratedItem = $itemTemplate, itemsToRemove = [];
-      for(var i = 1; i < $children.length; i++){
+      var itemNodes = [], pregeneratedItemCount = 0, lastPregeneratedItem = $itemTemplate, itemsToRemove = [], i;
+      for(i = 1; i < $children.length; i+=1){
         if(this.$($children[i]).hasClass('reactItem')){
-          pregeneratedItemCount++;
+          pregeneratedItemCount+=1;
           collection.length < pregeneratedItemCount ? itemsToRemove.push($children[i]) : (lastPregeneratedItem = $children[i]);
         }
       }
       var newItems = [], newItem;
-      for(i = pregeneratedItemCount; i < collection.length; i++){
+      for(i = pregeneratedItemCount; i < collection.length; i+=1){
         callback.call(this, i, newItem = $itemTemplate.clone().removeClass('reactItemTemplate').addClass('reactItem')[0]);
         this.$(newItem).directives.before.updateBranch();
         newItems.push(newItem);
