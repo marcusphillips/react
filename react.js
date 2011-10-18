@@ -446,7 +446,7 @@
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to makeNodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var makeNodeWrapper = function(operation, $nodes, toVisit, searched, node){
-    js.errorIf(arguments.length !== 5 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
+    js.debugIf(arguments.length !== 5 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
     if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
 
     var $node = js.create(jQuery(node), {
@@ -722,7 +722,7 @@
           directive.index.toString() === '0' ? directives.anchored :
           directive.index.toString().match(matchers.isNumber) ? directives[directive.index-1] :
           directive.index === 'after' ? (directives.length ? directives[directives.length-1] : directives.anchored) :
-          js.debugIf(true, 'invalid directive key')
+          js.error('invalid directive key')
         );
       },
 
@@ -768,7 +768,7 @@
       // writes an association between a directive and a property on an object by annotating the object
       observe: function(key, directive, prefix){
         directive.$node.store();
-        new Observer(key, directive.$node.key, directive.index, prefix).write();
+        new Observer(operation, cachedObservers, object, key, directive.$node.key, directive.index, prefix).write();
       },
 
       changed: function(keys){
@@ -787,55 +787,66 @@
           if(!object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
           var keyObserverString;
           for(keyObserverString in object.observers[key]){
-            new Observer(key, keyObserverString).dirty();
+            new Observer(operation, cachedObservers, object, key, keyObserverString).dirty();
           }
         }
       }
     };
 
     var cachedObservers = {};
-    var Observer = function(propertyKey, nodeKey, directiveIndex, prefix){
-      if(arguments.length === 2){
-        var tokens = nodeKey.split(matchers.space);
-        nodeKey = tokens[0];
-        directiveIndex = tokens[1];
-        prefix = tokens[2];
-      }
-
-      var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
-      var observerKey = propertyKey+' '+observerDetailsString;
-      if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
-
-      var observer = {
-        object: object,
-
-        directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
-
-        key: observerKey,
-
-        write: function(){
-          object.observers = object.observers || {};
-          object.observers[propertyKey] = object.observers[propertyKey] || {};
-          object.observers[propertyKey][observerDetailsString] = true;
-        },
-
-        dirty: function(){
-          if(observer.isDirty){ return; }
-          observer.isDirty = true;
-          observer.directive.dirtyObserver(observer);
-        },
-
-        pertains: function(){
-          // ignore the object if it's not in the same path that lead to registration of the observer
-          return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
-        }
-      };
-
-      return (cachedObservers[observerKey] = observer);
-    };
 
     return proxy;
   };
+
+
+
+
+  /*
+   * Observer
+   */
+
+  var Observer = function(operation, cachedObservers, object, propertyKey, nodeKey, directiveIndex, prefix){
+    if(arguments.length === 5){
+      var tokens = nodeKey.split(matchers.space);
+      nodeKey = tokens[0];
+      directiveIndex = tokens[1];
+      prefix = tokens[2];
+    }
+
+    var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
+    var observerKey = propertyKey+' '+observerDetailsString;
+    if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
+
+    var observer = {
+      object: object,
+
+      directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
+
+      key: observerKey,
+
+      write: function(){
+        object.observers = object.observers || {};
+        object.observers[propertyKey] = object.observers[propertyKey] || {};
+        object.observers[propertyKey][observerDetailsString] = true;
+      },
+
+      dirty: function(){
+        if(observer.isDirty){ return; }
+        observer.isDirty = true;
+        observer.directive.dirtyObserver(observer);
+      },
+
+      pertains: function(){
+        // ignore the object if it's not in the same path that lead to registration of the observer
+        return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
+      }
+    };
+
+    return (cachedObservers[observerKey] = observer);
+  };
+
+
+
 
   /*
    * commands
