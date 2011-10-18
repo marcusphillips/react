@@ -209,7 +209,8 @@
 
     // allows user to notify react that an object's property has changed, so the relevant nodes may be updated
     changed: function(){
-      new Operation().changed.apply({}, arguments).run();
+      var operation = new Operation();
+      operation.changed.apply(operation, arguments).run();
     },
 
     update: function(/*[node, scope,]*/ options){
@@ -399,54 +400,67 @@
   // An operation provides a shared context where complex interactions may rely upon shared state
 
   var Operation = function(){
-    // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
-    var $nodes = {};
+    js.extend(this, {
 
-    // directives we plan to visit, by key
-    // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-    var toVisit = {};
+      // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
+      _$nodes: {},
 
-    // visited directives, by key
-    var visited = {};
+      // directives we plan to visit, by key
+      // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
+      _toVisit: {},
 
-    // branches from which we have already collected all bound descendants
-    var searched = {};
+      // visited directives, by key
+      _visited: {},
 
-    var hasRun = false, isRunning = false;
+      // branches from which we have already collected all bound descendants
+      _searched: {},
 
-    var operation = {
-      $: function(node){ return makeNodeWrapper(operation, $nodes, toVisit, searched, node);},
+      _hasRun: false,
+      _isRunning: false
 
-      hasRun: function(){ return hasRun; },
-
-      isRunning: function(){ return isRunning; },
-
-      run: function(){
-        js.errorIf(hasRun, 'An operation cannot be run twice');
-        isRunning = true;
-        // iterating over the toVisit list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
-        js.exhaust(toVisit, function(key, directive){
-          js.errorIf(visited[key], 'tried to consider the same directive twice');
-          visited[key] = toVisit[key].visit();
-        });
-        isRunning = false;
-        hasRun = true;
-      },
-
-      changed: function(object, keys){
-        new Proxy(operation, object).changed(keys);
-        return operation;
-      }
-
-    };
-
-    return operation;
+    });
   };
+
+  js.extend(Operation.prototype, {
+
+    $: function(node){ return makeNodeWrapper(this, this._$nodes, this._toVisit, this._searched, node);},
+
+    hasRun: function(){ return this._hasRun; },
+
+    isRunning: function(){ return this._isRunning; },
+
+    run: function(){
+      var limit = 10000,
+          key;
+      js.errorIf(this._hasRun, 'An operation cannot be run twice');
+      this._isRunning = true;
+      // iterating over the toVisit list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
+      while(js.hasKeys(this._toVisit)){
+        js.errorIf(!(--limit), 'too many node additions');
+        for(key in this._toVisit){
+          js.errorIf(this._visited[key], 'tried to consider the same directive twice');
+          this._visited[key] = this._toVisit[key].visit();
+          delete this._toVisit[key];
+        }
+      }
+      this._isRunning = false;
+      this._hasRun = true;
+    },
+
+    changed: function(object, keys){
+      new Proxy(this, object).changed(keys);
+      return this;
+    }
+  });
+
+
+
 
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to makeNodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var makeNodeWrapper = function(operation, $nodes, toVisit, searched, node){
-    js.debugIf(arguments.length !== 5 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
+    js.errorIf(arguments.length !== 5 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
+
     if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
 
     var $node = js.create(jQuery(node), {
@@ -565,7 +579,7 @@
     var didCallOnUpdate;
     var potentialObservers = [];
     var directive = js.extend(this, {
-      $: operation.$,
+      $: function(node){ return operation.$(node); },
       $node: $node,
       node: node,
       isDirective: true,
