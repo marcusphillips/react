@@ -56,6 +56,7 @@
 - should ignore binding scopes when looking for scope to iterate over
 
 --- optimizations ---
+- remove all memoizers, and set all parent state once only
 - *disassociate listeners when node gets updated against new object
 - clean up any pre-existing observers (lookup time? observation time?)
   - store observers in on a per-anchoring basis, for easy cleanup of memory references
@@ -73,6 +74,9 @@
 - moving away from jquery dependency
   - change $.find() back to queryselectorall $.find() (note calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
 - see if there's a more efficient way to build an array other than iterating over the array like object
+
+--- cleanup ---
+remove ._scopeInjectionArgLists property of directives
 
 --- tests ---
 - performance tests

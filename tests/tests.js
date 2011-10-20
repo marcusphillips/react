@@ -2,6 +2,8 @@
 
 var $originalFixtureNodes, nodes, scopes;
 
+react.debug();
+
 react.integrate.jQuery();
 
 $(function(){
