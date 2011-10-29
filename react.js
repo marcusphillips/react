@@ -435,7 +435,7 @@
 
   js.extend(Operation.prototype, {
 
-    $: function(node){ return makeNodeWrapper(this, this._$nodes, this._toVisit, this._searched, node);},
+    $: function(node){ return new NodeWrapper(this, node);},
 
     hasRun: function(){ return this._hasRun; },
 
@@ -469,13 +469,17 @@
 
 
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
-  // Within the scope of the Operation constructor, all calls to makeNodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var makeNodeWrapper = function(operation, $nodes, toVisit, searched, node){
-    js.errorIf(arguments.length !== 5 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
+  // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
+  var NodeWrapper = function(operation, node){
+    js.errorIf(arguments.length !== 2 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
 
-    if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
+    if(operation._$nodes[getNodeKey(node)]){ return operation._$nodes[getNodeKey(node)]; }
 
-    var $node = js.create(jQuery(node), {
+    var that = this;
+
+    jQuery.prototype.init.call(this, node);
+
+    js.extend(this, {
 
       node: node,
 
@@ -483,46 +487,11 @@
 
       _operation: operation,
 
-      makeDirective: function(index, tokens){ return new Directive($node, index, tokens); },
-
-      getDirectiveStrings: function(){
-        return js.map(($node.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
-          return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
-        });
-      },
-
-      getDirectiveArrays: function(){
-        return js.reduce($node.getDirectiveStrings(), [], function(which, string, memo){
-          return string ? memo.concat([string.split(matchers.space)]) : memo;
-        });
-      },
-
-      wrappedParent: function(){
-        return (
-          ! $node.parent()[0] ? null :
-          $node.parent()[0] === document ? null :
-          operation.$($node.parent()[0])
-        );
-      },
-
-      store: function(){
-        react.nodes[$node.key] = node;
-      },
-
-      // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
-      getReactDescendants: function(){
-        return js.map(makeArrayFromArrayLikeObject($node.find('[react]')), function(which, node){
-          return operation.$(node);
-        });
-      },
-
-      getReactNodes: function(){
-        return [$node].concat($node.getReactDescendants());
-      }
+      directives: []
 
     });
 
-    $node.nullDirective = js.extend($node.makeDirective(null, []), {
+    this.nullDirective = js.extend(this.makeDirective(null, []), {
       visit: noop,
       isDead: noop,
       shouldUpdate: noop,
@@ -532,37 +501,38 @@
     });
 
     // build up directives
-    var directives = [];
-    directives = js.reduce($node.getDirectiveArrays(), directives, function(which, tokens, memo){
+
+    this.directives = js.reduce(this.getDirectiveArrays(), this.directives, function(which, tokens, memo){
       which === 0 && tokens[0] === 'anchored' ?
-        memo.anchored = $node.makeDirective('anchored', tokens) :
-        memo.push($node.makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
+        memo.anchored = that.makeDirective('anchored', tokens) :
+        memo.push(that.makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
       return memo;
     });
 
-    directives.anchored = directives.anchored || $node.makeDirective('anchored', ['anchored']);
+    this.directives.anchored = this.directives.anchored || this.makeDirective('anchored', ['anchored']);
 
-    $node.directives = js.extend(directives,{
+    var $node = this;
+    js.extend(this.directives,{
 
-      before: $node.makeDirective('before', ['before']),
-      after: $node.makeDirective('after', ['after']),
+      before: this.makeDirective('before', ['before']),
+      after: this.makeDirective('after', ['after']),
 
       // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
       set: function(key, directive){
-        directives[key] = $node.makeDirective(''+key, directive);
-        directives.write();
+        $node.directives[key] = $node.makeDirective(''+key, directive);
+        $node.directives.write();
       },
 
       write: function(){
-        node.setAttribute('react', directives);
+        node.setAttribute('react', $node.directives);
       },
 
       orderedForString: function(){
-        return (directives.anchored.inputs.length ? [directives.anchored] : []).concat(directives);
+        return ($node.directives.anchored.inputs.length ? [$node.directives.anchored] : []).concat($node.directives);
       },
 
       toString: function(){
-        return js.map(directives.orderedForString(), function(which, directive){
+        return js.map($node.directives.orderedForString(), function(which, directive){
           if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
           return directive.toString();
         }).join(', ');
@@ -570,17 +540,61 @@
 
       prepend: function(directive){
         directive = directive.isDirective ? directive : $node.makeDirective('0', directive);
-        directives.unshift(directive);
-        js.map(directives, function(which, directive){
+        $node.directives.unshift(directive);
+        js.map($node.directives, function(which, directive){
           directive.setIndex(which.toString());
         });
-        directives.write();
+        $node.directives.write();
       }
 
     });
 
-    return ($nodes[$node.key] = $node);
+    return (operation._$nodes[this.key] = this);
   };
+
+  NodeWrapper.prototype = js.create(jQuery.prototype, {
+    // a correct constructor mapping breaks with jquery, because it calls
+    // constructor: NodeWrapper
+
+    makeDirective: function(index, tokens){ return new Directive(this, index, tokens); },
+
+    getDirectiveStrings: function(){
+      return js.map((this.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
+        return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
+      });
+    },
+
+    getDirectiveArrays: function(){
+      return js.reduce(this.getDirectiveStrings(), [], function(which, string, memo){
+        return string ? memo.concat([string.split(matchers.space)]) : memo;
+      });
+    },
+
+    wrappedParent: function(){
+      return (
+        ! this.parent()[0] ? null :
+        this.parent()[0] === document ? null :
+        this._operation.$(this.parent()[0])
+      );
+    },
+
+    store: function(){
+      react.nodes[this.key] = this.node;
+    },
+
+    // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
+    getReactDescendants: function(){
+      var that = this;
+      return js.map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
+        return that._operation.$(node);
+      });
+    },
+
+    getReactNodes: function(){
+      return [this].concat(this.getReactDescendants());
+    }
+
+  });
 
 
 
