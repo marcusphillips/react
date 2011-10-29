@@ -27,7 +27,7 @@ var refreshNodes = function(){
       $(node).attr('data-fixture', key);
       nodes['$'+key] = window['$'+key] = $(node);
       nodes[key] = node;
-    });
+    }).end().html('');
   }
 };
 
@@ -348,10 +348,12 @@ test('functions can be used as namespaces without running', function(){
 module('anchor');
 
 test('can name objects', function(){
-  ok(react.name('visitor', alice) === react.scopes.visitor, 'react.scopes held the specified object at the specified name');
+  ok(react.name('visitor', alice) === alice, 'naming a scope returns the scope');
+  ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
 });
 
 test('anchored nodes are prepended to scope chains on render', function(){
+  react.name('visitor', alice);
   equal($visitorName.anchor({}).html(), 'alice', 'inner node had access to outer node\'s anchor object');
 });
 

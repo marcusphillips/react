@@ -204,7 +204,13 @@
     },
 
     reset: function(){
-      this.scopes.length = this.nodes.length = 0;
+      var key;
+      for(key in this.scopes){
+        delete this.scopes[key];
+      }
+      for(key in this.nodes){
+        delete this.nodes[key];
+      }
     },
 
     // convenience method for setting object values and automatically calling changed on them
@@ -591,10 +597,18 @@
       node: $node[0],
       command: tokens[0],
       inputs: tokens.slice(1),
+
       _operation: $node._operation,
+
       _isDead: undefined,
       _shouldUpdate: undefined,
       _shouldUpdateBranch: undefined,
+
+      _parent: undefined,
+      _parentIsDead: undefined,
+      _visitParentBranch: undefined,
+      _gotParentInfo: undefined,
+
       _dirtyObservers: {},
       _scopeChain: undefined,
       _scopeInjectionArgLists: [],
@@ -611,6 +625,8 @@
 
     $: function(node){ return this._operation.$(node); },
     isDirective: true,
+
+    toString: function(){ return [this.command].concat(this.inputs).join(' '); },
 
     setIndex: function(newIndex){
       this.index = newIndex;
@@ -640,13 +656,6 @@
 
     getScopeChain: function(){
       return this._scopeChain = this._scopeChain || this.getParentScopeChain();
-    },
-
-    getParentScopeChain: function(){
-      if(this._parentScopeChain){ return this._parentScopeChain; }
-      return (this._parentScopeChain = js.reduce(this._scopeInjectionArgLists, this.getParent().getScopeChain(), function(which, scopeChainArguments, memo){
-        return memo.extend.apply(memo, scopeChainArguments);
-      }));
     },
 
     getScope: function(){
@@ -687,7 +696,7 @@
     },
 
     onUpdate: function(callback){
-      if(this._shouldUpdate && callback){
+      if(this.shouldUpdate() && callback){
         callback.apply(this);
       }
       return this;
@@ -704,8 +713,7 @@
         try {
           this._runCommand();
         } catch (error) {
-          this._describeError(error);
-          throw error;
+          throw this._describeError(error);
         }
       } else {
         this._runCommand();
@@ -747,6 +755,7 @@
         'scope chain description': this.getScopeChain().describe(),
         '(internal scope chain object) ': this.getScopeChain()
       });
+      return error;
     },
 
     search: function(){
@@ -759,28 +768,47 @@
       }
     },
 
+    _getParentInfo: function(){
+      if(this._gotParentInfo){ return; }
+      this._gotParentInfo = true;
+      this._parent = this._parent || this.getParent();
+      this._parentIsDead = this.parentIsDead();
+      this._shouldUpdateParentBranch = this.shouldUpdateParentBranch();
+      this._parentScopeChain = this._parentScopeChain || js.reduce(this._scopeInjectionArgLists, this._parent.getScopeChain(), function(which, scopeChainArguments, memo){
+        return memo.extend.apply(memo, scopeChainArguments);
+      });
+    },
+
+    getParentScopeChain: function(){
+      this._getParentInfo();
+      return this._parentScopeChain;
+    },
+
     shouldUpdate: function(){
-      return !this.isDead() && (this._shouldUpdate = this._shouldUpdate || this.shouldUpdateParentBranch() || this.dirtyObserverPertains());
+      this._getParentInfo();
+      return !this.isDead() && (this._shouldUpdate = this._shouldUpdate || this._shouldUpdateParentBranch || this.dirtyObserverPertains());
     },
 
     shouldUpdateBranch: function(){
-      return this.shouldUpdate() && (this._shouldUpdateBranch || this.shouldUpdateParentBranch());
-    },
-
-    shouldUpdateParentBranch: function(){
-      return this._shouldUpdateParentBranch = '_shouldUpdateParentBranch' in this ? this._shouldUpdateParentBranch : this.getParent().shouldUpdateBranch();
+      this._getParentInfo();
+      return this.shouldUpdate() && (this._shouldUpdateBranch || this._shouldUpdateParentBranch);
     },
 
     isDead: function(){
-      return this._isDead || this.parentIsDead();
+      this._getParentInfo();
+      return this._isDead || this._parentIsDead;
+    },
+
+    shouldUpdateParentBranch: function(){
+      return this._shouldUpdateParentBranch !== undefined ? this._shouldUpdateParentBranch : this.getParent().shouldUpdateBranch();
     },
 
     parentIsDead: function(){
-      return this._parentIsDead = '_parentIsDead' in this ? this._parentIsDead : this.getParent().isDead();
+      return this._parentIsDead !== undefined ? this._parentIsDead : this.getParent().isDead();
     },
 
     getParent: function(){
-      if('_parent' in this){ return this._parent; }
+      if(this._parent !== undefined){ return this._parent; }
       var repeatLimit = 10000, parent;
       while(parent !== (parent = this._potentialParent())){
         parent && parent.visit();
@@ -798,9 +826,7 @@
         this.index === 'after' ? (this.$node.directives.length ? this.$node.directives[this.$node.directives.length-1] : this.$node.directives.anchored) :
         js.error('invalid directive key')
       );
-    },
-
-    toString: function(){ return [this.command].concat(this.inputs).join(' '); }
+    }
 
   });
 
