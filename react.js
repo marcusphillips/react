@@ -591,7 +591,6 @@
 
   // provides an object representing the directive itself (for example, "contain user.name")
   var Directive = function($node, index, tokens){
-// todo asdf - every local variable here must be referenced correctly in the methods below
     js.extend(this, {
       $node: $node,
       node: $node[0],
@@ -893,35 +892,36 @@
     var observerKey = propertyKey+' '+observerDetailsString;
     if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
 
-    var observer = {
+    cachedObservers[observerKey] = js.extend(this, {
       object: object,
-
+      propertyKey: propertyKey,
+      observerDetailsString: observerDetailsString,
+      prefix: prefix,
       directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
-
-      key: observerKey,
-
-      write: function(){
-        object.observers = object.observers || {};
-        object.observers[propertyKey] = object.observers[propertyKey] || {};
-        object.observers[propertyKey][observerDetailsString] = true;
-      },
-
-      dirty: function(){
-        if(observer.isDirty){ return; }
-        observer.isDirty = true;
-        observer.directive.dirtyObserver(observer);
-      },
-
-      pertains: function(){
-        // ignore the object if it's not in the same path that lead to registration of the observer
-        return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
-      }
-    };
-
-    return (cachedObservers[observerKey] = observer);
+      key: observerKey
+    });
   };
 
+  js.extend(Observer.prototype, {
 
+    write: function(){
+      var observers = this.object.observers = this.object.observers || {};
+      var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
+      propertyObservers[this.observerDetailsString] = true;
+    },
+
+    dirty: function(){
+      if(this.isDirty){ return; }
+      this.isDirty = true;
+      this.directive.dirtyObserver(this);
+    },
+
+    pertains: function(){
+      // ignore the object if it's not in the same path that lead to registration of the observer
+      return this.directive.getScopeChain().detailedLookup(this.prefix + this.propertyKey, {checkFocus: this.object}).didMatchFocus;
+    }
+
+  });
 
 
   /*
