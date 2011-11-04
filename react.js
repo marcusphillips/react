@@ -468,6 +468,10 @@
 
 
 
+  /*
+   * NodeWrapper (subclass of jQuery)
+   */
+
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var NodeWrapper = function(operation, node){
@@ -475,20 +479,12 @@
 
     if(operation._$nodes[getNodeKey(node)]){ return operation._$nodes[getNodeKey(node)]; }
 
-    var that = this;
-
     jQuery.prototype.init.call(this, node);
 
     js.extend(this, {
-
       node: node,
-
       key: getNodeKey(node),
-
-      _operation: operation,
-
-      directives: []
-
+      _operation: operation
     });
 
     this.nullDirective = js.extend(this.makeDirective(null, []), {
@@ -500,54 +496,7 @@
       getParent: function(){ js.error('internal error: cannot get the parent of a null directive'); }
     });
 
-    // build up directives
-
-    this.directives = js.reduce(this.getDirectiveArrays(), this.directives, function(which, tokens, memo){
-      which === 0 && tokens[0] === 'anchored' ?
-        memo.anchored = that.makeDirective('anchored', tokens) :
-        memo.push(that.makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
-      return memo;
-    });
-
-    this.directives.anchored = this.directives.anchored || this.makeDirective('anchored', ['anchored']);
-
-    var $node = this;
-    js.extend(this.directives,{
-
-      before: this.makeDirective('before', ['before']),
-      after: this.makeDirective('after', ['after']),
-
-      // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
-      set: function(key, directive){
-        $node.directives[key] = $node.makeDirective(''+key, directive);
-        $node.directives.write();
-      },
-
-      write: function(){
-        node.setAttribute('react', $node.directives);
-      },
-
-      orderedForString: function(){
-        return ($node.directives.anchored.inputs.length ? [$node.directives.anchored] : []).concat($node.directives);
-      },
-
-      toString: function(){
-        return js.map($node.directives.orderedForString(), function(which, directive){
-          if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
-          return directive.toString();
-        }).join(', ');
-      },
-
-      prepend: function(directive){
-        directive = directive.isDirective ? directive : $node.makeDirective('0', directive);
-        $node.directives.unshift(directive);
-        js.map($node.directives, function(which, directive){
-          directive.setIndex(which.toString());
-        });
-        $node.directives.write();
-      }
-
-    });
+    this.directives = new DirectiveSet(this);
 
     return (operation._$nodes[this.key] = this);
   };
@@ -842,6 +791,63 @@
     }
 
   });
+
+
+
+
+  /*
+   * Directive Set
+   */
+
+  var DirectiveSet = function($node){
+    var directives = js.reduce($node.getDirectiveArrays(), [], function(which, tokens, memo){
+      which === 0 && tokens[0] === 'anchored' ?
+        memo.anchored = $node.makeDirective('anchored', tokens) :
+        memo.push($node.makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
+      return memo;
+    });
+
+    directives.anchored = directives.anchored || $node.makeDirective('anchored', ['anchored']);
+
+    js.extend(directives, {
+
+      before: $node.makeDirective('before', ['before']),
+      after: $node.makeDirective('after', ['after']),
+
+      // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
+      set: function(key, directive){
+        $node.directives[key] = $node.makeDirective(''+key, directive);
+        $node.directives.write();
+      },
+
+      write: function(){
+        $node[0].setAttribute('react', $node.directives);
+      },
+
+      orderedForString: function(){
+        return ($node.directives.anchored.inputs.length ? [$node.directives.anchored] : []).concat($node.directives);
+      },
+
+      toString: function(){
+        return js.map($node.directives.orderedForString(), function(which, directive){
+          if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
+          return directive.toString();
+        }).join(', ');
+      },
+
+      prepend: function(directive){
+        directive = directive.isDirective ? directive : $node.makeDirective('0', directive);
+        $node.directives.unshift(directive);
+        js.map($node.directives, function(which, directive){
+          directive.setIndex(which.toString());
+        });
+        $node.directives.write();
+      }
+
+    });
+
+    return directives;
+  };
 
 
 
