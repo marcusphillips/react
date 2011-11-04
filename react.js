@@ -56,131 +56,130 @@
    */
 
   // Scope chains are used to model namespace lookup behavior in templates
-  // all scope chains are built by calling emptyScopeChain.extend()
-  var emptyScopeChain = (function(){
+  // all scope chains should be built by calling emptyScopeChain.extend()
 
-    // helper for creating the result (emptyScopeChain) and future scope chains returned from .extend()
-    var ScopeChain = function(type, previousLink, additionalScope, options){
-      options = options || {};
+  var ScopeChain = function(type, previousLink, additionalScope, options){
+    options = options || {};
 
-      var scopeChain = {
-        parent: previousLink,
-        scope: additionalScope,
-        type: type,
-        key: options.key,
-        prefix: options.prefix || '',
+    js.extend(this, {
+      parent: previousLink,
+      scope: additionalScope,
+      type: type,
+      key: options.key,
+      prefix: options.prefix || '',
 // asdf this shouldn't need a prefix
-        anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
+      anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
+    });
+  };
 
-        contains: function(scope){
-          return scopeChain.scope === scope || (scopeChain.parent && scopeChain.parent.contains(scope));
-        },
+  js.extend(ScopeChain.prototype, {
 
-        extend: function(type, additionalScope, options){
-          return new ScopeChain(type, scopeChain, additionalScope, options);
-        },
+    contains: function(scope){
+      return this.scope === scope || (this.parent && this.parent.contains(scope));
+    },
 
-        extendWithMany: function(type, scopes, options){
-          scopes = scopes || [];
-          var lastLink = scopeChain;
-          var which;
-          for(which = 0; which < scopes.length; which+=1){
-            lastLink = lastLink.extend(type, scopes[which], options);
-          }
-          return lastLink;
-        },
+    extend: function(type, additionalScope, options){
+      return new ScopeChain(type, this, additionalScope, options);
+    },
 
-        // provides the value at a given key by looking through the scope chain from this leaf up
-        detailedLookup: function(key, options){
-          var negate;
-          options = options || {};
-          key = key.toString();
-          if(key[0] === '!'){
-            negate = true;
-            key = key.slice(1);
-          }
-          // the details object will contain all interesting aspects of this lookup
-          // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
-          var details = {potentialObservers: []};
-          // extend details must be called on any return values, since it handles the final step of negation
-          var extendDetails = function(moreDetails){
-            var key;
-            for(key in moreDetails||{}){
-              details[key] = (
-                key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
-                key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
-                moreDetails[key]
-              );
-            }
-            if(negate){ details.value = !details.vailue; }
-            return details;
-          };
+    extendWithMany: function(type, scopes, options){
+      scopes = scopes || [];
+      var lastLink = this;
+      var which;
+      for(which = 0; which < scopes.length; which+=1){
+        lastLink = lastLink.extend(type, scopes[which], options);
+      }
+      return lastLink;
+    },
 
-          // all lookups fail in the empty scope chain
-          if(scopeChain === emptyScopeChain){
-            return extendDetails({failed:true});
-          }
-
-          if (matchers.isString.test(key)) {
-            js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
-            return extendDetails({value: key.slice(1, key.length-1)});
-          }
-
-          var path = key.split('.');
-          // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
-          var baseKey = path.shift();
-          var value = scopeChain.scope[baseKey];
-
-          // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
-          if(value instanceof Fallthrough){
-            return extendDetails(scopeChain.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
-          }
-
-          details.potentialObservers.push({scopeChain: scopeChain, key: baseKey});
-          details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === scopeChain.scope);
-          // recurse onto the parent scopeChain if the lookup fails at this level
-          if(! (baseKey in scopeChain.scope) ){
-            return extendDetails(scopeChain.parent.detailedLookup(key, options));
-          }
-
-          // for dot access
-          if(path.length){
-            if(value === undefined || value === null){
-              // Could not find the key on a null or undefined object at path scopeChain.prefix+baseKey from scopeChain.scope
-              return extendDetails();
-            }
-            return extendDetails(emptyScopeChain.extend('dotAccess', value, {
-              // asdf - i think this needs to pass a key
-              prefix: scopeChain.prefix + baseKey + '.',
-              anchorKey: scopeChain.anchorKey
-            }).detailedLookup(path.join('.'), options));
-          }
-
-          // functions are called before being returned
-          value = typeof value === 'function' ? value.call(scopeChain.scope) : value;
-
-          return extendDetails({value: value});
-        },
-
-        lookup: function(){
-          return scopeChain.detailedLookup.apply(scopeChain, arguments).value;
-        },
-
-        // provides a description of the scope chain in array format, optimized for viewing in the console
-        describe: function(){
-          return [
-            ['scope: ', scopeChain.scope, ', type of scope shift: ' + scopeChain.type + (scopeChain.key ? ' (key: '+scopeChain.key+')': '') + (scopeChain.anchorKey ? ', anchored to: '+scopeChain.anchorKey+')': '')]
-          ].concat(scopeChain.parent ? scopeChain.parent.describe() : []);
+    // provides the value at a given key by looking through the scope chain from this leaf up
+    detailedLookup: function(key, options){
+      var negate;
+      options = options || {};
+      key = key.toString();
+      if(key[0] === '!'){
+        negate = true;
+        key = key.slice(1);
+      }
+      // the details object will contain all interesting aspects of this lookup
+      // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
+      var details = {potentialObservers: []};
+      // extend details must be called on any return values, since it handles the final step of negation
+      var extendDetails = function(moreDetails){
+        var key;
+        for(key in moreDetails||{}){
+          details[key] = (
+            key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
+            key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
+            moreDetails[key]
+          );
         }
-
+        if(negate){ details.value = !details.vailue; }
+        return details;
       };
 
-      return scopeChain;
-    };
+      // all lookups fail in the empty scope chain
+      if(this === emptyScopeChain){
+        return extendDetails({failed:true});
+      }
 
-    var emptyScopeChain = new ScopeChain('empty');
-    return emptyScopeChain;
-  }());
+      if (matchers.isString.test(key)) {
+        js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
+        return extendDetails({value: key.slice(1, key.length-1)});
+      }
+
+      var path = key.split('.');
+      // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
+      var baseKey = path.shift();
+      var value = this.scope[baseKey];
+
+      // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
+      if(value instanceof Fallthrough){
+        return extendDetails(this.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
+      }
+
+      details.potentialObservers.push({scopeChain: this, key: baseKey});
+      details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === this.scope);
+      // recurse onto the parent scopeChain if the lookup fails at this level
+      if(! (baseKey in this.scope) ){
+        return extendDetails(this.parent.detailedLookup(key, options));
+      }
+
+      // for dot access
+      if(path.length){
+        if(value === undefined || value === null){
+          // Could not find the key on a null or undefined object at path this.prefix+baseKey from this.scope
+          return extendDetails();
+        }
+        return extendDetails(emptyScopeChain.extend('dotAccess', value, {
+          // asdf - i think this needs to pass a key
+          prefix: this.prefix + baseKey + '.',
+          anchorKey: this.anchorKey
+        }).detailedLookup(path.join('.'), options));
+      }
+
+      // functions are called before being returned
+      value = typeof value === 'function' ? value.call(this.scope) : value;
+
+      return extendDetails({value: value});
+    },
+
+    lookup: function(){
+      return this.detailedLookup.apply(this, arguments).value;
+    },
+
+    // provides a description of the scope chain in array format, optimized for viewing in the console
+    describe: function(){
+      return [
+        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.key ? ' (key: '+this.key+')': '') + (this.anchorKey ? ', anchored to: '+this.anchorKey+')': '')]
+      ].concat(this.parent ? this.parent.describe() : []);
+    }
+
+  });
+
+  var emptyScopeChain = new ScopeChain('empty');
+
+
 
 
   /*
