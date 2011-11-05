@@ -35,6 +35,8 @@
 - jquery selection syntax for finding child directives that reference properties available in the current directive's scope
 
 --- new major features ---
+- move to closure based data storage for each object
+- move to .commit() for updating observers
 - converter for a simpler abstraction language that generates react nodes (sort of like handlebars)
 - an in-javascript syntax for defining bound relationships of objects and nodes
 
