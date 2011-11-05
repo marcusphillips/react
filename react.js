@@ -673,12 +673,12 @@
 
       if(debugging){
         try {
-          this._runCommand();
+          this._runCommand(this.command, this.inputs);
         } catch (error) {
           throw this._describeError(error);
         }
       } else {
-        this._runCommand();
+        this._runCommand(this.command, this.inputs);
       }
 
       if(willUpdate){
@@ -689,10 +689,21 @@
       }
     },
 
-    _runCommand: function(){
+    _runCommand: function(command, inputs){
       js.errorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
-      js.errorIf(!commands[this.command], 'not a valid react command: '+this.command);
-      commands[this.command].apply(this, this.inputs);
+      js.errorIf(!commands[command], 'not a valid react command: '+command);
+      commands["resolve_"+command] || (commands["resolve_"+command] = commands["resolve_"+command] === false ? this._nonResolver : this._fullResolver);
+      var args = commands["resolve_"+command].call(this, inputs);
+      commands[command].apply(this, args);
+    },
+
+    _nonResolver: function(names){ return names; },
+
+    _fullResolver: function(names){
+      var that = this;
+      return js.map(names, function(which, name){
+        return that.lookup(name);
+      });
     },
 
     _registerPotentialObservers: function(){
@@ -981,21 +992,19 @@
   js.extend(react.commands, {
 
     log: function(){
-      var inputs = {}, that = this;
-      js.map(arguments, function(which, argument){
-        inputs[argument] = that.lookup(argument);
-      });
-      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:inputs});
+      typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:arguments});
     },
 
-    debug: function(command){
+    resolve_debug: false,
+    debug: function(commandKey){
       debugger;
-      this[command].apply(this, Array.prototype.slice.call(arguments, 1));
+      this._runCommand(commandKey, Array.prototype.slice.call(arguments, 1));
     },
 
-    debugIf: function(condition, command){
-      if(this.lookup(condition)){ debugger; }
-      this[command].apply(this, Array.prototype.slice.call(arguments, 2));
+    resolve_debugIf: false,
+    debugIf: function(conditionKey, commandKey){
+      if(this.lookup(conditionKey)){ debugger; }
+      this._runCommand(commandKey, Array.prototype.slice.call(arguments, 2));
     },
 
     before: function(){
@@ -1006,6 +1015,7 @@
 
     after: noop,
 
+    resolve_anchored: false,
     anchored: function(/*token1, ...tokenN */){
       //this.resetScopeChain();
       var i;
@@ -1023,6 +1033,8 @@
       });
     },
 
+
+    resolve_within: false,
     within: function(key){
       this._withScope('within', key);
     },
@@ -1035,6 +1047,7 @@
       scope ? this.pushScope(type, scope, {key:key}) : this.dead();
     },
 
+    resolve_withinItem: false,
     withinItem: function(key){
       // todo: add a rule to only allow getting items from last scope (check if key < scope.length?)
       // todo: add a rule to make sure the last scope object is an array
@@ -1054,6 +1067,7 @@
       });
     },
 
+    resolve_bindItem: false,
     bindItem: function(key, keyAlias, valueAlias){
       if(valueAlias === undefined){
         valueAlias = keyAlias;
@@ -1075,6 +1089,8 @@
       });
     },
 
+
+    resolve_for: false,
     'for': function(keyAlias, valueAlias){
       var aliases = Array.prototype.slice.call(arguments);
       this.onUpdate(function(){
@@ -1113,13 +1129,13 @@
       $(newItems).insertAfter(lastPregeneratedItem);
     },
 
-    contain: function(key){
+    contain: function(content){
       this.onUpdate(function(){
         // using innerHTML to clear the node because the jQuery convenience functions unbind event handlers. This would be an unexpected side effect for most React user consumption cases.
         this.node.innerHTML = '';
-        var insertion = this.lookup(key);
-        // if the insertion is a node, use the dom appending method, but insert other items as text
-        jQuery(this.node)[insertion && insertion.nodeType ? 'append' : 'text'](insertion);
+        // if the content is a node, use the dom appending method, but insert other items as text
+        var insertionMethod = content && content.nodeType ? 'append' : 'text';
+        jQuery(this.node)[insertionMethod](content);
         // note: .dead() can't happen outside onUpdate() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
         this.$node.directives.after.dead();
       });
@@ -1127,11 +1143,10 @@
     },
 
     'if': function(condition){
-      var conditional = this.lookup(condition);
-      if(!conditional){ this.dead(); }
+      if(!condition){ this.dead(); }
       this.onUpdate(function(){
-        $(this.node)[conditional ? 'removeClass' : 'addClass']('reactConditionallyHidden');
-        this._conditionalShow(conditional);
+        $(this.node)[condition ? 'removeClass' : 'addClass']('reactConditionallyHidden');
+        this._conditionalShow(condition);
         this.updateBranch();
       });
     },
@@ -1142,16 +1157,17 @@
 
     showIf: function(condition){
       this.onUpdate(function(){
-        this._conditionalShow(this.lookup(condition));
+        this._conditionalShow(condition);
       });
     },
 
     visIf: function(condition){
       this.onUpdate(function(){
-        jQuery(this.node).css('visibility', this.lookup(condition) ? 'visible' : 'hidden');
+        jQuery(this.node).css('visibility', condition ? 'visible' : 'hidden');
       });
     },
 
+    resolve_classIf: false,
     classIf: function(conditionKey, nameKey){
       this.onUpdate(function(){
         this.node.classIfs = this.node.classIfs || {};
@@ -1178,10 +1194,6 @@
     attr: function(name, value){
       js.errorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
       this.onUpdate(function(){
-
-        name = this.lookup(name);
-        value = this.lookup(value);
-
         if(!js.among(['string', 'number', 'undefined'], typeof name)){
           js.log('bad attr name: ', name);
           js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
@@ -1189,20 +1201,19 @@
           js.log('bad attr value: ', value);
           js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
         }
-
         jQuery(this.node).attr(name, value);
       });
     },
 
     attrIf: function(condition, name, value){
       this.onUpdate(function(){
-        this.lookup(condition) ? $(this.node).attr(this.lookup(name), this.lookup(value)) : $(this.node).removeAttr(this.lookup(name));
+        condition ? $(this.node).attr(name, value) : $(this.node).removeAttr(name);
       });
     },
 
     checkedIf: function(condition){
       this.onUpdate(function(){
-        $(this.node).attr('checked', !!this.lookup(condition));
+        $(this.node).attr('checked', !!condition);
       });
     }
 
