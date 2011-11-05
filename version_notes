@@ -1,3 +1,8 @@
+1.2.5
+---
+- no interface changes
+- full use of prototypes and pseudoclassical patterns (to take advantage of the browser optimizations fo them)
+
 1.2.4
 ---
 - no interface changes

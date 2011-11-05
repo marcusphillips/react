@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 1.2.4, http://github.com/marcusphillips/react
+ * Version 1.2.5, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
@@ -49,138 +49,6 @@
 
   // Fallthroughs provide a mechanism for binding one key in a scope to the value at another key
   var Fallthrough = function(key){ this.key = key; };
-
-
-  /*
-   * Scope chains
-   */
-
-  // Scope chains are used to model namespace lookup behavior in templates
-  // all scope chains are built by calling emptyScopeChain.extend()
-  var emptyScopeChain = (function(){
-
-    // helper for creating the result (emptyScopeChain) and future scope chains returned from .extend()
-    var ScopeChain = function(type, previousLink, additionalScope, options){
-      options = options || {};
-
-      var scopeChain = {
-        parent: previousLink,
-        scope: additionalScope,
-        type: type,
-        key: options.key,
-        prefix: options.prefix || '',
-// asdf this shouldn't need a prefix
-        anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
-
-        contains: function(scope){
-          return scopeChain.scope === scope || (scopeChain.parent && scopeChain.parent.contains(scope));
-        },
-
-        extend: function(type, additionalScope, options){
-          return new ScopeChain(type, scopeChain, additionalScope, options);
-        },
-
-        extendWithMany: function(type, scopes, options){
-          scopes = scopes || [];
-          var lastLink = scopeChain;
-          var which;
-          for(which = 0; which < scopes.length; which+=1){
-            lastLink = lastLink.extend(type, scopes[which], options);
-          }
-          return lastLink;
-        },
-
-        // provides the value at a given key by looking through the scope chain from this leaf up
-        detailedLookup: function(key, options){
-          var negate;
-          options = options || {};
-          key = key.toString();
-          if(key[0] === '!'){
-            negate = true;
-            key = key.slice(1);
-          }
-          // the details object will contain all interesting aspects of this lookup
-          // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
-          var details = {potentialObservers: []};
-          // extend details must be called on any return values, since it handles the final step of negation
-          var extendDetails = function(moreDetails){
-            var key;
-            for(key in moreDetails||{}){
-              details[key] = (
-                key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
-                key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
-                moreDetails[key]
-              );
-            }
-            if(negate){ details.value = !details.vailue; }
-            return details;
-          };
-
-          // all lookups fail in the empty scope chain
-          if(scopeChain === emptyScopeChain){
-            return extendDetails({failed:true});
-          }
-
-          if (matchers.isString.test(key)) {
-            js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
-            return extendDetails({value: key.slice(1, key.length-1)});
-          }
-
-          var path = key.split('.');
-          // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
-          var baseKey = path.shift();
-          var value = scopeChain.scope[baseKey];
-
-          // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
-          if(value instanceof Fallthrough){
-            return extendDetails(scopeChain.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
-          }
-
-          details.potentialObservers.push({scopeChain: scopeChain, key: baseKey});
-          details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === scopeChain.scope);
-          // recurse onto the parent scopeChain if the lookup fails at this level
-          if(! (baseKey in scopeChain.scope) ){
-            return extendDetails(scopeChain.parent.detailedLookup(key, options));
-          }
-
-          // for dot access
-          if(path.length){
-            if(value === undefined || value === null){
-              // Could not find the key on a null or undefined object at path scopeChain.prefix+baseKey from scopeChain.scope
-              return extendDetails();
-            }
-            return extendDetails(emptyScopeChain.extend('dotAccess', value, {
-              // asdf - i think this needs to pass a key
-              prefix: scopeChain.prefix + baseKey + '.',
-              anchorKey: scopeChain.anchorKey
-            }).detailedLookup(path.join('.'), options));
-          }
-
-          // functions are called before being returned
-          value = typeof value === 'function' ? value.call(scopeChain.scope) : value;
-
-          return extendDetails({value: value});
-        },
-
-        lookup: function(){
-          return scopeChain.detailedLookup.apply(scopeChain, arguments).value;
-        },
-
-        // provides a description of the scope chain in array format, optimized for viewing in the console
-        describe: function(){
-          return [
-            ['scope: ', scopeChain.scope, ', type of scope shift: ' + scopeChain.type + (scopeChain.key ? ' (key: '+scopeChain.key+')': '') + (scopeChain.anchorKey ? ', anchored to: '+scopeChain.anchorKey+')': '')]
-          ].concat(scopeChain.parent ? scopeChain.parent.describe() : []);
-        }
-
-      };
-
-      return scopeChain;
-    };
-
-    var emptyScopeChain = new ScopeChain('empty');
-    return emptyScopeChain;
-  }());
 
 
   /*
@@ -405,6 +273,139 @@
   };
 
 
+
+
+  /*
+   * Scope chains
+   */
+
+  // Scope chains are used to model namespace lookup behavior in templates
+  // all scope chains should be built by calling emptyScopeChain.extend()
+
+  var ScopeChain = function(type, previousLink, additionalScope, options){
+    options = options || {};
+
+    js.extend(this, {
+      parent: previousLink,
+      scope: additionalScope,
+      type: type,
+      key: options.key,
+      prefix: options.prefix || '',
+// asdf this shouldn't need a prefix
+      anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
+    });
+  };
+
+  js.extend(ScopeChain.prototype, {
+
+    contains: function(scope){
+      return this.scope === scope || (this.parent && this.parent.contains(scope));
+    },
+
+    extend: function(type, additionalScope, options){
+      return new ScopeChain(type, this, additionalScope, options);
+    },
+
+    extendWithMany: function(type, scopes, options){
+      scopes = scopes || [];
+      var lastLink = this;
+      var which;
+      for(which = 0; which < scopes.length; which+=1){
+        lastLink = lastLink.extend(type, scopes[which], options);
+      }
+      return lastLink;
+    },
+
+    // provides the value at a given key by looking through the scope chain from this leaf up
+    detailedLookup: function(key, options){
+      var negate;
+      options = options || {};
+      key = key.toString();
+      if(key[0] === '!'){
+        negate = true;
+        key = key.slice(1);
+      }
+      // the details object will contain all interesting aspects of this lookup
+      // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
+      var details = {potentialObservers: []};
+      // extend details must be called on any return values, since it handles the final step of negation
+      var extendDetails = function(moreDetails){
+        var key;
+        for(key in moreDetails||{}){
+          details[key] = (
+            key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
+            key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
+            moreDetails[key]
+          );
+        }
+        if(negate){ details.value = !details.vailue; }
+        return details;
+      };
+
+      // all lookups fail in the empty scope chain
+      if(this === emptyScopeChain){
+        return extendDetails({failed:true});
+      }
+
+      if (matchers.isString.test(key)) {
+        js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
+        return extendDetails({value: key.slice(1, key.length-1)});
+      }
+
+      var path = key.split('.');
+      // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
+      var baseKey = path.shift();
+      var value = this.scope[baseKey];
+
+      // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
+      if(value instanceof Fallthrough){
+        return extendDetails(this.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
+      }
+
+      details.potentialObservers.push({scopeChain: this, key: baseKey});
+      details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === this.scope);
+      // recurse onto the parent scopeChain if the lookup fails at this level
+      if(! (baseKey in this.scope) ){
+        return extendDetails(this.parent.detailedLookup(key, options));
+      }
+
+      // for dot access
+      if(path.length){
+        if(value === undefined || value === null){
+          // Could not find the key on a null or undefined object at path this.prefix+baseKey from this.scope
+          return extendDetails();
+        }
+        return extendDetails(emptyScopeChain.extend('dotAccess', value, {
+          // asdf - i think this needs to pass a key
+          prefix: this.prefix + baseKey + '.',
+          anchorKey: this.anchorKey
+        }).detailedLookup(path.join('.'), options));
+      }
+
+      // functions are called before being returned
+      value = typeof value === 'function' ? value.call(this.scope) : value;
+
+      return extendDetails({value: value});
+    },
+
+    lookup: function(){
+      return this.detailedLookup.apply(this, arguments).value;
+    },
+
+    // provides a description of the scope chain in array format, optimized for viewing in the console
+    describe: function(){
+      return [
+        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.key ? ' (key: '+this.key+')': '') + (this.anchorKey ? ', anchored to: '+this.anchorKey+')': '')]
+      ].concat(this.parent ? this.parent.describe() : []);
+    }
+
+  });
+
+  var emptyScopeChain = new ScopeChain('empty');
+
+
+
+
   /*
    * Operation
    */
@@ -435,7 +436,7 @@
 
   js.extend(Operation.prototype, {
 
-    $: function(node){ return makeNodeWrapper(this, this._$nodes, this._toVisit, this._searched, node);},
+    $: function(node){ return new NodeWrapper(this, node); },
 
     hasRun: function(){ return this._hasRun; },
 
@@ -468,61 +469,26 @@
 
 
 
+  /*
+   * NodeWrapper (subclass of jQuery)
+   */
+
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
-  // Within the scope of the Operation constructor, all calls to makeNodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var makeNodeWrapper = function(operation, $nodes, toVisit, searched, node){
-    js.errorIf(arguments.length !== 5 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
+  // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
+  var NodeWrapper = function(operation, node){
+    js.errorIf(arguments.length !== 2 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
 
-    if($nodes[getNodeKey(node)]){ return $nodes[getNodeKey(node)]; }
+    if(operation._$nodes[getNodeKey(node)]){ return operation._$nodes[getNodeKey(node)]; }
 
-    var $node = js.create(jQuery(node), {
+    jQuery.prototype.init.call(this, node);
 
+    js.extend(this, {
       node: node,
-
       key: getNodeKey(node),
-
-      _operation: operation,
-
-      makeDirective: function(index, tokens){ return new Directive($node, index, tokens); },
-
-      getDirectiveStrings: function(){
-        return js.map(($node.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
-          return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
-        });
-      },
-
-      getDirectiveArrays: function(){
-        return js.reduce($node.getDirectiveStrings(), [], function(which, string, memo){
-          return string ? memo.concat([string.split(matchers.space)]) : memo;
-        });
-      },
-
-      wrappedParent: function(){
-        return (
-          ! $node.parent()[0] ? null :
-          $node.parent()[0] === document ? null :
-          operation.$($node.parent()[0])
-        );
-      },
-
-      store: function(){
-        react.nodes[$node.key] = node;
-      },
-
-      // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
-      getReactDescendants: function(){
-        return js.map(makeArrayFromArrayLikeObject($node.find('[react]')), function(which, node){
-          return operation.$(node);
-        });
-      },
-
-      getReactNodes: function(){
-        return [$node].concat($node.getReactDescendants());
-      }
-
+      _operation: operation
     });
 
-    $node.nullDirective = js.extend($node.makeDirective(null, []), {
+    this.nullDirective = js.extend(this.makeDirective(null, []), {
       visit: noop,
       isDead: noop,
       shouldUpdate: noop,
@@ -531,56 +497,54 @@
       getParent: function(){ js.error('internal error: cannot get the parent of a null directive'); }
     });
 
-    // build up directives
-    var directives = [];
-    directives = js.reduce($node.getDirectiveArrays(), directives, function(which, tokens, memo){
-      which === 0 && tokens[0] === 'anchored' ?
-        memo.anchored = $node.makeDirective('anchored', tokens) :
-        memo.push($node.makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
-      return memo;
-    });
+    this.directives = new DirectiveSet(this);
 
-    directives.anchored = directives.anchored || $node.makeDirective('anchored', ['anchored']);
-
-    $node.directives = js.extend(directives,{
-
-      before: $node.makeDirective('before', ['before']),
-      after: $node.makeDirective('after', ['after']),
-
-      // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
-      set: function(key, directive){
-        directives[key] = $node.makeDirective(''+key, directive);
-        directives.write();
-      },
-
-      write: function(){
-        node.setAttribute('react', directives);
-      },
-
-      orderedForString: function(){
-        return (directives.anchored.inputs.length ? [directives.anchored] : []).concat(directives);
-      },
-
-      toString: function(){
-        return js.map(directives.orderedForString(), function(which, directive){
-          if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
-          return directive.toString();
-        }).join(', ');
-      },
-
-      prepend: function(directive){
-        directive = directive.isDirective ? directive : $node.makeDirective('0', directive);
-        directives.unshift(directive);
-        js.map(directives, function(which, directive){
-          directive.setIndex(which.toString());
-        });
-        directives.write();
-      }
-
-    });
-
-    return ($nodes[$node.key] = $node);
+    return (operation._$nodes[this.key] = this);
   };
+
+  NodeWrapper.prototype = js.create(jQuery.prototype, {
+    // a correct constructor mapping breaks with jquery, because it calls
+    // constructor: NodeWrapper
+
+    makeDirective: function(index, tokens){ return new Directive(this, index, tokens); },
+
+    getDirectiveStrings: function(){
+      return js.map((this.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
+        return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
+      });
+    },
+
+    getDirectiveArrays: function(){
+      return js.reduce(this.getDirectiveStrings(), [], function(which, string, memo){
+        return string ? memo.concat([string.split(matchers.space)]) : memo;
+      });
+    },
+
+    wrappedParent: function(){
+      return (
+        ! this.parent()[0] ? null :
+        this.parent()[0] === document ? null :
+        this._operation.$(this.parent()[0])
+      );
+    },
+
+    store: function(){
+      react.nodes[this.key] = this.node;
+    },
+
+    // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
+    getReactDescendants: function(){
+      var that = this;
+      return js.map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
+        return that._operation.$(node);
+      });
+    },
+
+    getReactNodes: function(){
+      return [this].concat(this.getReactDescendants());
+    }
+
+  });
 
 
 
@@ -591,7 +555,6 @@
 
   // provides an object representing the directive itself (for example, "contain user.name")
   var Directive = function($node, index, tokens){
-// todo asdf - every local variable here must be referenced correctly in the methods below
     js.extend(this, {
       $node: $node,
       node: $node[0],
@@ -624,7 +587,6 @@
   js.extend(Directive.prototype, {
 
     $: function(node){ return this._operation.$(node); },
-    isDirective: true,
 
     toString: function(){ return [this.command].concat(this.inputs).join(' '); },
 
@@ -834,6 +796,91 @@
 
 
   /*
+   * Directive Set
+   */
+
+  var DirectiveSet = function($node){
+    var i,
+        key,
+        tokens,
+        tokenArrays = $node.getDirectiveArrays();
+
+    this.length = 0;
+
+    for(i = 0; i < tokenArrays.length; i++){
+      tokens = tokenArrays[i];
+      if(i === 0 && tokens[0] === 'anchored'){
+        this.anchored = $node.makeDirective('anchored', tokens);
+      } else {
+        key = (this.anchored ? i-1 : i).toString();
+        this.push($node.makeDirective(key, tokens));
+      }
+    }
+
+    js.extend(this, {
+
+      _$node: $node,
+
+      before: $node.makeDirective('before', ['before']),
+      anchored: this.anchored || $node.makeDirective('anchored', ['anchored']),
+      after: $node.makeDirective('after', ['after']),
+
+    });
+
+  };
+
+  js.extend(DirectiveSet.prototype, {
+
+    push: function(element){
+      this[this.length] = element;
+      this.length += 1;
+    },
+
+    unshift: function(element){
+      for(var i = this.length-1; 0 <= i; i--){
+        this[i+1] = this[i];
+      }
+      this[0] = element;
+      this.length += 1;
+    },
+
+    // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
+    set: function(key, directive){
+      this[key] = this._$node.makeDirective(''+key, directive);
+      this.write();
+    },
+
+    write: function(){
+      this._$node[0].setAttribute('react', this);
+    },
+
+    orderedForString: function(){
+      return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this));
+    },
+
+    toString: function(){
+      return js.map(this.orderedForString(), function(which, directive){
+        if(!(directive instanceof Directive) && console){ console.log('oops - something\'s wrong with your directives'); }
+        return directive.toString();
+      }).join(', ');
+    },
+
+    prepend: function(directive){
+      directive = directive instanceof Directive ? directive : this._$node.makeDirective('0', directive);
+      this.unshift(directive);
+
+      js.map(this, function(which, directive){
+        directive.setIndex(which.toString());
+      });
+      this.write();
+    }
+
+  });
+
+
+
+
+  /*
    * Proxy
    */
 
@@ -893,33 +940,36 @@
     var observerKey = propertyKey+' '+observerDetailsString;
     if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
 
-    var observer = {
+    cachedObservers[observerKey] = js.extend(this, {
       object: object,
-
+      propertyKey: propertyKey,
+      observerDetailsString: observerDetailsString,
+      prefix: prefix,
       directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
-
-      key: observerKey,
-
-      write: function(){
-        object.observers = object.observers || {};
-        object.observers[propertyKey] = object.observers[propertyKey] || {};
-        object.observers[propertyKey][observerDetailsString] = true;
-      },
-
-      dirty: function(){
-        if(observer.isDirty){ return; }
-        observer.isDirty = true;
-        observer.directive.dirtyObserver(observer);
-      },
-
-      pertains: function(){
-        // ignore the object if it's not in the same path that lead to registration of the observer
-        return observer.directive.getScopeChain().detailedLookup(prefix + propertyKey, {checkFocus: object}).didMatchFocus;
-      }
-    };
-
-    return (cachedObservers[observerKey] = observer);
+      key: observerKey
+    });
   };
+
+  js.extend(Observer.prototype, {
+
+    write: function(){
+      var observers = this.object.observers = this.object.observers || {};
+      var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
+      propertyObservers[this.observerDetailsString] = true;
+    },
+
+    dirty: function(){
+      if(this.isDirty){ return; }
+      this.isDirty = true;
+      this.directive.dirtyObserver(this);
+    },
+
+    pertains: function(){
+      // ignore the object if it's not in the same path that lead to registration of the observer
+      return this.directive.getScopeChain().detailedLookup(this.prefix + this.propertyKey, {checkFocus: this.object}).didMatchFocus;
+    }
+
+  });
 
 
 
@@ -1157,6 +1207,9 @@
     }
 
   });
+
+
+
 
   /*
    * Exporting library
