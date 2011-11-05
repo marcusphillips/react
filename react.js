@@ -434,7 +434,7 @@
 
   js.extend(Operation.prototype, {
 
-    $: function(node){ return new NodeWrapper(this, node);},
+    $: function(node){ return new NodeWrapper(this, node); },
 
     hasRun: function(){ return this._hasRun; },
 
@@ -585,7 +585,6 @@
   js.extend(Directive.prototype, {
 
     $: function(node){ return this._operation.$(node); },
-    isDirective: true,
 
     toString: function(){ return [this.command].concat(this.inputs).join(' '); },
 
@@ -799,54 +798,82 @@
    */
 
   var DirectiveSet = function($node){
-    var directives = js.reduce($node.getDirectiveArrays(), [], function(which, tokens, memo){
-      which === 0 && tokens[0] === 'anchored' ?
-        memo.anchored = $node.makeDirective('anchored', tokens) :
-        memo.push($node.makeDirective((memo.anchored ? which-1 : which).toString(), tokens));
-      return memo;
-    });
+    var i,
+        key,
+        tokens,
+        tokenArrays = $node.getDirectiveArrays();
 
-    directives.anchored = directives.anchored || $node.makeDirective('anchored', ['anchored']);
+    this.length = 0;
 
-    js.extend(directives, {
+    for(i = 0; i < tokenArrays.length; i++){
+      tokens = tokenArrays[i];
+      if(i === 0 && tokens[0] === 'anchored'){
+        this.anchored = $node.makeDirective('anchored', tokens);
+      } else {
+        key = (this.anchored ? i-1 : i).toString();
+        this.push($node.makeDirective(key, tokens));
+      }
+    }
+
+    js.extend(this, {
+
+      _$node: $node,
 
       before: $node.makeDirective('before', ['before']),
+      anchored: this.anchored || $node.makeDirective('anchored', ['anchored']),
       after: $node.makeDirective('after', ['after']),
-
-      // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
-      set: function(key, directive){
-        $node.directives[key] = $node.makeDirective(''+key, directive);
-        $node.directives.write();
-      },
-
-      write: function(){
-        $node[0].setAttribute('react', $node.directives);
-      },
-
-      orderedForString: function(){
-        return ($node.directives.anchored.inputs.length ? [$node.directives.anchored] : []).concat($node.directives);
-      },
-
-      toString: function(){
-        return js.map($node.directives.orderedForString(), function(which, directive){
-          if(!directive.isDirective && console){ console.log('oops - something\'s wrong with your directives'); }
-          return directive.toString();
-        }).join(', ');
-      },
-
-      prepend: function(directive){
-        directive = directive.isDirective ? directive : $node.makeDirective('0', directive);
-        $node.directives.unshift(directive);
-        js.map($node.directives, function(which, directive){
-          directive.setIndex(which.toString());
-        });
-        $node.directives.write();
-      }
 
     });
 
-    return directives;
   };
+
+  js.extend(DirectiveSet.prototype, {
+
+    push: function(element){
+      this[this.length] = element;
+      this.length += 1;
+    },
+
+    unshift: function(element){
+      for(var i = this.length-1; 0 <= i; i--){
+        this[i+1] = this[i];
+      }
+      this[0] = element;
+      this.length += 1;
+    },
+
+    // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
+    set: function(key, directive){
+      this[key] = this._$node.makeDirective(''+key, directive);
+      this.write();
+    },
+
+    write: function(){
+      this._$node[0].setAttribute('react', this);
+    },
+
+    orderedForString: function(){
+      return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this));
+    },
+
+    toString: function(){
+      return js.map(this.orderedForString(), function(which, directive){
+        if(!(directive instanceof Directive) && console){ console.log('oops - something\'s wrong with your directives'); }
+        return directive.toString();
+      }).join(', ');
+    },
+
+    prepend: function(directive){
+      directive = directive instanceof Directive ? directive : this._$node.makeDirective('0', directive);
+      this.unshift(directive);
+
+      js.map(this, function(which, directive){
+        directive.setIndex(which.toString());
+      });
+      this.write();
+    }
+
+  });
 
 
 
