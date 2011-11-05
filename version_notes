@@ -1,3 +1,8 @@
+local
+---
+- command functions now receive pre-resolved inputs
+- allows for custom name resultion through use of .resolve_*() functions on command object
+
 1.2.5
 ---
 - no interface changes

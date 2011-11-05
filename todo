@@ -14,7 +14,6 @@
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes
-- automatically lookup the tokens provided to a command. offer the option of defining a resolve() function when users want to do the lookup work manually
 
 --- improvements to existing ---
 - mutation of loop nodes should be persistent
