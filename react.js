@@ -291,7 +291,7 @@
       type: type,
       key: options.key,
       prefix: options.prefix || '',
-// asdf this shouldn't need a prefix
+      // todo this shouldn't need a prefix
       anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
     });
   };
@@ -376,7 +376,7 @@
           return extendDetails();
         }
         return extendDetails(emptyScopeChain.extend('dotAccess', value, {
-          // asdf - i think this needs to pass a key
+          // todo - i think this needs to pass a key
           prefix: this.prefix + baseKey + '.',
           anchorKey: this.anchorKey
         }).detailedLookup(path.join('.'), options));
@@ -436,11 +436,23 @@
 
   js.extend(Operation.prototype, {
 
-    $: function(node){ return new NodeWrapper(this, node); },
+    $: function(node){
+      return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapper(this, node));
+    },
 
     hasRun: function(){ return this._hasRun; },
 
     isRunning: function(){ return this._isRunning; },
+
+    visit: function(directive){ this._toVisit[directive.key] = directive; },
+
+    isSearched: function($node, setting){
+      if(setting === undefined){
+        this._searched[$node.key] = setting;
+      } else {
+        return this._searched[$node.key];
+      }
+    },
 
     run: function(){
       var limit = 10000,
@@ -476,9 +488,7 @@
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var NodeWrapper = function(operation, node){
-    js.errorIf(arguments.length !== 2 || !node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'the 5th argument to overridden $ must be a DOM node');
-
-    if(operation._$nodes[getNodeKey(node)]){ return operation._$nodes[getNodeKey(node)]; }
+    js.errorIf(!node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'node arg must be a DOM node');
 
     jQuery.prototype.init.call(this, node);
 
@@ -486,15 +496,6 @@
       node: node,
       key: getNodeKey(node),
       _operation: operation
-    });
-
-    this.nullDirective = js.extend(this.makeDirective(null, []), {
-      visit: noop,
-      isDead: noop,
-      shouldUpdate: noop,
-      shouldUpdateBranch: noop,
-      getScopeChain: function(){ return emptyScopeChain; },
-      getParent: function(){ js.error('internal error: cannot get the parent of a null directive'); }
     });
 
     this.directives = new DirectiveSet(this);
@@ -638,8 +639,7 @@
 
     // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
     consider: function(){
-      // todo: fix private access
-      return this._operation._toVisit[this.key] = this;
+      return this._operation.visit(this);
     },
 
     update: function(){
@@ -683,7 +683,7 @@
 
       if(willUpdate){
         this._registerPotentialObservers();
-        if(this.shouldUpdateBranch() && !this._operation._searched[this.$node.key]){ // todo: private var
+        if(this.shouldUpdateBranch() && !this._operation.isSearched(this.$node)){
           this.search();
         }
       }
@@ -736,7 +736,7 @@
       var $nodes = this.$node.getReactNodes(), which;
       for(which = 0; which < $nodes.length; which+=1){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        this._operation._searched[$nodes[which].key] = true; // todo: private var
+        this._operation.isSearched($nodes[which], true);
         $nodes[which].directives.after.consider();
       }
     },
@@ -792,7 +792,7 @@
 
     _potentialParent: function(){
       return (
-        this.index === 'before' ? (this.$node.wrappedParent() ? this.$node.wrappedParent().directives.after : this.$node.nullDirective) :
+        this.index === 'before' ? (this.$node.wrappedParent() ? this.$node.wrappedParent().directives.after : nullDirective) :
         this.index === 'anchored' ? this.$node.directives.before :
         this.index.toString() === '0' ? this.$node.directives.anchored :
         this.index.toString().match(matchers.isNumber) ? this.$node.directives[this.index-1] :
@@ -802,6 +802,15 @@
     }
 
   });
+
+  var nullDirective = {
+    visit: noop,
+    isDead: noop,
+    shouldUpdate: noop,
+    shouldUpdateBranch: noop,
+    getScopeChain: function(){ return emptyScopeChain; },
+    getParent: function(){ js.error('internal error: cannot get the parent of a null directive'); }
+  };
 
 
 
