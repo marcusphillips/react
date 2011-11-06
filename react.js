@@ -657,7 +657,7 @@
 
     onUpdate: function(callback){
       if(this.shouldUpdate() && callback){
-        callback.apply(this);
+        callback.call(this);
       }
       return this;
     },
