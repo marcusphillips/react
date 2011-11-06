@@ -499,12 +499,10 @@
     });
 
     this.directives = new DirectiveSet(this);
-
-    return (operation._$nodes[this.key] = this);
   };
 
   NodeWrapper.prototype = js.create(jQuery.prototype, {
-    // a correct constructor mapping breaks with jquery, because it calls
+    // a correct constructor mapping breaks with jquery, because it calls this.constructor() with no arguments
     // constructor: NodeWrapper
 
     makeDirective: function(index, tokens){ return new Directive(this, index, tokens); },
