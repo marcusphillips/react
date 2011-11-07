@@ -382,9 +382,16 @@ test('updating anchored nodes does not revisit all nodes', function(){
   ok($post.hasClass('verifiedPost'), 'properties changed manually are not rerendered');
 });
 
-test('anchored nodes do not inherit updates to enclosing scopes', function(){
+test('anchored nodes do not inherit parent scope', function(){
   $userImage.anchor({}); // user has no 'deleted' key
   $blogPost.anchor({deleted: true})
+  ok(!$userImage.hasClass('deleted'));
+});
+
+test("anchored nodes aren't visited in updates to parent nodes", function(){
+  $userImage.anchor(alice); // alice has no 'deleted' key
+  alice.deleted = true; // but in this contrived example, we don't want it to be updated yet
+  $blogPost.anchor({});
   ok(!$userImage.hasClass('deleted'));
 });
 

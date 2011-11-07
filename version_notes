@@ -5,6 +5,7 @@ local
 - includes failing test for a real bug
 - anchored nodes...
   - don't inherit parent's scope chain
+  - aren't visited in updates to parent nodes
 
 1.2.5
 ---

@@ -65,6 +65,7 @@
 - possible: when selecting react nodes to visit, generate a :not() selector that excludes children of other react nodes. works in all but IE<=8 (http://www.quirksmode.org/css/contents.html), and is no slower there (since we have to visit all nodes anyway). have to check that selection behavior is same as jquery though, and doesn't consider parents of the selection context.
 - for compressability, rework error messages to be shorter and described more fully in comments
 - make directive.consider() add to a keyed hash of reasons, rather than a list, and check 'force' first
+- optimize selection criteria not to match anchored descendants or their children
 
 --- refactors ---
 - fix this: in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
