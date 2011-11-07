@@ -1,5 +1,8 @@
 --- upcomming goals ---
-- bug: treat lookup failures on dot access and within directives as if they were if blocks (by turning them off)? Case: if you negate a failed lookup, do you want it to be truthy?
+- bug: treat lookup failures like if blocks, turning off render and display
+  - anchored
+  - bindItem
+  - for
 - don't recurse into anchored nodes
 - anchor command also updates
 - phase out 'for' directive
@@ -47,6 +50,7 @@
 
 --- open questions ---
 - what if a listened-to property is stored somewhere up the prototype chain? how can listeners be registered there?
+- consider: if you negate a failed lookup, do you want it to be truthy?
 
 --- bugs ---
 - progressive rendering: type check in iteration, and only allow arrays (especially not strings)

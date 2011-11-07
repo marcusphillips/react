@@ -1,5 +1,6 @@
 local
 ---
+- lookup failures for within directive turns off render and display of that node
 - command functions now receive pre-resolved inputs
 - allows for custom name resultion through use of .resolve_*() functions on command object
 
