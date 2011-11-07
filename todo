@@ -54,6 +54,7 @@
 - attrIf needs the same persistence behavior as classIf, write test for it first
 - check if this issue exists: after an if directive evaluates to false, setting it to true and activating the listener should update subtree
 - should ignore binding scopes when looking for scope to iterate over
+- nodes with no directives should propogate updates to their children
 
 --- optimizations ---
 - remove all memoizers, and set all parent state once only
