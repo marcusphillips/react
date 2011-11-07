@@ -51,6 +51,7 @@
 --- bugs ---
 - progressive rendering: type check in iteration, and only allow arrays (especially not strings)
   - in createItemNodes, don't allow looping over static native objects (like strings - this is almost certainly an error)
+- ! if two directives modify the class 'reactConditionallyHidden', they will clobber eachother
 - when the check for "key in object" for lookup() happens, it errors on non-object primitives like strings
 - attrIf needs the same persistence behavior as classIf, write test for it first
 - check if this issue exists: after an if directive evaluates to false, setting it to true and activating the listener should update subtree

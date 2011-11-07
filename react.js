@@ -1051,7 +1051,13 @@
       this.onUpdate(function(){
         this.updateBranch();
       });
-      scope ? this.pushScope(type, scope, {key:key}) : this.dead();
+      if(scope){
+        this.$node.removeClass('reactConditionallyHidden');
+        this.pushScope(type, scope, {key:key});
+      }else{
+        this.$node.addClass('reactConditionallyHidden');
+        this.dead();
+      }
     },
 
     resolve_withinItem: false,
