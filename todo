@@ -1,6 +1,5 @@
 --- upcomming goals ---
 - bug: treat lookup failures on dot access and within directives as if they were if blocks (by turning them off)? Case: if you negate a failed lookup, do you want it to be truthy?
-- don't recurse into anchored nodes
 - anchor command also updates
 - phase out 'for' directive
 - add each directive, which doesn't get an index
