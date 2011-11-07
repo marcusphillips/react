@@ -352,11 +352,6 @@ test('can name objects', function(){
   ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
 });
 
-test('anchored nodes are prepended to scope chains on render', function(){
-  react.name('visitor', alice);
-  equal($visitorName.anchor({}).html(), 'alice', 'inner node had access to outer node\'s anchor object');
-});
-
 test('anchored nodes re-render on object change', function(){
   alice.anchor($name).anchor($username).set({name: 'alison', username: 'crazygrrl'});
   same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
@@ -387,6 +382,11 @@ test('updating anchored nodes does not revisit all nodes', function(){
   ok($post.hasClass('verifiedPost'), 'properties changed manually are not rerendered');
 });
 
+test('anchored nodes do not inherit updates to enclosing scopes', function(){
+  $userImage.anchor({}); // user has no 'deleted' key
+  $blogPost.anchor({deleted: true})
+  ok(!$userImage.hasClass('deleted'));
+});
 
 /*
  * changed
@@ -425,11 +425,12 @@ test('anchors are not followed for contained nodes of an input node', function()
   same($name.attr('name'), 'alison', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
 });
 
-test('anchored nodes within root get operated on, even if root does not', function(){
-  var subNode = $('<span react="contain foo"></span>')[0];
-  react.anchor(subNode, {foo: 'bar'});
-  react.update($('<div></div>').html(subNode)[0]);
-  same(subNode.innerHTML, 'bar', 'foo did not get updated');
+test('nodes with no directives propogate updates to their children', function(){
+  var $nodeToInheritFrom = $('<div />').anchor({foo: 'bar'});
+  var $nodeThatWantsToInherit = $('<span react="contain foo">orig</span>');
+  var $nodeWithoutDirectives = $('<div />').html($nodeThatWantsToInherit);
+  react.update($nodeWithoutDirectives);
+  same($nodeThatWantsToInherit.html(), 'bar', 'foo did not get updated');
 });
 
 test('unanchored nodes can have properties set with no side effects', function(){

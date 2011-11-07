@@ -2,6 +2,8 @@ local
 ---
 - command functions now receive pre-resolved inputs
 - allows for custom name resultion through use of .resolve_*() functions on command object
+- anchored nodes...
+  - don't inherit parent's scope chain
 
 1.2.5
 ---

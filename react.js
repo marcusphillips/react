@@ -790,6 +790,7 @@
 
     _potentialParent: function(){
       return (
+        (this.command === "before" && this.$node.directives.anchored.inputs.length) ? nullDirective :
         this.index === 'before' ? (this.$node.wrappedParent() ? this.$node.wrappedParent().directives.after : nullDirective) :
         this.index === 'anchored' ? this.$node.directives.before :
         this.index.toString() === '0' ? this.$node.directives.anchored :
