@@ -3,7 +3,6 @@
   - anchored
   - bindItem
   - for
-- don't recurse into anchored nodes
 - anchor command also updates
 - phase out 'for' directive
 - add each directive, which doesn't get an index
@@ -60,6 +59,7 @@
 - attrIf needs the same persistence behavior as classIf, write test for it first
 - check if this issue exists: after an if directive evaluates to false, setting it to true and activating the listener should update subtree
 - should ignore binding scopes when looking for scope to iterate over
+- nodes with no directives should propogate updates to their children
 
 --- optimizations ---
 - remove all memoizers, and set all parent state once only
@@ -70,6 +70,7 @@
 - possible: when selecting react nodes to visit, generate a :not() selector that excludes children of other react nodes. works in all but IE<=8 (http://www.quirksmode.org/css/contents.html), and is no slower there (since we have to visit all nodes anyway). have to check that selection behavior is same as jquery though, and doesn't consider parents of the selection context.
 - for compressability, rework error messages to be shorter and described more fully in comments
 - make directive.consider() add to a keyed hash of reasons, rather than a list, and check 'force' first
+- optimize selection criteria not to match anchored descendants or their children
 
 --- refactors ---
 - fix this: in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed

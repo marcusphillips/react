@@ -534,6 +534,10 @@
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
     getReactDescendants: function(){
       var that = this;
+      
+      // todo: optimize selection criteria
+      // return js.map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(which, node){
+      
       return js.map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
         return that._operation.$(node);
       });
@@ -790,6 +794,7 @@
 
     _potentialParent: function(){
       return (
+        (this.command === "before" && this.$node.directives.anchored.inputs.length) ? nullDirective :
         this.index === 'before' ? (this.$node.wrappedParent() ? this.$node.wrappedParent().directives.after : nullDirective) :
         this.index === 'anchored' ? this.$node.directives.before :
         this.index.toString() === '0' ? this.$node.directives.anchored :
