@@ -389,6 +389,11 @@ test('anchored nodes re-render on object change', function(){
   same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
 });
 
+test('react.anchor() entails an update', function(){
+  react.anchor($name, alice);
+  same($name.html(), 'alice');
+});
+
 test('changing values on an anchored object results in automatic change to the view for class properties', function(){
   ok($name.anchor(alice).hasClass('ms'), 'node got correct first class');
   alice.set('title', 'mrs');

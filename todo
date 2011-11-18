@@ -3,7 +3,6 @@
   - anchored
   - bindItem
   - for
-- anchor command also updates
 - phase out 'for' directive
 - add each directive, which doesn't get an index
 - deprecate the .update() function
