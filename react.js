@@ -209,6 +209,10 @@
 
         jQuery.fn.extend(js.map({
 
+          update: function(){
+            return react.update(this);
+          },
+
           anchor: function(){
             if(arguments.length){
               return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});

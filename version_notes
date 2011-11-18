@@ -5,6 +5,7 @@ local
   - don't inherit parent's scope chain
   - aren't visited in updates to parent nodes
 - react.anchor() always incurs an update
+- new jQuery helper, .update(), which updates the target node
 - (internal) command functions now receive pre-resolved inputs
 - (internal) allows for custom name resultion through use of .resolve_*() functions on command object
 

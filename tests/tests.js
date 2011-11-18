@@ -472,11 +472,11 @@ test('anchors are not followed for contained nodes of an input node', function()
 });
 
 test('nodes with no directives propogate updates to their children', function(){
-  var $nodeToInheritFrom = $('<div />').anchor({foo: 'bar'});
-  var $nodeThatWantsToInherit = $('<span react="contain foo">orig</span>');
+  var $nodeThatWantsToInherit = $('<span react="contain prop">orig</span>');
   var $nodeWithoutDirectives = $('<div />').html($nodeThatWantsToInherit);
+  var $nodeToInheritFrom = $('<div />').anchor({prop: 'val'}).html($nodeWithoutDirectives);
   react.update($nodeWithoutDirectives);
-  // same($nodeThatWantsToInherit.html(), 'bar', 'foo did not get updated');  //todo: fix this bug
+  same($nodeThatWantsToInherit.html(), 'val', 'contents got updated');
 });
 
 test('unanchored nodes can have properties set with no side effects', function(){
