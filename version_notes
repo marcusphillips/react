@@ -7,6 +7,7 @@ local
 - anchored nodes...
   - don't inherit parent's scope chain
   - aren't visited in updates to parent nodes
+- anchor command also updates
 
 1.2.5
 ---

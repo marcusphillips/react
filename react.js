@@ -125,7 +125,7 @@
 
     anchor: function(options){
       options = options || {};
-      if(options.nodeType){
+      if(options.nodeType || options instanceof jQuery){
         options = {
           node: arguments[0],
           scope: arguments[1]
@@ -136,11 +136,17 @@
 
       this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      new Operation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
+      var operation = new Operation();
+      var $node = operation.$(node);
+      $node.directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
         var scopeKey = getScopeKey(scopes[i]);
         react.scopes[scopeKey] = scopes[i];
         return scopeKey;
       })));
+
+      $node.directives.before.updateBranch();
+      operation.run();
+
       return options.node;
     },
 
@@ -488,6 +494,7 @@
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var NodeWrapper = function(operation, node){
+    if(node instanceof jQuery){ node = node[0]; }
     js.errorIf(!node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'node arg must be a DOM node');
 
     jQuery.prototype.init.call(this, node);
@@ -871,6 +878,7 @@
     set: function(key, directive){
       this[key] = this._$node.makeDirective(''+key, directive);
       this.write();
+      return this;
     },
 
     write: function(){
