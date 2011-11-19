@@ -1213,6 +1213,10 @@
    * Exporting library
    */
 
+  if(window.jQuery){
+    react.integrate.jQuery();
+  }
+
   window.react = react;
 
 }());

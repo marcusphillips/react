@@ -3,12 +3,12 @@
 ***
 
 ## What is React?
-React is an HTML templating language designed for easy rerenders.  Rerenders can be triggered automatically when the original input objects change, or they can be managed manually.
+React is an HTML templating language designed for easy rerendering. It can manage view updates automatically by monitoring the state of the original input objects, and updating the original output nodes accordingly.
 
 ***
 
 ## What does it look like?
-React templates are expressed entirely in HTML, and can always be validated as such.  The directives that control rendering are written out in a custom `react` attribute, such as `<div react="contain myString"></div>`.
+React templates are expressed entirely in HTML, and can always be validated as such.  The directives that control rendering are written in a custom `react` attribute, such as `<div react="contain myString"></div>`.
 
 ***
 
@@ -21,14 +21,14 @@ OK, here's some sample code that illustrates the basics:
     <script>
       // this is all the stuff you won't have to do anymore
 
-      var updateProfileDiv = function(userInfo){
+      var updateProfileDiv = function(updatedUserInfo){
         var profileDiv = $('#profile');
     
         profileDiv.find('.mugshot img').attr('src', user.mugshotUrl);
     
         profileDiv.find('.mugshot .caption').html(user.mugshotCaption);
     
-        if(userInfo.isAdmin){
+        if(updatedUserInfo.isAdmin){
           profileDiv.find('.admin_links').show();
         } else {
           profileDiv.find('.admin_links').hide();
@@ -44,11 +44,8 @@ OK, here's some sample code that illustrates the basics:
 
     <script>
       // just once, you anchor a node to its scope
-      react.update({
-        node: $('#profile')[0],
-        scope: user,
-        anchor: true
-      );
+      $('#profile').anchor(user);
+      // Now all your changes to the user object will result in automatic updates to the #profile node
     </script>
 
 
@@ -57,8 +54,8 @@ OK, here's some sample code that illustrates the basics:
 It's all due to react directives you put in custom HTML attributes in your templates, like this:
 
     <div id="profile">
-      <img class="mugshot" react="attr 'src' mugshotUrl"/>
-      <span class="caption" react="contain mugshotCaption"></span>
+      <img class="mugshot"   react="attr 'src' mugshotUrl"/>
+      <span class="caption"  react="contain mugshotCaption"></span>
       <a href="/admin_panel" react="showIf isAdmin"/>
     </div>
 
@@ -67,19 +64,19 @@ It's all due to react directives you put in custom HTML attributes in your templ
 ## What features does React give me?
 
 #### The output of a rendering operation is still a valid input template
-In fact, the output template is equivalent to the the input template, but with appropriate substitutions.  In the process, It retains all its original directives that were used to control rendering.  Directives are things like 'for' and 'contain' that tell the engine what to do to the template - in some template languages, these are expressed with a custom syntax like `{{...}}` or `<?...?>`.  But since React directives are all contained in custom DOM attributes, they can be preserved between render updates.
+In fact, the output template is equivalent to the the input template, but with appropriate substitutions.  In the process, It retains all its original directives that were used to control rendering.  Directives are things like 'for' and 'contain' that tell the engine what to do to the template - in some template languages, these are expressed with a custom syntax like `{{...}}` or `<?...?>`.  But since React directives are all contained in custom DOM attributes, they can be preserved after the render step, and considered again during render updates.
 
 #### React can manage those view updates for you
 Thanks to the previous feature, the library is also capable of managing all view updates, without you manually calling for them.  If you use this auto-rerender feature (or 'anchor'), you can delete large swaths of your view code that were previously responsible for keeping DOM output in sync with model state.  For example, that would include most jQuery operations, such as `$('#mySelector').css({color:'red'}).show()`.
 
 #### React helps your app gracefully scale through complexity
-Often in small applications, view management code is minimal enough to go unnoticed.  But as the app grows complex, view management becomes exponentially harder, since each subsequent feature has to be respectful of more and more existing features.  After all, they share a common DOM tree, and each one can impose new expectations on it.  A handshake problem develops as the growing number of features mutate this single resource (see [exponential complexity and the handshake problem](http://en.wikipedia.org/wiki/Triangular_number)).  In essence, while object orientation allows us to divide and conquer app logic, this single, shared view resource (the DOM) mixes it all together again.  Reactive data binding can resolve that.
+Often in small applications, view management code is minimal enough to go unnoticed.  But as the app grows complex, view management becomes exponentially harder, since each subsequent feature has to be respectful of more and more existing features.  After all, they share a common DOM tree, and each one can impose new expectations on it.  A handshake problem develops as the growing number of features mutate this single resource (see [exponential complexity and the handshake problem](http://en.wikipedia.org/wiki/Triangular_number)).  In essence, while object orientation allows us to divide and conquer app logic, this single, shared view resource (the DOM) mixes it all together again.  Reactive data binding can untie that knot for you.
 
 #### Plays nice with others
-What set's React apart from other reactive data binding libraries is its emphasis on compatibility and minimal imposition.  It is compatible with nearly every other JavaScript library and pattern you might be using.
+What sets React apart from other reactive data binding libraries is its emphasis on compatibility and minimal imposition.  It is compatible with nearly every other JavaScript library and pattern you might be using.
 
 #### Standard building blocks
-When rendering templates, React accepts any vanilla JavaScript object, not just a custom class or special data format.  Similarly, the input template can be any valid string of HTML or a memory reference to an existing node.  The output will always be a DOM node reference, but with appropriate substitutions.  (A string output mode is planned for later versions, primarily for use on the server-side.)
+When rendering templates, React accepts any vanilla JavaScript object, not just a custom class or special data format.  Similarly, the input template can be any valid string of HTML or a memory reference to an existing node.  The output will always be a DOM node reference, but with appropriate substitutions.  (Support for string output mode is planned for later versions, primarily for use on the server-side.)
 
 #### Intrinsic XSS protection
 Since React achieves template substitutions by way of a builder pattern, the browser can always correctly escape your input for the given context.  This is an inherent advantage to builder patterns in general.  Injection attacks occur when an attacker can define part of a string that will eventually be interpreted by some part of the system as if it were code.  With builder patterns, the line between code and input is clear unless you work to blur it, rather than the other way around.  Note that React can't prevent all XSS vulnerabilities in your app, but does make the problem much easier to solve.
@@ -167,6 +164,19 @@ React currently uses jQuery to facilitate DOM operations, though the dependency 
 
 ***
 
+## What is the API?
+
+The easiest way to use React is as a jQuery extension. While using jQuery is not required, it provides a very elegant syntax for your rendering and anchoring operations.
+
+`myJqueryNode.anchor(<mixed> data)`
+Accepts an object or array 'data' to render against myJqueryNode. The substitutions defined in the template node will be taken from the data object, and data bindings will be set up.
+
+`myJqueryNode.update()`
+Updates the target node for its present context. This function is designed for when you create nodes or move them around in the DOM tree, and want them to render correctly for the new context.
+
+
+***
+
 ## What are all the React directives?
 
 ### Basics
@@ -230,6 +240,15 @@ Sets the style property specified by `attrName` to the specified value.
 #### `(not yet supported) styleIf(<bool> condition, <string> name, <string/number> value)`:
 Sets the style property specified by `attrName` to the specified value if `condition` is true.  Otherwise, removes the style.
 
+### Debugging
+
+#### `debug(...directive)`
+Pauses execution with a debugger command at directive evaluation time. Prepend this command to an existing directive that you wish to examine. Example:
+if `react="contain myString"` was not working as you expect, you can explore react's update routine by changing it to `react="debug contain myString"`
+
+#### `debugIf(condition, ...directive)`
+Works the same as debug(), but only if the condition argument resolves to true.
+
 
 ***
 
@@ -246,4 +265,4 @@ Under the hood, react adds string annotations to the input template node, the in
 ## FAQ
 
 #### Does React support subtemplates?
-Yes.  Simply include a node that you would like to use as the template on your input view object.  It will be substituted just as a string value would.
+React provides support for a widget inclusion. If the contain directive finds a DOM node as its substitution, it will insert the node as-is.

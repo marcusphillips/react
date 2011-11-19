@@ -12,6 +12,7 @@
 - jquery syntax for finding subnodes
   - fix it so it filters out bound children
 - jquery syntax for finding anchored children
+- allow string inputs for templates
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes
