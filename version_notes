@@ -1,11 +1,15 @@
 local
 ---
+- 'anchor' is no longer a valid option to react.update()
+- .update() now takes only one input, a DOM node or jQuery object with one element. It does not accept options or scope objects
+  - you can no longer update against a scope without anchoring to it
 - lookup failures for within directive turns off render and display of that node
 - anchored nodes...
   - don't inherit parent's scope chain
   - aren't visited in updates to parent nodes
 - react.anchor() always incurs an update
 - new jQuery helper, .update(), which updates the target node
+- fromDirective no longer a valid input to react.update()
 - (internal) command functions now receive pre-resolved inputs
 - (internal) allows for custom name resultion through use of .resolve_*() functions on command object
 

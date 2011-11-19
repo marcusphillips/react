@@ -82,7 +82,7 @@ test('errors on unknown commands', function(){
 });
 
 test('calling update returns the root', function(){
-  ok(react.update($inert[0], {}) === $inert[0], 'same node was returned');
+  ok(react.update($inert[0]) === $inert[0], 'same node was returned');
 });
 
 test('calling update with a jQuery object returns the same object', function(){
@@ -477,12 +477,6 @@ test('nodes with no directives propogate updates to their children', function(){
   var $nodeToInheritFrom = $('<div />').anchor({prop: 'val'}).html($nodeWithoutDirectives);
   react.update($nodeWithoutDirectives);
   same($nodeThatWantsToInherit.html(), 'val', 'contents got updated');
-});
-
-test('unanchored nodes can have properties set with no side effects', function(){
-  react.update($name, alice);
-  alice.set('name', 'alison');
-  same($name.html(), 'alice', 'even after notifying react of the change to the object with .set(), property changes do not result in rerenders');
 });
 
 test('changing dom or object strucutre invalidates change propogation to the view', function(){

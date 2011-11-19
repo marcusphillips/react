@@ -93,61 +93,31 @@
       operation.changed.apply(operation, arguments).run();
     },
 
-    update: function(/*[node, scope,]*/ options){
-      options = options || {};
-      if(options.nodeType || (options instanceof jQuery)){
-        // detect argument signature of (node, scope)
-        options = js.extend({
-          node: arguments[0],
-          scope: arguments[1]
-        }, arguments[2] || {});
+    update: function(input){
+      var node = input;
+      if(node instanceof jQuery){
+        js.errorIf(node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
+        node = node[0];
       }
-      var nodeInput = options.node;
-      if(options.node instanceof jQuery){
-        js.errorIf(options.node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
-        options.node = options.node[0];
-      }
-      js.errorIf(!options.node, 'you did not pass a valid node to react.update()');
-
-      js.errorIf(options.scope && options.scopes, 'you must supply only one set of scopes');
-
-      var scopes = options.scope ? [options.scope] : options.scopes || [];
-      if(options.anchor){
-        react.anchor({node: options.node, scopes: scopes});
-        scopes = [];
-      }
-
+      js.errorIf(!node, 'you did not pass a valid node to react.update()');
       var operation = new Operation();
-      operation.$(options.node).directives[options.fromDirective||'before'].injectScopes('updateInputs', scopes).updateBranch();
+      operation.$(node).directives.before.updateBranch();
       operation.run();
-      return nodeInput;
+      return input;
     },
 
-    anchor: function(options){
-      options = options || {};
-      if(options.nodeType || options instanceof jQuery){
-        options = {
-          node: arguments[0],
-          scope: arguments[1]
-        };
-      }
-      var node = options.node;
-      var scopes = options.scope ? [options.scope] : options.scopes;
-
+    anchor: function(node){
+      var scopes = Array.prototype.slice.call(arguments, 1);
       this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      var operation = new Operation();
-      var $node = operation.$(node);
-      $node.directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
+
+      new Operation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
         var scopeKey = getScopeKey(scopes[i]);
         react.scopes[scopeKey] = scopes[i];
         return scopeKey;
       })));
 
-      $node.directives.before.updateBranch();
-      operation.run();
-
-      return options.node;
+      return react.update(node);
     },
 
     helpers: js.extend(function(focus, deeply){
@@ -209,18 +179,15 @@
 
         jQuery.fn.extend(js.map({
 
-          update: function(){
-            return react.update(this);
-          },
+          update: function(){ return react.update(this); },
 
           anchor: function(){
-            if(arguments.length){
-              return react.update({node:this, scopes:Array.prototype.slice.call(arguments), anchor: true});
-            }else{
+            if(!arguments.length){
               var scopes = this.anchors();
               js.errorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
               return scopes[0];
             }
+            return react.anchor.apply(react, [this].concat(Array.prototype.slice.call(arguments)));
           },
 
           anchors: function(){
@@ -545,10 +512,10 @@
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
     getReactDescendants: function(){
       var that = this;
-      
+
       // todo: optimize selection criteria
       // return js.map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(which, node){
-      
+
       return js.map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
         return that._operation.$(node);
       });
@@ -588,7 +555,6 @@
 
       _dirtyObservers: {},
       _scopeChain: undefined,
-      _scopeInjectionArgLists: [],
       _potentialObservers: []
     });
 
@@ -617,13 +583,6 @@
 
     resetScopeChain: function(){
       this._scopeChain = emptyScopeChain;
-    },
-
-    injectScopes: function(type, scopes){
-      this._scopeInjectionArgLists = this._scopeInjectionArgLists.concat(js.map(scopes, function(which, scope){
-        return [type, scope];
-      }));
-      return this;
     },
 
     pushScope: function(type, scope, options){
@@ -760,9 +719,7 @@
       this._parent = this._parent || this.getParent();
       this._parentIsDead = this.parentIsDead();
       this._shouldUpdateParentBranch = this.shouldUpdateParentBranch();
-      this._parentScopeChain = this._parentScopeChain || js.reduce(this._scopeInjectionArgLists, this._parent.getScopeChain(), function(which, scopeChainArguments, memo){
-        return memo.extend.apply(memo, scopeChainArguments);
-      });
+      this._parentScopeChain = this._parentScopeChain || this._parent.getScopeChain();
     },
 
     getParentScopeChain: function(){

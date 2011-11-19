@@ -86,6 +86,7 @@ remove ._scopeInjectionArgLists property of directives
 
 --- tests ---
 - performance tests
+- build instrumentation that tracks how many internal objects are maintained, and test that they stay in appropriate ranges
 - test iteration count to ensure this behavior is working: earmark any nodes that have been found in a querySelectorAll call, so we don't have to add their children again when they show up in the 'branchesToConsider' list
 - negation doesnt break for dot access
 - classIf is not cumulative. the second time a class is added, the old one will not be cleaned up
