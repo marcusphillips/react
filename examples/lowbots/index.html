@@ -43,13 +43,9 @@
     <!-- end view code -->
 
 
+    <!-- Anchor the root level node with the world state object, which enables bindings to all future changes on the object -->
     <script>
-      <!-- Update parent node with the state object, and enable anchoring to watch for future changes on the object -->
-      react.update({
-        node: $('body')[0],
-        scope: board,
-        anchor: true
-      });
+      $('body').anchor(board);
     </script>
 
   </body>

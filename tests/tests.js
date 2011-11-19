@@ -14,9 +14,14 @@ for(var key in {'join':1}){
   jQuery.fn[key] = jQuery.fn[key] || Array.prototype[key];
 }
 
+
+
+
 /*
- * clone new fixture nodes from those found in tests/index.html
+ * For each test
  */
+
+// clones new fixture nodes from those found in tests/index.html
 var refreshNodes = function(){
   js.errorIf(!$originalFixtureNodes, 'fixture nodes not defined before attempted node refresh!');
   nodes = {};
@@ -31,9 +36,6 @@ var refreshNodes = function(){
   }
 };
 
-/*
- * For each test
- */
 QUnit.testStart = function(){
   refreshNodes();
   scopes = makeFixtures();
@@ -48,6 +50,9 @@ QUnit.testDone = function(){
   $('#qunit-fixture')[0].innerHTML = '';
   react.reset();
 };
+
+
+
 
 /*
  * helpers
@@ -64,6 +69,8 @@ var throws = function(block, description){
 };
 
 
+
+
 /*
  * basics
  */
@@ -75,7 +82,7 @@ test('errors on unknown commands', function(){
 });
 
 test('calling update returns the root', function(){
-  ok(react.update($inert[0], {}) === $inert[0], 'same node was returned');
+  ok(react.update($inert[0]) === $inert[0], 'same node was returned');
 });
 
 test('calling update with a jQuery object returns the same object', function(){
@@ -96,6 +103,8 @@ test('rendering to nodes that are nested in others still works, an additional la
   $inert2.html($name).anchor(alice);
   equal($name.html(), 'alice', 'the child node got the appropriate content');
 });
+
+
 
 /*
  *  containing
@@ -125,6 +134,8 @@ test('containing react nodes', function(){
 });
 
 
+
+
 /*
  * attributes
  */
@@ -146,6 +157,9 @@ test('substituting variables in attribute names', function(){
 test('substituting variables in attribute values', function(){
   equal($mugshot.anchor(alice).attr('src'), 'example.com', 'attribute was written correctly');
 });
+
+
+
 
 /*
  *  conditionals
@@ -206,11 +220,13 @@ test('if directives turn off recursion in child nodes', function(){
 });
 
 
+
+
 /*
  * looping
  */
 
-module("within");
+module("looping");
 
 test('template node is not visible after render', function(){
   ok($friends.appendTo('#qunit-fixture').itemTemplate().is(':visible'), 'template started out visible');
@@ -237,15 +253,6 @@ test('does not operate on descendants of loop item template node', function(){
 test('does not operate on descendants of loop item template node, even when loop item template has no react attribute', function(){
   $navItems.anchor(navItems);
   same($navItemText.html(), 'orig', 'the contained node\'s directives were ignored');
-});
-
-test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
-  same($businessStreet.anchor(alice).attr('name'), 'alice', 'attr came from outer prop');
-  same($businessStreet.html(), 'main', 'contents came from inner prop');
-  alice.name = 'alison';
-  alice.business.set('address', {street:'huffington'});
-  same($businessStreet.attr('name'), 'alice', 'attr was not changed');
-  same($businessStreet.html(), 'huffington', 'contents got updated');
 });
 
 test('originally rendered nodes are preserved on rerender', function(){
@@ -275,6 +282,8 @@ test('loops can be changed()', function(){
 });
 
 
+
+
 /*
  * withinEach
  */
@@ -293,6 +302,9 @@ test('looping several times on different sized arrays results in different amoun
 test('nested withinEachs', function(){
   same($ticTacToe.anchor(ticTacToe).item(0).item(0).attr('data-symbol'), 'x', 'doubly nested children took their values from item objects\' foo properties');
 });
+
+
+
 
 /*
  * within
@@ -319,6 +331,24 @@ test('within directive works well with changed method', function(){
   same($street.html(), 'ashbury', 'when address\'s street changes, the output changes');
 });
 
+test('calling changed on a subobject that\'s associated with a within directive does not attempt to rerender all directives on the node', function(){
+  same($businessStreet.anchor(alice).attr('name'), 'alice', 'attr came from outer prop');
+  same($businessStreet.html(), 'main', 'contents came from inner prop');
+  alice.name = 'alison';
+  alice.business.set('address', {street:'huffington'});
+  same($businessStreet.attr('name'), 'alice', 'attr was not changed');
+  same($businessStreet.html(), 'huffington', 'contents got updated');
+});
+
+test('a call to within that fails makes branch invisible and unrendered', function(){
+  delete alice.address;
+  alice.street = 'broken';
+  ok($addressCard.anchor(alice).children().html() === 'orig', 'street node went unchanged, as it is contained inside a within statement that failed lookup');
+  ok($addressCard.hasClass('reactConditionallyHidden'), 'street node was hidden');
+});
+
+
+
 
 /*
  * function properties
@@ -341,6 +371,8 @@ test('functions can be used as namespaces without running', function(){
 });
 
 
+
+
 /*
  * anchor
  */
@@ -352,14 +384,14 @@ test('can name objects', function(){
   ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
 });
 
-test('anchored nodes are prepended to scope chains on render', function(){
-  react.name('visitor', alice);
-  equal($visitorName.anchor({}).html(), 'alice', 'inner node had access to outer node\'s anchor object');
-});
-
 test('anchored nodes re-render on object change', function(){
   alice.anchor($name).anchor($username).set({name: 'alison', username: 'crazygrrl'});
   same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
+});
+
+test('react.anchor() entails an update', function(){
+  react.anchor($name, alice);
+  same($name.html(), 'alice');
 });
 
 test('changing values on an anchored object results in automatic change to the view for class properties', function(){
@@ -386,6 +418,20 @@ test('updating anchored nodes does not revisit all nodes', function(){
   ok(!$post.hasClass('adminPost'), 'for anchored nodes, properties that are set using react.set() get autmatically updated');
   ok($post.hasClass('verifiedPost'), 'properties changed manually are not rerendered');
 });
+
+test('anchored nodes do not inherit parent scope', function(){
+  $userImage.anchor({}); // user has no 'deleted' key
+  $blogPost.anchor({deleted: true})
+  ok(!$userImage.hasClass('deleted'));
+});
+
+test("anchored nodes aren't visited in updates to parent nodes", function(){
+  $userImage.anchor(alice); // alice has no 'deleted' key
+  alice.deleted = true; // but in this contrived example, we don't want it to be updated yet
+  $blogPost.anchor({});
+  ok(!$userImage.hasClass('deleted'));
+});
+
 
 
 /*
@@ -425,17 +471,12 @@ test('anchors are not followed for contained nodes of an input node', function()
   same($name.attr('name'), 'alison', 'attr substitution for directive following the \'contain\' directive does inherit previous directive\'s scope chain');
 });
 
-test('anchored nodes within root get operated on, even if root does not', function(){
-  var subNode = $('<span react="contain foo"></span>')[0];
-  react.anchor(subNode, {foo: 'bar'});
-  react.update($('<div></div>').html(subNode)[0]);
-  same(subNode.innerHTML, 'bar', 'foo did not get updated');
-});
-
-test('unanchored nodes can have properties set with no side effects', function(){
-  react.update($name, alice);
-  alice.set('name', 'alison');
-  same($name.html(), 'alice', 'even after notifying react of the change to the object with .set(), property changes do not result in rerenders');
+test('nodes with no directives propogate updates to their children', function(){
+  var $nodeThatWantsToInherit = $('<span react="contain prop">orig</span>');
+  var $nodeWithoutDirectives = $('<div />').html($nodeThatWantsToInherit);
+  var $nodeToInheritFrom = $('<div />').anchor({prop: 'val'}).html($nodeWithoutDirectives);
+  react.update($nodeWithoutDirectives);
+  same($nodeThatWantsToInherit.html(), 'val', 'contents got updated');
 });
 
 test('changing dom or object strucutre invalidates change propogation to the view', function(){
@@ -453,6 +494,8 @@ test('changing dom or object strucutre invalidates change propogation to the vie
   alice.address.set('street', '5th');
   same($street.html(), '5th', 'the property linked to the replaced object was re-rendered after the object was put back');
 });
+
+
 
 
 /*
@@ -593,8 +636,8 @@ test('templates are not rerendered when inserted in to the dom', function () {
       return 'henry';
     }
   })).html(), 'henry', 'inner node exercised function');
-  var didRun = false;
 
+  var didRun = false;
   $containingWidget.anchor().set('widget', $name);
   ok(!didRun, "function did not run, so inner node was not visited again");
 });
