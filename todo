@@ -34,6 +34,10 @@
 - binding syntax and dynamic partial inclusion, to allow code sharing in templates
 - allow a containEach directive?
 - jquery selection syntax for finding child directives that reference properties available in the current directive's scope
+- defining and subtemplates
+- assignments to the local scope chain object
+- allow literals like true and false
+- allow inline numbers
 
 --- new major features ---
 - move to closure based data storage for each object
@@ -73,6 +77,7 @@
 - optimize selection criteria not to match anchored descendants or their children
 
 --- refactors ---
+- provide every directive with a .persistence() helper, that can access a shared state based on previous executions of that same directive. Useful for unsetting previously defined classes and attributes, and allows those functions to be auto-resolved
 - fix this: in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
 - remove .anchorKey from scope chains
 - don't think we need matchingBaseObject in the return details of a lookup, maybe just check if it's contained in the scope chain

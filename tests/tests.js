@@ -104,6 +104,14 @@ test('rendering to nodes that are nested in others still works, an additional la
   equal($name.html(), 'alice', 'the child node got the appropriate content');
 });
 
+test('manually changing react string after render throws an error', function(){
+  throws(function(){
+    $name.anchor(alice);
+    $name.attr('react', $name.attr('react')+', attr "example" "example"').update();
+  });
+});
+
+
 
 
 /*

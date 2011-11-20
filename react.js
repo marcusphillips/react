@@ -485,15 +485,19 @@
 
     makeDirective: function(index, tokens){ return new Directive(this, index, tokens); },
 
+    getDirectivesString: function(){
+      return this.attr('react') || '';
+    },
+
     getDirectiveStrings: function(){
-      return js.map((this.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
+      return js.map(this.getDirectivesString().split(matchers.directiveDelimiter), function(which, string){
         return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
       });
     },
 
     getDirectiveArrays: function(){
       return js.reduce(this.getDirectiveStrings(), [], function(which, string, memo){
-        return string ? memo.concat([string.split(matchers.space)]) : memo;
+        return string ? memo.concat([js.trim(string).split(matchers.space)]) : memo;
       });
     },
 
@@ -794,7 +798,8 @@
     var i,
         key,
         tokens,
-        tokenArrays = $node.getDirectiveArrays();
+        tokenArrays = $node.getDirectiveArrays(),
+        validatedDirectivesString = $node.data('validatedDirectivesString');
 
     this.length = 0;
 
@@ -809,15 +814,19 @@
     }
 
     js.extend(this, {
-
       _$node: $node,
 
       before: $node.makeDirective('before', ['before']),
       anchored: this.anchored || $node.makeDirective('anchored', ['anchored']),
-      after: $node.makeDirective('after', ['after']),
-
+      after: $node.makeDirective('after', ['after'])
     });
 
+    if(validatedDirectivesString === undefined){
+      $node.data('validatedDirectiveString', validatedDirectivesString = this.toString());
+    }
+
+    this.write();
+    js.errorIf(validatedDirectivesString !== $node.getDirectivesString(), 'invalid change to react string');
   };
 
   js.extend(DirectiveSet.prototype, {
@@ -843,7 +852,7 @@
     },
 
     write: function(){
-      this._$node[0].setAttribute('react', this);
+      this._$node.attr('react', this.toString()).data('validatedDirectivesString', this.toString());
     },
 
     orderedForString: function(){
