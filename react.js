@@ -821,15 +821,22 @@
       after: $node.makeDirective('after', ['after'])
     });
 
+    this.normalizeAttribute();
+
     if(validatedDirectivesString === undefined){
       $node.data('validatedDirectiveString', validatedDirectivesString = this.toString());
     }
 
-    this.write();
     js.errorIf(validatedDirectivesString !== $node.getDirectivesString(), 'invalid change to react string');
   };
 
   js.extend(DirectiveSet.prototype, {
+
+    normalizeAttribute: function(){
+      if(this.toString() !== this._$node.getDirectivesString()){
+        this.write();
+      }
+    },
 
     push: function(element){
       this[this.length] = element;
@@ -852,7 +859,9 @@
     },
 
     write: function(){
-      this._$node.attr('react', this.toString()).data('validatedDirectivesString', this.toString());
+      var newDirectivesString = this.toString();
+      if(newDirectivesString === this._$node.getDirectivesString()){ return; }
+      this._$node.attr('react', newDirectivesString).data('validatedDirectivesString', newDirectivesString);
     },
 
     orderedForString: function(){

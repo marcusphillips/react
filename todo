@@ -23,6 +23,7 @@
   - re-ordering nodes in a loop remains the same
   - add a class to every generated node for easy lookup/modification in the tree
 - make sure iteration works over jquery objects and other array-likes
+- disallow spaces in attribute names?
 
 --- new features ---
 - allow delayed updates that wait until a flag is turned on (add a readiness flag for objects)
@@ -59,6 +60,7 @@
 - progressive rendering: type check in iteration, and only allow arrays (especially not strings)
   - in createItemNodes, don't allow looping over static native objects (like strings - this is almost certainly an error)
 - ! if two directives modify the class 'reactConditionallyHidden', they will clobber eachother
+- if the reactConditionallyHidden css rule is listed after other more specific rules, they'll be overridden
 - when the check for "key in object" for lookup() happens, it errors on non-object primitives like strings
 - attrIf needs the same persistence behavior as classIf, write test for it first
 - check if this issue exists: after an if directive evaluates to false, setting it to true and activating the listener should update subtree

@@ -111,6 +111,35 @@ test('manually changing react string after render throws an error', function(){
   });
 });
 
+test('library doesnt add empty react attributes to nodes that didn\'t have them already', function(){
+  var withoutReactAttr = $('\
+    <div react="attr \'foo\' \'bar\'">\
+      <div class="withoutReactAttr">\
+        <div react="attr \'foo\' \'bar\'"></div>\
+      </div>\
+    </div>\
+  ').anchor({}).find('.withoutReactAttr');
+  ok(!withoutReactAttr.is('[react]'), 'visiting a node that doesn\'t have a react attribute does not result in adding an empty react attribute to it');
+});
+
+test('library doesnt remove empty react attributes from nodes that had them to begin with', function(){
+  var withEmptyReactAttr = $('\
+    <div react="attr \'foo\' \'bar\'">\
+      <div class="withEmptyReactAttr" react="">\
+        <div react="attr \'foo\' \'bar\'"></div>\
+      </div>\
+    </div>\
+  ').anchor({}).find('.withEmptyReactAttr');
+  ok(withEmptyReactAttr.is('[react]'), 'visiting a node that has an empty react attribute does not result in removing the attribute');
+});
+
+test('visiting a node results in normalization of its react string spacing', function(){
+  var withMessyReactString = $('<div>\
+    <div class="withMessyReactString" react=" attrIf   ! condition  \'foo\' \'bar  \' , contain greeting ">\
+  </div>').anchor({condition: true, greeting: 'hi'}).find('.withMessyReactString');
+  same(withMessyReactString.attr('react'), 'attrIf !condition \'foo\' \'bar  \', contain greeting', 'directive spacings were cleaned up, though not within string literals');
+});
+
 
 
 
