@@ -40,6 +40,10 @@
 - allow literals like true and false
 - allow inline numbers
 
+--- improvements ---
+- allow string inputs to have spaces (build a parser to replace regexes - ack!)
+- allow string inputs to directives to contain escaped quotation marks and other control characters
+
 --- new major features ---
 - move to closure based data storage for each object
 - move to .commit() for updating observers

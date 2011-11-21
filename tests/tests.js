@@ -134,11 +134,20 @@ test('library doesnt remove empty react attributes from nodes that had them to b
 });
 
 test('visiting a node results in normalization of its react string spacing', function(){
-  var withMessyReactString = $('<div>\
-    <div class="withMessyReactString" react=" attrIf   ! condition  \'foo\' \'bar  \' , contain greeting ">\
-  </div>').anchor({condition: true, greeting: 'hi'}).find('.withMessyReactString');
-  same(withMessyReactString.attr('react'), 'attrIf !condition \'foo\' \'bar  \', contain greeting', 'directive spacings were cleaned up, though not within string literals');
+  var withMessyReactAttr = $('<div>\
+    <div class="withMessyReactAttr" react=" attrIf   ! condition  \'foo\' \'bar\' , contain greeting ">\
+  </div>').anchor({condition: true, greeting: 'hi'}).find('.withMessyReactAttr');
+  same(withMessyReactAttr.attr('react'), 'attrIf !condition \'foo\' \'bar\', contain greeting', 'directive spacings were cleaned up');
 });
+
+/*
+test('normalization does not modify contents of string literals', function(){
+  var withSpaceyString = $('<div>\
+    <div class="withSpaceyString" react="contain \'foo  \'">\
+  </div>').anchor({}).find('.withSpaceyString');
+  same(withSpaceyString.attr('react'), 'contain \'foo  \'', 'string literal was unchanged');
+});
+*/
 
 
 
