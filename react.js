@@ -14,6 +14,12 @@
 
   var noop = function(){};
 
+  var throwError = js.error, throwErrorIf = js.errorIf, log = js.log;
+  var create = js.create, unique = js.unique, extend = js.extend, trim = js.trim;
+  var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter;
+  var keysFor = js.keys, hasKeys = js.hasKeys, isArray = js.isArray, among = js.among;
+
+
   var debugging = false;
 
   var matchers = {
@@ -29,14 +35,14 @@
   var getNodeKey = function(node){
     var key = jQuery(node).data("reactKey");
     if(!key){
-      key = js.util.unique('reactNode');
+      key = unique('reactNode');
       jQuery(node).data("reactKey", key);
     }
     return key;
   };
 
   var getScopeKey = function(object){
-    return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
+    return (object.reactKey = object.reactKey || unique('reactObject'));
   };
 
   var makeArrayFromArrayLikeObject = function(arrayLikeObject){
@@ -67,7 +73,7 @@
 
     // for giving scope objects meaningful names, which appear in the anchor directives on nodes. not yet ready for external consumption
     name: function(name, object){
-      js.errorIf(object.reactKey, 'You tried to name a scope object that already had a name');
+      throwErrorIf(object.reactKey, 'You tried to name a scope object that already had a name');
       object.reactKey = name;
       return this.scopes[name] = object;
     },
@@ -97,10 +103,10 @@
     update: function(input){
       var node = input;
       if(node instanceof jQuery){
-        js.errorIf(node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
+        throwErrorIf(node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
         node = node[0];
       }
-      js.errorIf(!node, 'you did not pass a valid node to react.update()');
+      throwErrorIf(!node, 'you did not pass a valid node to react.update()');
       var operation = new Operation();
       operation.$(node).directives.before.updateBranch();
       operation.run();
@@ -112,7 +118,7 @@
       this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
 
-      new Operation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
+      new Operation().$(node).directives.set('anchored', ['anchored'].concat(map(scopes, function(i, scope){
         var scopeKey = getScopeKey(scopes[i]);
         react.scopes[scopeKey] = scopes[i];
         return scopeKey;
@@ -121,8 +127,8 @@
       return react.update(node);
     },
 
-    helpers: js.extend(function(focus, deeply){
-      js.extend(focus, react.helpers);
+    helpers: extend(function(focus, deeply){
+      extend(focus, react.helpers);
 
       if(deeply){
         var key;
@@ -151,12 +157,12 @@
         for(key in newValues){
           this[key] = newValues[key];
         }
-        react.changed(this, js.keys(newValues));
+        react.changed(this, keysFor(newValues));
       },
 
       del: function(keys){
         var i;
-        keys = js.isArray(keys) ? keys : [keys];
+        keys = isArray(keys) ? keys : [keys];
         for(i = 0; i < keys.length; i+=1){
           delete this[keys[i]];
         }
@@ -173,26 +179,26 @@
       jQuery: function(){
         var singularize = function(which, method){
           return function(){
-            js.errorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
+            throwErrorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
             return method.apply(this, arguments);
           };
         };
 
-        jQuery.fn.extend(js.map({
+        jQuery.fn.extend(map({
 
           update: function(){ return react.update(this); },
 
           anchor: function(){
             if(!arguments.length){
               var scopes = this.anchors();
-              js.errorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
+              throwErrorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
               return scopes[0];
             }
             return react.anchor.apply(react, [this].concat(Array.prototype.slice.call(arguments)));
           },
 
           anchors: function(){
-            return js.map(new Operation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
+            return map(new Operation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
               return react.scopes[scopeName];
             });
           },
@@ -263,7 +269,7 @@
   var ScopeChain = function(type, previousLink, additionalScope, options){
     options = options || {};
 
-    js.extend(this, {
+    extend(this, {
       parent: previousLink,
       scope: additionalScope,
       type: type,
@@ -274,7 +280,7 @@
     });
   };
 
-  js.extend(ScopeChain.prototype, {
+  extend(ScopeChain.prototype, {
 
     contains: function(scope){
       return this.scope === scope || (this.parent && this.parent.contains(scope));
@@ -326,7 +332,7 @@
       }
 
       if (matchers.isString.test(key)) {
-        js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
+        throwErrorIf(negate, 'You can\'t negate literals using the exlamation point');
         return extendDetails({value: key.slice(1, key.length-1)});
       }
 
@@ -391,7 +397,7 @@
   // An operation provides a shared context where complex interactions may rely upon shared state
 
   var Operation = function(){
-    js.extend(this, {
+    extend(this, {
 
       // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
       _$nodes: {},
@@ -412,7 +418,7 @@
     });
   };
 
-  js.extend(Operation.prototype, {
+  extend(Operation.prototype, {
 
     $: function(node){
       return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapper(this, node));
@@ -435,13 +441,13 @@
     run: function(){
       var limit = 10000,
           key;
-      js.errorIf(this._hasRun, 'An operation cannot be run twice');
+      throwErrorIf(this._hasRun, 'An operation cannot be run twice');
       this._isRunning = true;
       // iterating over the toVisit list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
-      while(js.hasKeys(this._toVisit)){
-        js.errorIf(!(--limit), 'too many node additions');
+      while(hasKeys(this._toVisit)){
+        throwErrorIf(!(--limit), 'too many node additions');
         for(key in this._toVisit){
-          js.errorIf(this._visited[key], 'tried to consider the same directive twice');
+          throwErrorIf(this._visited[key], 'tried to consider the same directive twice');
           this._visited[key] = this._toVisit[key].visit();
           delete this._toVisit[key];
         }
@@ -467,11 +473,11 @@
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var NodeWrapper = function(operation, node){
     if(node instanceof jQuery){ node = node[0]; }
-    js.errorIf(!node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'node arg must be a DOM node');
+    throwErrorIf(!node || node.nodeType !== 1 || isArray(node) || node instanceof jQuery, 'node arg must be a DOM node');
 
     jQuery.prototype.init.call(this, node);
 
-    js.extend(this, {
+    extend(this, {
       node: node,
       key: getNodeKey(node),
       _operation: operation
@@ -481,7 +487,7 @@
     this.getMeta('initialized') ||  this.initializeNode();
   };
 
-  NodeWrapper.prototype = js.create(jQuery.prototype, {
+  NodeWrapper.prototype = create(jQuery.prototype, {
 
     // note: a correct mapping of the .constructor property to NodeWrapper breaks jquery, since it calls new this.constructor() with no arguments
 
@@ -498,14 +504,14 @@
     },
 
     getDirectiveStrings: function(){
-      return js.map(this.getDirectivesString().split(matchers.directiveDelimiter), function(which, string){
-        return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
+      return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(which, string){
+        return trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
       });
     },
 
     getDirectiveArrays: function(){
-      return js.reduce(this.getDirectiveStrings(), [], function(which, string, memo){
-        return string ? memo.concat([js.trim(string).split(matchers.space)]) : memo;
+      return reduce(this.getDirectiveStrings(), [], function(which, string, memo){
+        return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
       });
     },
 
@@ -548,9 +554,9 @@
       var that = this;
 
       // todo: optimize selection criteria
-      // return js.map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(which, node){
+      // return map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(which, node){
 
-      return js.map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
+      return map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
         return that._operation.$(node);
       });
     },
@@ -570,9 +576,9 @@
 
   // provides an object representing the directive itself (for example, "contain user.name")
   var Directive = function($node, key, tokens){
-    js.errorIf(tokens instanceof Directive, 'input to constructor was already a directive!');
+    throwErrorIf(tokens instanceof Directive, 'input to constructor was already a directive!');
 
-    js.extend(this, {
+    extend(this, {
       $node: $node,
       node: $node[0],
       command: tokens[0],
@@ -597,10 +603,10 @@
 
   };
 
-  Directive.prototype = js.create(commands);
+  Directive.prototype = create(commands);
   Directive.prototype.constructor = Directive;
 
-  js.extend(Directive.prototype, {
+  extend(Directive.prototype, {
 
     $: function(node){ return this._operation.$(node); },
 
@@ -697,8 +703,8 @@
     },
 
     _runCommand: function(command, inputs){
-      js.errorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
-      js.errorIf(!commands[command], 'not a valid react command: '+command);
+      throwErrorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
+      throwErrorIf(!commands[command], 'not a valid react command: '+command);
       commands["resolve_"+command] || (commands["resolve_"+command] = commands["resolve_"+command] === false ? this._nonResolver : this._fullResolver);
       var args = commands["resolve_"+command].call(this, inputs);
       commands[command].apply(this, args);
@@ -708,7 +714,7 @@
 
     _fullResolver: function(names){
       var that = this;
-      return js.map(names, function(which, name){
+      return map(names, function(which, name){
         return that.lookup(name);
       });
     },
@@ -724,14 +730,14 @@
     },
 
     _describeError: function(error){
-      js.log('Failure during React update: ', {
+      log('Failure during React update: ', {
         'original error': error,
         'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
         'while processing node': this.node,
         'key of failed directive': this.key,
         'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
       }, '(Supplemental dynamic data follows)');
-      js.log('Supplemental: ', {
+      log('Supplemental: ', {
         'index of failed directive': this.$node.directives.getIndex(this.key),
         'scope chain description': this.getScopeChain().describe(),
         '(internal scope chain object) ': this.getScopeChain()
@@ -791,7 +797,7 @@
       var repeatLimit = 10000, parent;
       while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
         parent && parent.visit();
-        js.errorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
+        throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
       }
       return (this._parent = parent);
     }
@@ -804,7 +810,7 @@
     shouldUpdate: noop,
     shouldUpdateBranch: noop,
     getScopeChain: function(){ return emptyScopeChain; },
-    getParent: function(){ js.error('internal error: cannot get the parent of a null directive'); }
+    getParent: function(){ throwError('internal error: cannot get the parent of a null directive'); }
   };
 
 
@@ -815,14 +821,14 @@
    */
 
   var TwoWayMap = function(serialized){
-    js.extend(this, { _ltr: {}, _rtl: {} });
+    extend(this, { _ltr: {}, _rtl: {} });
     serialized && this.fromString(serialized);
   };
 
-  js.extend(TwoWayMap.prototype, {
+  extend(TwoWayMap.prototype, {
     map: function(left, right){
-      js.errorIf(this._ltr[left], 'mapping already exists for left ', left);
-      js.errorIf(this._rtl[right], 'mapping already exists for right ', right);
+      throwErrorIf(this._ltr[left], 'mapping already exists for left ', left);
+      throwErrorIf(this._rtl[right], 'mapping already exists for right ', right);
       this._ltr[left] = right;
       this._rtl[right] = left;
     },
@@ -842,7 +848,7 @@
 
     // note: these serialization and de-serialization functions are built to work only with the case where all left-side values are sequential indices
     toString: function(){
-      return js.reduce(this._ltr, [], function(left, right, memo){
+      return reduce(this._ltr, [], function(left, right, memo){
         memo[left] = right;
         return memo;
       }).join(',');
@@ -850,7 +856,7 @@
 
     fromString: function(string){
       var that = this;
-      js.each(js.filter(string.split(',')), function(left, right){
+      each(filter(string.split(',')), function(left, right){
         that.map(left, right);
       });
     }
@@ -865,18 +871,18 @@
    */
 
   var DirectiveSet = function($node){
-    js.extend(this, {
+    extend(this, {
       _$node: $node,
       _node: $node[0],
       _indexKeyPairs: new TwoWayMap($node.getMeta('indexKeyPairs')),
       _validatedDirectivesString: $node.getMeta('validatedDirectivesString') || $node.getDirectivesString()
     });
-    js.errorIf(this._validatedDirectivesString !== $node.getDirectivesString(), 'directives string changed manually since last visit');
+    throwErrorIf(this._validatedDirectivesString !== $node.getDirectivesString(), 'directives string changed manually since last visit');
 
     this.buildDirectives();
   };
 
-  js.extend(DirectiveSet.prototype, {
+  extend(DirectiveSet.prototype, {
 
     getByKey: function(key){ return this[this.getIndex(key)]; },
 
@@ -890,7 +896,7 @@
       var tokenArrays = $node.getDirectiveArrays();
       var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
 
-      js.extend(this, {
+      extend(this, {
         length: tokenArrays.length,
 
         before: $node.makeDirective('before', ['before']),
@@ -918,7 +924,7 @@
     },
 
     mapIndexToKey: function(index, key){
-      js.errorIf(matchers.specialDirective.test(index), 'cannot explicitly set keys for special directives');
+      throwErrorIf(matchers.specialDirective.test(index), 'cannot explicitly set keys for special directives');
       this._indexKeyPairs.map(index, key);
       return this;
     },
@@ -959,7 +965,7 @@
     write: function(){
       var newDirectivesString = this.toString();
       var currentDirectivesString = this._$node.getDirectivesString();
-      js.errorIf(currentDirectivesString !== this._validatedDirectivesString, 'conflicting change to directives attribute');
+      throwErrorIf(currentDirectivesString !== this._validatedDirectivesString, 'conflicting change to directives attribute');
 
       this._$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setMeta({
         validatedDirectivesString: newDirectivesString,
@@ -984,7 +990,7 @@
         index === '0' ? this.anchored :
         index.match(matchers.isNumber) ? this[index-1] :
         index === 'after' ? (this.length ? this[this.length-1] : this.anchored) :
-        js.error('invalid directive key')
+        throwError('invalid directive key')
       );
     },
 
@@ -1001,14 +1007,14 @@
 
   // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
   var Proxy = function(operation, object){
-    js.extend(this, {
+    extend(this, {
       _operation: operation,
       _object: object,
       _cachedObservers: {}
     });
   };
 
-  js.extend(Proxy.prototype, {
+  extend(Proxy.prototype, {
     // writes an association between a directive and a property on an object by annotating the object
     observe: function(key, directive, prefix){
       directive.$node.store();
@@ -1019,9 +1025,9 @@
       // if no key is supplied, check every key
       if(!this._object || !this._object.observers){ return; }
       keys = (
-        js.isArray(keys) ? keys :
+        isArray(keys) ? keys :
         keys !== undefined ? [keys] :
-        js.keys(this._object).concat('length' in this._object && !this._object.propertyIsEnumerable('length') ? ['length'] : [])
+        keysFor(this._object).concat('length' in this._object && !this._object.propertyIsEnumerable('length') ? ['length'] : [])
       );
 
       // we first need to collect all the observers of the changed keys
@@ -1049,7 +1055,7 @@
     var observerKey = propertyKey+' '+observerDetailsString;
     if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
 
-    cachedObservers[observerKey] = js.extend(this, {
+    cachedObservers[observerKey] = extend(this, {
       object: object,
       propertyKey: propertyKey,
       observerDetailsString: observerDetailsString,
@@ -1068,7 +1074,7 @@
     };
   };
 
-  js.extend(Observer.prototype, {
+  extend(Observer.prototype, {
 
     write: function(){
       var observers = this.object.observers = this.object.observers || {};
@@ -1096,7 +1102,7 @@
    * commands
    */
 
-  js.extend(react.commands, {
+  extend(react.commands, {
 
     log: function(){
       typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:arguments});
@@ -1164,7 +1170,7 @@
     withinItem: function(key){
       // todo: add a rule to only allow getting items from last scope (check if key < scope.length?)
       // todo: add a rule to make sure the last scope object is an array
-      if(js.isArray(this.getScope()) && +key < this.getScope().length && this.getScope()[key]){
+      if(isArray(this.getScope()) && +key < this.getScope().length && this.getScope()[key]){
         this._withScope('withinItem', key);
       }else{
         this.dead();
@@ -1221,7 +1227,7 @@
       if(!$itemTemplate.length){ return; }
 
       var collection = this.getScope();
-      if(!js.isArray(collection)){ return this.dead(); }
+      if(!isArray(collection)){ return this.dead(); }
       // this ensures that the directive will depend upon any changes to the length of the array
       this.lookup('length');
 
@@ -1305,14 +1311,14 @@
     },
 
     attr: function(name, value){
-      js.errorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
+      throwErrorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
       this.onUpdate(function(){
-        if(!js.among(['string', 'number', 'undefined'], typeof name)){
-          js.log('bad attr name: ', name);
-          js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
-        }else if(!js.among(['string', 'number', 'undefined'], typeof value)){
-          js.log('bad attr value: ', value);
-          js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
+        if(!among(['string', 'number', 'undefined'], typeof name)){
+          log('bad attr name: ', name);
+          throwError('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
+        }else if(!among(['string', 'number', 'undefined'], typeof value)){
+          log('bad attr value: ', value);
+          throwError('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
         }
         jQuery(this.node).attr(name, value);
       });
