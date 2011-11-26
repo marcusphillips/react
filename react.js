@@ -33,16 +33,16 @@
 
   // returns a unique, consistent key for every node
   var getNodeKey = function(node){
-    var key = jQuery(node).data("reactKey");
-    if(!key){
-      key = unique('reactNode');
-      jQuery(node).data("reactKey", key);
-    }
-    return key;
+    !(node instanceof jQuery) || (node = node[0]);
+    return node._reactKey || (node._reactKey = unique('reactKey'));
   };
 
   var getScopeKey = function(object){
     return (object.reactKey = object.reactKey || unique('reactObject'));
+  };
+
+  var cacheAndGetScopeKey = function(scope){
+    return getScopeKey(react.scopes[getScopeKey(scope)] = scope);
   };
 
   var makeArrayFromArrayLikeObject = function(arrayLikeObject){
@@ -114,17 +114,11 @@
     },
 
     anchor: function(node){
-      var scopes = Array.prototype.slice.call(arguments, 1);
-      this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-
-      new Operation().$(node).directives.set('anchored', ['anchored'].concat(map(scopes, function(i, scope){
-        var scopeKey = getScopeKey(scopes[i]);
-        react.scopes[scopeKey] = scopes[i];
-        return scopeKey;
-      })));
-
-      return react.update(node);
+      var scopes = Array.prototype.slice.call(arguments, 1);
+      var anchoredTokens = ['anchored'].concat(map(scopes, cacheAndGetScopeKey));
+      new Operation().$(this.nodes[getNodeKey(node)] = node).setDirective('anchored', anchoredTokens).update();
+      return node;
     },
 
     helpers: extend(function(focus, deeply){
@@ -177,7 +171,7 @@
 
     integrate: {
       jQuery: function(){
-        var singularize = function(which, method){
+        var singularize = function(method){
           return function(){
             throwErrorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
             return method.apply(this, arguments);
@@ -198,7 +192,7 @@
           },
 
           anchors: function(){
-            return map(new Operation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
+            return map(new Operation().$(this[0]).directives.anchored.inputs, function(scopeName){
               return react.scopes[scopeName];
             });
           },
@@ -496,6 +490,11 @@
 
     makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
 
+    setDirective: function(key, tokens){
+      this.directives.set(key, tokens);
+      return this;
+    },
+
     getDirectivesString: function(){ return this.attr('react') || ''; },
     setDirectivesString: function(value){
       // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
@@ -504,13 +503,13 @@
     },
 
     getDirectiveStrings: function(){
-      return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(which, string){
+      return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(string){
         return trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
       });
     },
 
     getDirectiveArrays: function(){
-      return reduce(this.getDirectiveStrings(), [], function(which, string, memo){
+      return reduce(this.getDirectiveStrings(), [], function(memo, string){
         return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
       });
     },
@@ -554,9 +553,9 @@
       var that = this;
 
       // todo: optimize selection criteria
-      // return map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(which, node){
+      // return map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
 
-      return map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
+      return map(makeArrayFromArrayLikeObject(this.find('[react]')), function(node){
         return that._operation.$(node);
       });
     },
@@ -714,7 +713,7 @@
 
     _fullResolver: function(names){
       var that = this;
-      return map(names, function(which, name){
+      return map(names, function(name){
         return that.lookup(name);
       });
     },
@@ -848,7 +847,7 @@
 
     // note: these serialization and de-serialization functions are built to work only with the case where all left-side values are sequential indices
     toString: function(){
-      return reduce(this._ltr, [], function(left, right, memo){
+      return reduce(this._ltr, [], function(memo, right, left){
         memo[left] = right;
         return memo;
       }).join(',');
@@ -856,7 +855,7 @@
 
     fromString: function(string){
       var that = this;
-      each(filter(string.split(',')), function(left, right){
+      each(filter(string.split(',')), function(right, left){
         that.map(left, right);
       });
     }

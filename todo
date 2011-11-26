@@ -3,7 +3,6 @@
   - anchored
   - bindItem
   - for
-- add commonly-used js.* helpers to local scope
 - phase out 'for' directive
 - add each directive, which doesn't get an index
 - deprecate the .update() function
