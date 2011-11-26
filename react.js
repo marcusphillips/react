@@ -21,7 +21,8 @@
     space: /\s+/,
     negation: /!\s*/,
     isString: /(^'.*'$)|(^".*"$)/,
-    isNumber: /^\d+$/
+    isNumber: /^\d+$/,
+    specialDirective: /^(before)|(anchored)|(after)$/
   };
 
   // returns a unique, consistent key for every node
@@ -269,7 +270,7 @@
       key: options.key,
       prefix: options.prefix || '',
       // todo this shouldn't need a prefix
-      anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
+      anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey)
     });
   };
 
@@ -421,7 +422,7 @@
 
     isRunning: function(){ return this._isRunning; },
 
-    visit: function(directive){ this._toVisit[directive.key] = directive; },
+    visit: function(directive){ this._toVisit[directive.uniqueKey()] = directive; },
 
     isSearched: function($node, setting){
       if(setting === undefined){
@@ -477,16 +478,23 @@
     });
 
     this.directives = new DirectiveSet(this);
+    this.getMeta('initialized') ||  this.initializeNode();
   };
 
   NodeWrapper.prototype = js.create(jQuery.prototype, {
-    // a correct constructor mapping breaks with jquery, because it calls this.constructor() with no arguments
-    // constructor: NodeWrapper
 
-    makeDirective: function(index, tokens){ return new Directive(this, index, tokens); },
+    // note: a correct mapping of the .constructor property to NodeWrapper breaks jquery, since it calls new this.constructor() with no arguments
 
-    getDirectivesString: function(){
-      return this.attr('react') || '';
+    initializeNode: function(){ this.setMeta('initialized', true).directives.write(); },
+    isInitialized: function(){ return !!this.getMeta('initialized'); },
+
+    makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
+
+    getDirectivesString: function(){ return this.attr('react') || ''; },
+    setDirectivesString: function(value){
+      // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
+      // modifying all nodes that lacked attributes to have react="" would result in over-matching of the nodes on subsequent DOM queries
+      return (value || this.attr('react')) ? this.attr('react', value) : this;
     },
 
     getDirectiveStrings: function(){
@@ -511,6 +519,28 @@
 
     store: function(){
       react.nodes[this.key] = this.node;
+    },
+
+    setMeta: function(key, value){
+      var mappings = {};
+      key && typeof key === 'object' ? mappings = key : mappings[key] = value;
+
+      this.node._boundMeta || (this.node._boundMeta = {});
+
+      for(key in mappings){
+        this._storeInAttr[key] ? this.attr('data-bound-meta-'+key, mappings[key]) : this.node._boundMeta[key] = mappings[key];
+      }
+
+      return this;
+    },
+
+    getMeta: function(key){
+      this.node._boundMeta || (this.node._boundMeta = {});
+      return this._storeInAttr[key] ? this.attr('data-bound-meta-'+key) : this.node._boundMeta[key];
+    },
+
+    _storeInAttr: {
+      //indexKeyPairs: true // todo: this results in copies of the node getting their directive indices mapped to the same values, even before being initialized
     },
 
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
@@ -539,12 +569,15 @@
    */
 
   // provides an object representing the directive itself (for example, "contain user.name")
-  var Directive = function($node, index, tokens){
+  var Directive = function($node, key, tokens){
+    js.errorIf(tokens instanceof Directive, 'input to constructor was already a directive!');
+
     js.extend(this, {
       $node: $node,
       node: $node[0],
       command: tokens[0],
       inputs: tokens.slice(1),
+      key: key,
 
       _operation: $node._operation,
 
@@ -562,7 +595,6 @@
       _potentialObservers: []
     });
 
-    this.setIndex(index);
   };
 
   Directive.prototype = js.create(commands);
@@ -574,9 +606,8 @@
 
     toString: function(){ return [this.command].concat(this.inputs).join(' '); },
 
-    setIndex: function(newIndex){
-      this.index = newIndex;
-      this.key = this.$node.key+' '+this.index;
+    uniqueKey: function(){
+      return this.$node.key+' '+this.key;
     },
 
     lookup: function(key){
@@ -697,10 +728,11 @@
         'original error': error,
         'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
         'while processing node': this.node,
-        'index of failed directive': this.index,
-        'directive call': this.command+'('+this.inputs.join(', ')+')'
+        'key of failed directive': this.key,
+        'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
       }, '(Supplemental dynamic data follows)');
       js.log('Supplemental: ', {
+        'index of failed directive': this.$node.directives.getIndex(this.key),
         'scope chain description': this.getScopeChain().describe(),
         '(internal scope chain object) ': this.getScopeChain()
       });
@@ -757,23 +789,11 @@
     getParent: function(){
       if(this._parent !== undefined){ return this._parent; }
       var repeatLimit = 10000, parent;
-      while(parent !== (parent = this._potentialParent())){
+      while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
         parent && parent.visit();
         js.errorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
       }
       return (this._parent = parent);
-    },
-
-    _potentialParent: function(){
-      return (
-        (this.command === "before" && this.$node.directives.anchored.inputs.length) ? nullDirective :
-        this.index === 'before' ? (this.$node.wrappedParent() ? this.$node.wrappedParent().directives.after : nullDirective) :
-        this.index === 'anchored' ? this.$node.directives.before :
-        this.index.toString() === '0' ? this.$node.directives.anchored :
-        this.index.toString().match(matchers.isNumber) ? this.$node.directives[this.index-1] :
-        this.index === 'after' ? (this.$node.directives.length ? this.$node.directives[this.$node.directives.length-1] : this.$node.directives.anchored) :
-        js.error('invalid directive key')
-      );
     }
 
   });
@@ -791,99 +811,184 @@
 
 
   /*
+   * Two-way mapping
+   */
+
+  var TwoWayMap = function(serialized){
+    js.extend(this, { _ltr: {}, _rtl: {} });
+    serialized && this.fromString(serialized);
+  };
+
+  js.extend(TwoWayMap.prototype, {
+    map: function(left, right){
+      js.errorIf(this._ltr[left], 'mapping already exists for left ', left);
+      js.errorIf(this._rtl[right], 'mapping already exists for right ', right);
+      this._ltr[left] = right;
+      this._rtl[right] = left;
+    },
+
+    getLeft: function(right){ return this._rtl[right]; },
+    getRight: function(left){ return this._ltr[left]; },
+
+    releaseLeft: function(left){
+      delete this._rtl[this._ltr[left]];
+      delete this._ltr[left];
+    },
+
+    releaseRight: function(right){
+      delete this._ltr[this._rtl[right]];
+      delete this._rtl[right];
+    },
+
+    // note: these serialization and de-serialization functions are built to work only with the case where all left-side values are sequential indices
+    toString: function(){
+      return js.reduce(this._ltr, [], function(left, right, memo){
+        memo[left] = right;
+        return memo;
+      }).join(',');
+    },
+
+    fromString: function(string){
+      var that = this;
+      js.each(js.filter(string.split(',')), function(left, right){
+        that.map(left, right);
+      });
+    }
+
+  });
+
+
+
+
+  /*
    * Directive Set
    */
 
   var DirectiveSet = function($node){
-    var i,
-        key,
-        tokens,
-        tokenArrays = $node.getDirectiveArrays(),
-        validatedDirectivesString = $node.data('validatedDirectivesString');
-
-    this.length = 0;
-
-    for(i = 0; i < tokenArrays.length; i++){
-      tokens = tokenArrays[i];
-      if(i === 0 && tokens[0] === 'anchored'){
-        this.anchored = $node.makeDirective('anchored', tokens);
-      } else {
-        key = (this.anchored ? i-1 : i).toString();
-        this.push($node.makeDirective(key, tokens));
-      }
-    }
-
     js.extend(this, {
       _$node: $node,
-
-      before: $node.makeDirective('before', ['before']),
-      anchored: this.anchored || $node.makeDirective('anchored', ['anchored']),
-      after: $node.makeDirective('after', ['after'])
+      _node: $node[0],
+      _indexKeyPairs: new TwoWayMap($node.getMeta('indexKeyPairs')),
+      _validatedDirectivesString: $node.getMeta('validatedDirectivesString') || $node.getDirectivesString()
     });
+    js.errorIf(this._validatedDirectivesString !== $node.getDirectivesString(), 'directives string changed manually since last visit');
 
-    this.normalizeAttribute();
-
-    if(validatedDirectivesString === undefined){
-      $node.data('validatedDirectiveString', validatedDirectivesString = this.toString());
-    }
-
-    js.errorIf(validatedDirectivesString !== $node.getDirectivesString(), 'invalid change to react string');
+    this.buildDirectives();
   };
 
   js.extend(DirectiveSet.prototype, {
 
-    normalizeAttribute: function(){
-      if(this.toString() !== this._$node.getDirectivesString()){
-        this.write();
+    getByKey: function(key){ return this[this.getIndex(key)]; },
+
+    getMeta: function(){ return this._$node.getMeta.apply(this._$node, arguments); },
+    setMeta: function(){ return this._$node.setMeta.apply(this._$node, arguments); },
+
+    buildDirectives: function(){
+      var i;
+      var $node = this._$node;
+      var isInitialized = $node.isInitialized();
+      var tokenArrays = $node.getDirectiveArrays();
+      var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
+
+      js.extend(this, {
+        length: tokenArrays.length,
+
+        before: $node.makeDirective('before', ['before']),
+        anchored: $node.makeDirective('anchored', anchoredTokens),
+        after: $node.makeDirective('after', ['after'])
+      });
+
+      for(i = 0; i < tokenArrays.length; i++){
+        this[i] = $node.makeDirective(isInitialized ? this.getKey(i) : this.makeKey(i), tokenArrays[i]);
       }
     },
 
-    push: function(element){
-      this[this.length] = element;
-      this.length += 1;
+    getKey: function(index){
+      return matchers.specialDirective.test(index) ? index : this._indexKeyPairs.getRight(index);
     },
 
-    unshift: function(element){
+    getIndex: function(key){
+      return matchers.specialDirective.test(key) ? key : this._indexKeyPairs.getLeft(key);
+    },
+
+    makeKey: function(index){
+      var key = (this.getMeta('lastDirectiveKey') || 0) + 1;
+      this.mapIndexToKey(index, key).setMeta('lastDirectiveKey', key);
+      return key;
+    },
+
+    mapIndexToKey: function(index, key){
+      js.errorIf(matchers.specialDirective.test(index), 'cannot explicitly set keys for special directives');
+      this._indexKeyPairs.map(index, key);
+      return this;
+    },
+
+    releaseIndex: function(index){ return this._indexKeyPairs.releaseLeft(index); },
+
+    releaseKey: function(key){ return this._indexKeyPairs.releaseRight(key); },
+
+
+    // mutation methods
+
+    set: function(index, tokens){
+      var key = matchers.specialDirective.test(index) ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
+      this[index] = this._$node.makeDirective(key, tokens);
+
+      return this.write();
+    },
+
+    push: function(tokens){
+      this[this.length] = this._$node.makeDirective(this.makeKey(this.length), tokens);
+      this.length += 1;
+
+      return this.write();
+    },
+
+    unshift: function(tokens){
       for(var i = this.length-1; 0 <= i; i--){
         this[i+1] = this[i];
+        this.releaseIndex(i);
+        this.mapIndexToKey(i+1, this[i+1].key);
       }
-      this[0] = element;
+      this[0] = this._$node.makeDirective(this.makeKey('0'), tokens);
       this.length += 1;
-    },
 
-    // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
-    set: function(key, directive){
-      this[key] = this._$node.makeDirective(''+key, directive);
-      this.write();
-      return this;
+      return this.write();
     },
 
     write: function(){
       var newDirectivesString = this.toString();
-      if(newDirectivesString === this._$node.getDirectivesString()){ return; }
-      this._$node.attr('react', newDirectivesString).data('validatedDirectivesString', newDirectivesString);
+      var currentDirectivesString = this._$node.getDirectivesString();
+      js.errorIf(currentDirectivesString !== this._validatedDirectivesString, 'conflicting change to directives attribute');
+
+      this._$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setMeta({
+        validatedDirectivesString: newDirectivesString,
+        indexKeyPairs: this._indexKeyPairs.toString()
+      });
+      return this;
     },
 
     orderedForString: function(){
       return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this));
     },
 
-    toString: function(){
-      return js.map(this.orderedForString(), function(which, directive){
-        if(!(directive instanceof Directive) && console){ console.log('oops - something\'s wrong with your directives'); }
-        return directive.toString();
-      }).join(', ');
+    potentialParentOf: function(key){
+      var index = this.getIndex(key).toString();
+      return (
+        index === 'before' ? (
+          this.anchored.inputs.length ? nullDirective :
+          !this._$node.wrappedParent() ? nullDirective :
+          this._$node.wrappedParent().directives.after
+        ) :
+        index === 'anchored' ? this.before :
+        index === '0' ? this.anchored :
+        index.match(matchers.isNumber) ? this[index-1] :
+        index === 'after' ? (this.length ? this[this.length-1] : this.anchored) :
+        js.error('invalid directive key')
+      );
     },
 
-    prepend: function(directive){
-      directive = directive instanceof Directive ? directive : this._$node.makeDirective('0', directive);
-      this.unshift(directive);
-
-      js.map(this, function(which, directive){
-        directive.setIndex(which.toString());
-      });
-      this.write();
-    }
+    toString: function(){ return this.orderedForString().join(', '); }
 
   });
 
@@ -907,7 +1012,7 @@
     // writes an association between a directive and a property on an object by annotating the object
     observe: function(key, directive, prefix){
       directive.$node.store();
-      new Observer(this._operation, this._cachedObservers, this._object, key, directive.$node.key, directive.index, prefix).write();
+      new Observer(this._operation, this._cachedObservers, this._object, key, directive.$node.key, directive.key, prefix).write();
     },
 
     changed: function(keys){
@@ -926,7 +1031,8 @@
         if(!this._object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
         var keyObserverString;
         for(keyObserverString in this._object.observers[key]){
-          new Observer(this._operation, this._cachedObservers, this._object, key, keyObserverString).dirty();
+          var observerTokens = Observer.parseKeyObserverString(keyObserverString);
+          new Observer(this._operation, this._cachedObservers, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix).dirty();
         }
       }
     }
@@ -938,15 +1044,8 @@
    * Observer
    */
 
-  var Observer = function(operation, cachedObservers, object, propertyKey, nodeKey, directiveIndex, prefix){
-    if(arguments.length === 5){
-      var tokens = nodeKey.split(matchers.space);
-      nodeKey = tokens[0];
-      directiveIndex = tokens[1];
-      prefix = tokens[2];
-    }
-
-    var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
+  var Observer = function(operation, cachedObservers, object, propertyKey, nodeKey, directiveKey, prefix){
+    var observerDetailsString = nodeKey+' '+directiveKey+' '+prefix;
     var observerKey = propertyKey+' '+observerDetailsString;
     if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
 
@@ -955,9 +1054,18 @@
       propertyKey: propertyKey,
       observerDetailsString: observerDetailsString,
       prefix: prefix,
-      directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
+      directive: operation.$(react.nodes[nodeKey]).directives.getByKey(directiveKey),
       key: observerKey
     });
+  };
+
+  Observer.parseKeyObserverString = function(keyObserverString){
+    var tokens = keyObserverString.split(matchers.space);
+    return {
+      nodeKey: tokens[0],
+      directiveKey: tokens[1],
+      prefix: tokens[2]
+    };
   };
 
   js.extend(Observer.prototype, {
@@ -1065,7 +1173,7 @@
 
     withinEach: function(){
       this._createItemNodes(function(index, itemNode){
-        this.$(itemNode).directives.prepend(['withinItem', index]);
+        this.$(itemNode).directives.unshift(['withinItem', index]);
       });
       this.onUpdate(function(){
         this.updateBranch();
@@ -1101,7 +1209,7 @@
       this.onUpdate(function(){
         // todo: return here (and everywhere else) if collection is undefined.  test for this
         this._createItemNodes(function(index, itemNode){
-          this.$(itemNode).directives.prepend( ['bindItem', index].concat(aliases) );
+          this.$(itemNode).directives.unshift( ['bindItem', index].concat(aliases) );
         });
         this.updateBranch();
       });

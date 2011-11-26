@@ -3,6 +3,7 @@
   - anchored
   - bindItem
   - for
+- add commonly-used js.* helpers to local scope
 - phase out 'for' directive
 - add each directive, which doesn't get an index
 - deprecate the .update() function
@@ -13,6 +14,8 @@
   - fix it so it filters out bound children
 - jquery syntax for finding anchored children
 - allow string inputs for templates
+- change js.js iterators to pass in the item before the index
+- remove all use of .data()
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes
@@ -83,6 +86,8 @@
 - optimize selection criteria not to match anchored descendants or their children
 
 --- refactors ---
+- using directives.set() on a the 'anchored' directive will result in discarding the previous directive object and all its associated metadata. find a better way
+- don't make anchor a special directive, just require no more than one per node, and process at the beginning
 - provide every directive with a .persistence() helper, that can access a shared state based on previous executions of that same directive. Useful for unsetting previously defined classes and attributes, and allows those functions to be auto-resolved
 - fix this: in createItemNodes, we simply put an observer on the length property that results in a complete re-render of the looping directive if ever a change in length is noticed
 - remove .anchorKey from scope chains
@@ -92,6 +97,7 @@
 - moving away from jquery dependency
   - change $.find() back to queryselectorall $.find() (note calling Array.prototype.slice.call on the results of a call to .querySelectorAll blows up in IE)
 - see if there's a more efficient way to build an array other than iterating over the array like object
+- todo: deprecate internal access-by-index for directiveSets - move to access-by-key with some form of sequence encoding (linked list?)
 
 --- cleanup ---
 remove ._scopeInjectionArgLists property of directives
@@ -130,6 +136,7 @@ remove ._scopeInjectionArgLists property of directives
 - test('when a list item is removed, associated loop item nodes disappear', function(){
 - test('todo: write a test this for inadvertent fallthrough, for the case where lookup of a withinItem key hits undefined and falls through this._lookupInScopeChain(args[0], lastLink)', function(){});
 - test('works with a missing key alias', function(){/*...*/});
+- modifying the directives attribute after initializing a node throws an error on next visit to the node
 /* todo
   var object = ['a', 'b'];
   var node = $('\
