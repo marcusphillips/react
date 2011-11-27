@@ -13,8 +13,6 @@
   - fix it so it filters out bound children
 - jquery syntax for finding anchored children
 - allow string inputs for templates
-- change js.js iterators to pass in the item before the index
-- remove all use of .data()
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes

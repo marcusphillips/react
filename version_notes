@@ -1,6 +1,9 @@
 local
 ---
 - (internal) directives are refered to by persistent keys, not thier index in the string
+- (internaL) js.* iterators now pass the item as the first argument to the callback block
+- (internaL) js.* iterators now run in the context of the input collection, unless you pass a context argument in after the block.
+
 
 1.3
 ---
