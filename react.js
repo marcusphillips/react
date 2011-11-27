@@ -142,16 +142,9 @@
       },
 
       set: function(key, value){
-        if(typeof key === 'object'){
-          var newValues = key;
-        } else {
-          newValues = {};
-          newValues[key] = value;
-        }
-        for(key in newValues){
-          this[key] = newValues[key];
-        }
-        react.changed(this, keysFor(newValues));
+        var newValues = {};
+        typeof key === 'object' ? newValues = key : newValues[key] = value;
+        react.changed(extend(this, newValues), keysFor(newValues));
       },
 
       del: function(keys){
@@ -425,11 +418,7 @@
     visit: function(directive){ this._toVisit[directive.uniqueKey()] = directive; },
 
     isSearched: function($node, setting){
-      if(setting === undefined){
-        this._searched[$node.key] = setting;
-      } else {
-        return this._searched[$node.key];
-      }
+      return setting === undefined ? this._searched[$node.key] : this._searched[$node.key] = setting;
     },
 
     run: function(){
