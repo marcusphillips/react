@@ -539,14 +539,12 @@
 
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
     getReactDescendants: function(){
-      var that = this;
-
       // todo: optimize selection criteria
       // return map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
 
       return map(makeArrayFromArrayLikeObject(this.find('[react]')), function(node){
-        return that._operation.$(node);
-      });
+        return this._operation.$(node);
+      }, this);
     },
 
     getReactNodes: function(){
@@ -701,10 +699,9 @@
     _nonResolver: function(names){ return names; },
 
     _fullResolver: function(names){
-      var that = this;
       return map(names, function(name){
-        return that.lookup(name);
-      });
+        return this.lookup(name);
+      }, this);
     },
 
     _registerPotentialObservers: function(){
@@ -843,10 +840,9 @@
     },
 
     fromString: function(string){
-      var that = this;
       each(filter(string.split(',')), function(right, left){
-        that.map(left, right);
-      });
+        this.map(left, right);
+      }, this);
     }
 
   });
