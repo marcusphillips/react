@@ -391,10 +391,10 @@
 
       // directives we plan to visit, by key
       // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-      _toVisit: {},
+      _toVisit: new DirectiveStore(),
 
       // visited directives, by key
-      _visited: {},
+      _visited: new DirectiveStore(),
 
       // branches from which we have already collected all bound descendants
       _searched: {},
@@ -415,28 +415,23 @@
 
     isRunning: function(){ return this._isRunning; },
 
-    visit: function(directive){ this._toVisit[directive.uniqueKey()] = directive; },
+    visit: function(directive){ return this._toVisit.add(directive); },
 
     isSearched: function($node, setting){
       return setting === undefined ? this._searched[$node.key] : this._searched[$node.key] = setting;
     },
 
     run: function(){
-      var limit = 10000,
-          key;
       throwErrorIf(this._hasRun, 'An operation cannot be run twice');
       this._isRunning = true;
-      // iterating over the toVisit list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
-      while(hasKeys(this._toVisit)){
-        throwErrorIf(!(--limit), 'too many node additions');
-        for(key in this._toVisit){
-          throwErrorIf(this._visited[key], 'tried to consider the same directive twice');
-          this._visited[key] = this._toVisit[key].visit();
-          delete this._toVisit[key];
-        }
-      }
-      this._isRunning = false;
-      this._hasRun = true;
+
+      // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
+      this._toVisit.exhaust(function(directive){
+        throwErrorIf(this._visited.contains(directive), 'tried to consider the same directive twice');
+        this._visited.add(directive.visit());
+      }, this);
+
+      extend(this, {_isRunning: false, _hasRun: true});
     },
 
     changed: function(object, keys){
@@ -455,18 +450,18 @@
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
   var NodeWrapper = function(operation, node){
+    if(node && 'length' in node){ node = node[0]; }
+    throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a DOM node');
+
     if(node instanceof jQuery){ node = node[0]; }
     throwErrorIf(!node || node.nodeType !== 1 || isArray(node) || node instanceof jQuery, 'node arg must be a DOM node');
 
-    jQuery.prototype.init.call(this, node);
-
-    extend(this, {
+    extend(jQuery.prototype.init.call(this, node), {
       node: node,
       key: getNodeKey(node),
       _operation: operation
-    });
+    }).directives = new DirectiveSet(this);
 
-    this.directives = new DirectiveSet(this);
     this.getMeta('initialized') ||  this.initializeNode();
   };
 
@@ -665,7 +660,7 @@
 
     // the directive's command (for example, 'contain') will be executed with a 'this' context of that directive
     visit: function(){
-      if(this._visited){ return; }
+      if(this._visited){ return this; }
       this._visited = true;
       this.getParent().visit();
       var willUpdate = this.shouldUpdate();
@@ -686,6 +681,7 @@
           this.search();
         }
       }
+      return this;
     },
 
     _runCommand: function(command, inputs){
@@ -797,6 +793,51 @@
     getScopeChain: function(){ return emptyScopeChain; },
     getParent: function(){ throwError('internal error: cannot get the parent of a null directive'); }
   };
+
+
+
+
+  /*
+   * NodeStore
+   */
+
+  var NodeStore = function(){
+    extend(this, { _nodes: {} });
+  };
+
+  extend(NodeStore.prototype, {
+    add: function($node){ this._nodes[$node.key] = $node; },
+    remove: function($node){ delete this._nodes[$node.key]; },
+    each: function(block, context){ each(this._nodes, block, context); }
+  });
+
+
+
+
+  /*
+   * DirectiveStore
+   */
+
+  var DirectiveStore = function(){
+    extend(this, { _directives: {} });
+  };
+
+  extend(DirectiveStore.prototype, {
+    add: function(directive){ this._directives[directive.uniqueKey()] = directive; },
+    remove: function(directive){ delete this._directives[directive.uniqueKey()]; },
+    contains: function(directive){ return directive.uniqueKey() in this._directives; },
+    each: function(block, context){ each(this._directives, block, context); },
+    exhaust: function(block, context){
+      var limit = 10000;
+      while(hasKeys(this._directives)){
+        throwErrorIf(!(--limit), 'could not exhaust object in '+ limit +' iterations', {target: this._directives});
+        each(this._directives, function(directive){
+          block.call(context, directive);
+          this.remove(directive);
+        }, this);
+      }
+    }
+  });
 
 
 
@@ -1006,8 +1047,8 @@
     },
 
     changed: function(keys){
+      if(!this._object.observers){ return; }
       // if no key is supplied, check every key
-      if(!this._object || !this._object.observers){ return; }
       keys = (
         isArray(keys) ? keys :
         keys !== undefined ? [keys] :
@@ -1067,9 +1108,8 @@
     },
 
     dirty: function(){
-      if(this.isDirty){ return; }
+      this.isDirty || this.directive.dirtyObserver(this);
       this.isDirty = true;
-      this.directive.dirtyObserver(this);
     },
 
     pertains: function(){
