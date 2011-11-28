@@ -390,10 +390,10 @@
 
       // directives we plan to visit, by key
       // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-      _toVisit: makeDirectiveStore(),
+      _toVisit: makeDirectiveSet(),
 
       // visited directives, by key
-      _visited: makeDirectiveStore(),
+      _visited: makeDirectiveSet(),
 
       // branches from which we have already collected all bound descendants
       _searched: {},
@@ -800,7 +800,7 @@
    * DirectiveSet
    */
 
-  var makeDirectiveStore = function(){ return new Set(getDirectiveKey); };
+  var makeDirectiveSet = function(){ return new Set(getDirectiveKey); };
   var getDirectiveKey = function(item){ return item.uniqueKey(); };
 
 
