@@ -12,15 +12,14 @@
    * Library-wide helpers
    */
 
+  var debugging = false;
   var noop = function(){};
 
   var throwError = js.error, throwErrorIf = js.errorIf, log = js.log;
   var create = js.create, unique = js.unique, extend = js.extend, trim = js.trim;
-  var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter;
+  var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
   var keysFor = js.keys, hasKeys = js.hasKeys, isArray = js.isArray, among = js.among;
-
-
-  var debugging = false;
+  var Set = js.Set;
 
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
@@ -391,10 +390,10 @@
 
       // directives we plan to visit, by key
       // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-      _toVisit: new DirectiveStore(),
+      _toVisit: makeDirectiveStore(),
 
       // visited directives, by key
-      _visited: new DirectiveStore(),
+      _visited: makeDirectiveStore(),
 
       // branches from which we have already collected all bound descendants
       _searched: {},
@@ -460,7 +459,7 @@
       node: node,
       key: getNodeKey(node),
       _operation: operation
-    }).directives = new DirectiveSet(this);
+    }).directives = new DirectiveList(this);
 
     this.getMeta('initialized') ||  this.initializeNode();
   };
@@ -798,46 +797,11 @@
 
 
   /*
-   * NodeStore
+   * DirectiveSet
    */
 
-  var NodeStore = function(){
-    extend(this, { _nodes: {} });
-  };
-
-  extend(NodeStore.prototype, {
-    add: function($node){ this._nodes[$node.key] = $node; },
-    remove: function($node){ delete this._nodes[$node.key]; },
-    each: function(block, context){ each(this._nodes, block, context); }
-  });
-
-
-
-
-  /*
-   * DirectiveStore
-   */
-
-  var DirectiveStore = function(){
-    extend(this, { _directives: {} });
-  };
-
-  extend(DirectiveStore.prototype, {
-    add: function(directive){ this._directives[directive.uniqueKey()] = directive; },
-    remove: function(directive){ delete this._directives[directive.uniqueKey()]; },
-    contains: function(directive){ return directive.uniqueKey() in this._directives; },
-    each: function(block, context){ each(this._directives, block, context); },
-    exhaust: function(block, context){
-      var limit = 10000;
-      while(hasKeys(this._directives)){
-        throwErrorIf(!(--limit), 'could not exhaust object in '+ limit +' iterations', {target: this._directives});
-        each(this._directives, function(directive){
-          block.call(context, directive);
-          this.remove(directive);
-        }, this);
-      }
-    }
-  });
+  var makeDirectiveStore = function(){ return new Set(getDirectiveKey); };
+  var getDirectiveKey = function(item){ return item.uniqueKey(); };
 
 
 
@@ -895,7 +859,7 @@
    * Directive Set
    */
 
-  var DirectiveSet = function($node){
+  var DirectiveList = function($node){
     extend(this, {
       _$node: $node,
       _node: $node[0],
@@ -907,7 +871,7 @@
     this.buildDirectives();
   };
 
-  extend(DirectiveSet.prototype, {
+  extend(DirectiveList.prototype, {
 
     getByKey: function(key){ return this[this.getIndex(key)]; },
 
