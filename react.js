@@ -558,9 +558,7 @@
       node: $node[0],
       command: tokens[0],
       inputs: tokens.slice(1),
-      key: key,
-
-      _operation: $node._operation
+      key: key
     });
   };
 
@@ -580,14 +578,12 @@
 
   var DirectiveVisit = function($node, key, tokens){
     return extend(create(new Directive($node, key, tokens)), DirectiveVisit.prototype, {
+      _operation: $node._operation,
       _isVisited: undefined,
       _isDead: undefined,
       _shouldUpdate: undefined,
       _shouldUpdateBranch: undefined,
-      _parent: undefined,
-      _parentIsDead: undefined,
-      _visitParentBranch: undefined,
-      _gotParentInfo: undefined,
+      _parentInfo: undefined,
       _dirtyObservers: {},
       _scopeChain: undefined,
       _potentialObservers: []
@@ -728,59 +724,32 @@
     },
 
     _getParentInfo: function(){
-      if(this._gotParentInfo){ return; }
+      if(this._parentInfo){ return this._parentInfo; }
       var repeatLimit = 10000, parent;
       while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
         parent.visit();
         throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
       }
-      extend(this, {
-        _gotParentInfo: true,
-        _parent: parent,
-        _parentIsDead: parent.isDead(),
-        _shouldUpdateParentBranch: parent.shouldUpdateBranch(),
-        _parentScopeChain: parent.getScopeChain()
+      return (this._parentInfo = {
+        parent: parent,
+        isDead: parent.isDead(),
+        shouldUpdateBranch: parent.shouldUpdateBranch(),
+        scopeChain: parent.getScopeChain()
       });
     },
 
-    getParent: function(){
-      this._getParentInfo();
-      var repeatLimit = 10000, parent;
-      while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
-        parent && parent.visit();
-        throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
-      }
-      return this._parent;
-    },
+    getParent: function(){ return this._getParentInfo().parent; },
+    parentIsDead: function(){ return this._getParentInfo().isDead; },
+    getParentScopeChain: function(){ return this._getParentInfo().scopeChain; },
+    shouldUpdateParentBranch: function(){ return this._getParentInfo().shouldUpdateBranch; },
 
-    parentIsDead: function(){
-      this._getParentInfo();
-      return this._parentIsDead;
-    },
-
-    getParentScopeChain: function(){
-      this._getParentInfo();
-      return this._parentScopeChain;
-    },
-
-    shouldUpdateParentBranch: function(){
-      this._getParentInfo();
-      return this._shouldUpdateParentBranch;
-    },
-
+    isDead: function(){ return this._isDead || this._getParentInfo().isDead; },
     shouldUpdateBranch: function(){
-      this._getParentInfo();
-      return this.shouldUpdate() && (this._shouldUpdateBranch || this._shouldUpdateParentBranch);
+      return this.shouldUpdate() && (this._shouldUpdateBranch || this._getParentInfo().shouldUpdateBranch);
     },
-
     shouldUpdate: function(){
-      this._getParentInfo();
-      return !this.isDead() && (this._shouldUpdate = this._shouldUpdate || this._shouldUpdateParentBranch || this.dirtyObserverPertains());
-    },
-
-    isDead: function(){
-      this._getParentInfo();
-      return this._isDead || this._parentIsDead;
+      if(this.isDead()){ return false; }
+      return this._shouldUpdate || (this._shouldUpdate = this._getParentInfo().shouldUpdateBranch || this.dirtyObserverPertains());
     }
 
   });
