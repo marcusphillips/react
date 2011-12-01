@@ -591,23 +591,34 @@
   };
 
   DirectiveVisit.prototype = extend(create(commands), {
-
     constructor: DirectiveVisit,
 
     $: function(node){ return this._operation.$(node); },
+
+    resetScopeChain: function(){ this._scopeChain = emptyScopeChain; },
+    pushScope: function(type, scope, options){ this._scopeChain = this.getScopeChain().extend(type, scope, options); },
+    getScope: function(){ return this.getScopeChain().scope; },
+    getScopeChain: function(){ return this._scopeChain || (this._scopeChain = this.parentInfo().scopeChain); },
+
+    // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
+    consider: function(){ return this._operation.visit(this); },
+    update: function(){ return extend(this, {_shouldUpdate: true}).consider(); },
+    updateBranch: function(){ return extend(this, {_shouldUpdateBranch: true}).update(); },
+
+    isVisited: function(){ return this._isVisited; },
+    isDead: function(){ return this._isDead || this.parentInfo().isDead; },
+    shouldUpdateBranch: function(){
+      return this.shouldUpdate() && (this._shouldUpdateBranch || this.parentInfo().shouldUpdateBranch);
+    },
+    shouldUpdate: function(){
+      if(this.isDead()){ return false; }
+      return this._shouldUpdate || (this._shouldUpdate = this.parentInfo().shouldUpdateBranch || this.dirtyObserverPertains());
+    },
 
     lookup: function(key){
       var details = this.getScopeChain().detailedLookup(key);
       this._potentialObservers = this._potentialObservers.concat(details.potentialObservers);
       return details.value;
-    },
-
-    resetScopeChain: function(){ this._scopeChain = emptyScopeChain; },
-    pushScope: function(type, scope, options){ this._scopeChain = this.getScopeChain().extend(type, scope, options); },
-    getScope: function(){ return this.getScopeChain().scope; },
-
-    getScopeChain: function(){
-      return this._scopeChain = this._scopeChain || this.parentInfo().scopeChain;
     },
 
     dirtyObserver: function(observer){
@@ -621,25 +632,10 @@
       }
     },
 
-    // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
-    consider: function(){ return this._operation.visit(this); },
-
-    update: function(){
-      this._shouldUpdate = true;
-      return this.consider();
-    },
-
-    updateBranch: function(){
-      this._shouldUpdateBranch = true;
-      return this.update();
-    },
-
     onUpdate: function(callback){
       this.shouldUpdate() && callback && callback.call(this);
       return this;
     },
-
-    isVisited: function(){ return this._isVisited; },
 
     // the directive's command (for example, 'contain') will be executed with a 'this' context of that directive
     visit: function(){
@@ -666,7 +662,8 @@
     _runCommand: function(command, inputs){
       throwErrorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
       throwErrorIf(!commands[command], 'not a valid react command: '+command);
-      var resolver = commands["resolve_"+command] || (commands["resolve_"+command] = commands["resolve_"+command] === false ? this._nonResolver : this._fullResolver);
+      var resolverKey = "resolve_"+command;
+      var resolver = commands[resolverKey] || (commands[resolverKey] = commands[resolverKey] === false ? this._nonResolver : this._fullResolver);
       commands[command].apply(this, resolver.call(this, inputs));
     },
 
@@ -684,22 +681,6 @@
           new Proxy(this._operation, potentialObserver.scopeChain.scope).observe(potentialObserver.key, this, potentialObserver.scopeChain.prefix);
         }
       }, this);
-    },
-
-    _describeError: function(error){
-      log('Failure during React update: ', {
-        'original error': error,
-        'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
-        'while processing node': this.node,
-        'key of failed directive': this.key,
-        'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
-      }, '(Supplemental dynamic data follows)');
-      log('Supplemental: ', {
-        'index of failed directive': this.$node.directives.getIndex(this.key),
-        'scope chain description': this.getScopeChain().describe(),
-        '(internal scope chain object) ': this.getScopeChain()
-      });
-      return error;
     },
 
     search: function(){
@@ -726,13 +707,20 @@
       });
     },
 
-    isDead: function(){ return this._isDead || this.parentInfo().isDead; },
-    shouldUpdateBranch: function(){
-      return this.shouldUpdate() && (this._shouldUpdateBranch || this.parentInfo().shouldUpdateBranch);
-    },
-    shouldUpdate: function(){
-      if(this.isDead()){ return false; }
-      return this._shouldUpdate || (this._shouldUpdate = this.parentInfo().shouldUpdateBranch || this.dirtyObserverPertains());
+    _describeError: function(error){
+      log('Failure during React update: ', {
+        'original error': error,
+        'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
+        'while processing node': this.node,
+        'key of failed directive': this.key,
+        'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
+      }, '(Supplemental dynamic data follows)');
+      log('Supplemental: ', {
+        'index of failed directive': this.$node.directives.getIndex(this.key),
+        'scope chain description': this.getScopeChain().describe(),
+        '(internal scope chain object) ': this.getScopeChain()
+      });
+      return error;
     }
 
   });
