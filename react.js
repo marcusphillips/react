@@ -349,9 +349,6 @@
       // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
       _toVisit: makeDirectiveSet(),
 
-      // branches from which we have already collected all bound descendants
-      _searched: {},
-
       _hasRun: false,
       _isRunning: false
 
@@ -360,15 +357,12 @@
 
   extend(Operation.prototype, {
 
-    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapperMeta(this, node)); },
+    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new $$(node).makeMeta(this)); },
 
     hasRun: function(){ return this._hasRun; },
     isRunning: function(){ return this._isRunning; },
-    isSearched: function($node, setting){ return setting === undefined ? this._searched[$node.key] : this._searched[$node.key] = setting; },
 
     visit: function(directive){ return this._toVisit.add(directive); },
-
-    dirtyObserver: function(observer){ observer.directive.dirtyObserver(observer); },
 
     run: function(){
       throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
@@ -393,12 +387,12 @@
 
 
   /*
-   * NodeWrapper (subclass of jQuery)
+   * $$ (subclass of jQuery)
    */
 
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
-  // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var NodeWrapper = function(node){
+  // Within the scope of the Operation constructor, all calls to $$() return a customized jQuery object. For access to the original, use jQuery()
+  var $$ = function(node){
     node && 'length' in node && (node = node[0]);
     throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a DOM node');
 
@@ -408,9 +402,10 @@
     });
   };
 
-  NodeWrapper.prototype = create(jQuery.prototype, {
-    // note: a correct mapping of the .constructor property to NodeWrapper breaks jquery, since it calls new this.constructor() with no arguments
+  $$.prototype = create(jQuery.prototype, {
+    // note: a correct mapping of the .constructor property to $$ breaks jquery, since it calls new this.constructor() with no arguments
 
+    makeMeta: function(operation){ return new $$Meta(this, operation); },
     initializeNode: function(){ this.setStorage('initialized', true).directives.write(); },
     isInitialized: function(){ return !!this.getStorage('initialized'); },
 
@@ -455,19 +450,17 @@
 
 
   /*
-   * NodeWrapper (subclass of jQuery)
+   * $$Meta (metadata for operations, about nodes)
    */
 
-  // Overriding jQuery to provide supplemental functionality to DOM node wrappers
-  // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var NodeWrapperMeta = function(operation, node){
-    var result = extend(create(new NodeWrapper(node)), NodeWrapperMeta.prototype, {_operation: operation});
-    extend(result, {directives: new DirectiveList(result)});
+  var $$Meta = function(nodeWrapper, operation){
+    var result = extend(create(nodeWrapper), $$Meta.prototype, {_operation: operation});
+    extend(result, {_isSearched: undefined, directives: new DirectiveList(result)});
     result.getStorage('initialized') || result.initializeNode();
     return result;
   };
 
-  extend(NodeWrapperMeta.prototype, {
+  extend($$Meta.prototype, {
 
     makeDirective: function(key, tokens){ return new Directive(this, key, tokens).makeMeta(); },
     setDirective: function(key, tokens){
@@ -491,12 +484,10 @@
     },
 
     search: function(){
-      if(this._operation.isSearched(this)){ return; }
       // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
-      each(this.getReactNodes(), function($node){
+      this._isSearched || each(this.getReactNodes(), function($node){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        this._operation.isSearched($node, true);
-        $node.directives.after.consider();
+        extend($node, {_isSearched: true}).directives.after.consider();
       }, this);
     }
 
@@ -904,7 +895,7 @@
         for(keyObserverString in this._object.observers[key]){
           var observerTokens = Observer.parseKeyObserverString(keyObserverString);
           var directive = this._operation.$(react.nodes[observerTokens.nodeKey]).directives.getByKey(observerTokens.directiveKey);
-          this._operation.dirtyObserver(this.getObserver(directive, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
+          directive.dirtyObserver(this.getObserver(directive, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
         }
       }
     }
