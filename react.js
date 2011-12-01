@@ -15,7 +15,7 @@
   var debugging = false;
   var noop = function(){};
 
-  var throwError = js.error, throwErrorIf = js.errorIf, log = js.log;
+  var throwError = js.error, throwErrorIf = js.errorIf, log = js.log, catchIf = js.catchIf;
   var create = js.create, unique = js.unique, extend = js.extend, trim = js.trim;
   var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
   var keysFor = js.keys, hasKeys = js.hasKeys, isArray = js.isArray, among = js.among;
@@ -210,7 +210,7 @@
           boundFilter: function(directiveString){
             var i;
             if(!directiveString){ return this; }
-            var directive = new Directive(directiveString);
+            var directive = new DirectiveVisit(directiveString);
             return this.filter(function(item){
               var directives = jQuery(item).boundDirectives();
               for(i = 0; i < directives.length; i+=1){
@@ -392,9 +392,6 @@
       // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
       _toVisit: makeDirectiveSet(),
 
-      // visited directives, by key
-      _visited: makeDirectiveSet(),
-
       // branches from which we have already collected all bound descendants
       _searched: {},
 
@@ -421,13 +418,12 @@
     },
 
     run: function(){
-      throwErrorIf(this._hasRun, 'An operation cannot be run twice');
-      this._isRunning = true;
+      throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
+      extend(this, {_isRunning: true});
 
       // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
       this._toVisit.exhaust(function(directive){
-        throwErrorIf(this._visited.contains(directive), 'tried to consider the same directive twice');
-        this._visited.add(directive.visit());
+        directive.visit();
       }, this);
 
       extend(this, {_isRunning: false, _hasRun: true});
@@ -471,7 +467,7 @@
     initializeNode: function(){ this.setMeta('initialized', true).directives.write(); },
     isInitialized: function(){ return !!this.getMeta('initialized'); },
 
-    makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
+    makeDirective: function(key, tokens){ return new DirectiveVisit(this, key, tokens); },
 
     setDirective: function(key, tokens){
       this.directives.set(key, tokens);
@@ -555,9 +551,8 @@
    */
 
   // provides an object representing the directive itself (for example, "contain user.name")
-  var Directive = function($node, key, tokens){
-    throwErrorIf(tokens instanceof Directive, 'input to constructor was already a directive!');
 
+  var Directive = function($node, key, tokens){
     extend(this, {
       $node: $node,
       node: $node[0],
@@ -565,36 +560,45 @@
       inputs: tokens.slice(1),
       key: key,
 
-      _operation: $node._operation,
+      _operation: $node._operation
+    });
+  };
 
+  extend(Directive.prototype, {
+    toString: function(){ return [this.command].concat(this.inputs).join(' '); },
+    uniqueKey: function(){ return this.$node.key+' '+this.key; },
+  });
+
+
+
+
+  /*
+   * DirectiveVisit
+   */
+
+  // provides an object representing an operation's perspective on the directive for the duration of that operation's execution
+
+  var DirectiveVisit = function($node, key, tokens){
+    return extend(create(new Directive($node, key, tokens)), DirectiveVisit.prototype, {
+      _isVisited: undefined,
       _isDead: undefined,
       _shouldUpdate: undefined,
       _shouldUpdateBranch: undefined,
-
       _parent: undefined,
       _parentIsDead: undefined,
       _visitParentBranch: undefined,
       _gotParentInfo: undefined,
-
       _dirtyObservers: {},
       _scopeChain: undefined,
       _potentialObservers: []
     });
-
   };
 
-  Directive.prototype = create(commands);
-  Directive.prototype.constructor = Directive;
+  DirectiveVisit.prototype = extend(create(commands), {
 
-  extend(Directive.prototype, {
+    constructor: DirectiveVisit,
 
     $: function(node){ return this._operation.$(node); },
-
-    toString: function(){ return [this.command].concat(this.inputs).join(' '); },
-
-    uniqueKey: function(){
-      return this.$node.key+' '+this.key;
-    },
 
     lookup: function(key){
       var details = this.getScopeChain().detailedLookup(key);
@@ -610,12 +614,12 @@
       this._scopeChain = this.getScopeChain().extend(type, scope, options);
     },
 
-    getScopeChain: function(){
-      return this._scopeChain = this._scopeChain || this.getParentScopeChain();
-    },
-
     getScope: function(){
       return this.getScopeChain().scope;
+    },
+
+    getScopeChain: function(){
+      return this._scopeChain = this._scopeChain || this.getParentScopeChain();
     },
 
     dirtyObserver: function(observer){
@@ -624,8 +628,7 @@
     },
 
     dirtyObserverPertains: function(){
-      var key;
-      for(key in this._dirtyObservers){
+      for(var key in this._dirtyObservers){
         if(this._dirtyObservers[key].pertains()){ return true; }
       }
     },
@@ -645,11 +648,6 @@
       return this.update();
     },
 
-    dead: function(){
-      this._isDead = true;
-      return this;
-    },
-
     onUpdate: function(callback){
       if(this.shouldUpdate() && callback){
         callback.call(this);
@@ -657,22 +655,20 @@
       return this;
     },
 
+    isVisited: function(){ return this._isVisited; },
+
     // the directive's command (for example, 'contain') will be executed with a 'this' context of that directive
     visit: function(){
-      if(this._visited){ return this; }
-      this._visited = true;
+      if(this.isVisited()){ return this; }
+      this._isVisited = true;
       this.getParent().visit();
       var willUpdate = this.shouldUpdate();
 
-      if(debugging){
-        try {
-          this._runCommand(this.command, this.inputs);
-        } catch (error) {
-          throw this._describeError(error);
-        }
-      } else {
+      catchIf(debugging, function(){
         this._runCommand(this.command, this.inputs);
-      }
+      }, function(error){
+        throw this._describeError(error);
+      }, this);
 
       if(willUpdate){
         this._registerPotentialObservers();
@@ -686,9 +682,8 @@
     _runCommand: function(command, inputs){
       throwErrorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
       throwErrorIf(!commands[command], 'not a valid react command: '+command);
-      commands["resolve_"+command] || (commands["resolve_"+command] = commands["resolve_"+command] === false ? this._nonResolver : this._fullResolver);
-      var args = commands["resolve_"+command].call(this, inputs);
-      commands[command].apply(this, args);
+      var resolver = commands["resolve_"+command] || (commands["resolve_"+command] = commands["resolve_"+command] === false ? this._nonResolver : this._fullResolver);
+      commands[command].apply(this, resolver.call(this, inputs));
     },
 
     _nonResolver: function(names){ return names; },
@@ -700,13 +695,11 @@
     },
 
     _registerPotentialObservers: function(){
-      var i, potentialObserver;
-      for(i = 0; i < this._potentialObservers.length; i+=1){
-        potentialObserver = this._potentialObservers[i];
+      each(this._potentialObservers, function(potentialObserver){
         if(potentialObserver.scopeChain.anchorKey){
           new Proxy(this._operation, potentialObserver.scopeChain.scope).observe(potentialObserver.key, this, potentialObserver.scopeChain.prefix);
         }
-      }
+      }, this);
     },
 
     _describeError: function(error){
@@ -727,21 +720,42 @@
 
     search: function(){
       // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
-      var $nodes = this.$node.getReactNodes(), which;
-      for(which = 0; which < $nodes.length; which+=1){
+      each(this.$node.getReactNodes(), function($node){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        this._operation.isSearched($nodes[which], true);
-        $nodes[which].directives.after.consider();
-      }
+        this._operation.isSearched($node, true);
+        $node.directives.after.consider();
+      }, this);
     },
 
     _getParentInfo: function(){
       if(this._gotParentInfo){ return; }
-      this._gotParentInfo = true;
-      this._parent = this._parent || this.getParent();
-      this._parentIsDead = this.parentIsDead();
-      this._shouldUpdateParentBranch = this.shouldUpdateParentBranch();
-      this._parentScopeChain = this._parentScopeChain || this._parent.getScopeChain();
+      var repeatLimit = 10000, parent;
+      while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
+        parent.visit();
+        throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
+      }
+      extend(this, {
+        _gotParentInfo: true,
+        _parent: parent,
+        _parentIsDead: parent.isDead(),
+        _shouldUpdateParentBranch: parent.shouldUpdateBranch(),
+        _parentScopeChain: parent.getScopeChain()
+      });
+    },
+
+    getParent: function(){
+      this._getParentInfo();
+      var repeatLimit = 10000, parent;
+      while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
+        parent && parent.visit();
+        throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
+      }
+      return this._parent;
+    },
+
+    parentIsDead: function(){
+      this._getParentInfo();
+      return this._parentIsDead;
     },
 
     getParentScopeChain: function(){
@@ -749,9 +763,9 @@
       return this._parentScopeChain;
     },
 
-    shouldUpdate: function(){
+    shouldUpdateParentBranch: function(){
       this._getParentInfo();
-      return !this.isDead() && (this._shouldUpdate = this._shouldUpdate || this._shouldUpdateParentBranch || this.dirtyObserverPertains());
+      return this._shouldUpdateParentBranch;
     },
 
     shouldUpdateBranch: function(){
@@ -759,27 +773,14 @@
       return this.shouldUpdate() && (this._shouldUpdateBranch || this._shouldUpdateParentBranch);
     },
 
+    shouldUpdate: function(){
+      this._getParentInfo();
+      return !this.isDead() && (this._shouldUpdate = this._shouldUpdate || this._shouldUpdateParentBranch || this.dirtyObserverPertains());
+    },
+
     isDead: function(){
       this._getParentInfo();
       return this._isDead || this._parentIsDead;
-    },
-
-    shouldUpdateParentBranch: function(){
-      return this._shouldUpdateParentBranch !== undefined ? this._shouldUpdateParentBranch : this.getParent().shouldUpdateBranch();
-    },
-
-    parentIsDead: function(){
-      return this._parentIsDead !== undefined ? this._parentIsDead : this.getParent().isDead();
-    },
-
-    getParent: function(){
-      if(this._parent !== undefined){ return this._parent; }
-      var repeatLimit = 10000, parent;
-      while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
-        parent && parent.visit();
-        throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
-      }
-      return (this._parent = parent);
     }
 
   });
@@ -1115,6 +1116,10 @@
     },
 
     after: noop,
+
+    dead: function(){
+      return this._isDead = true;
+    },
 
     resolve_anchored: false,
     anchored: function(/*token1, ...tokenN */){
