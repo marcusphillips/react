@@ -368,6 +368,8 @@
 
     visit: function(directive){ return this._toVisit.add(directive); },
 
+    dirtyObserver: function(observer){ observer.directive.dirtyObserver(observer); },
+
     run: function(){
       throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
       extend(this, {_isRunning: true});
@@ -585,9 +587,11 @@
     },
 
     dirtyObserverPertains: function(){
-      for(var key in this._dirtyObservers){
-        if(this._dirtyObservers[key].pertains()){ return true; }
-      }
+      var scopeChain = this.getScopeChain();
+      return reduce(this._dirtyObservers, false, function(memo, observer){
+        // ignore the object if it's not in the same path that lead to registration of the observer
+        return memo || scopeChain.detailedLookup(observer.prefix + observer.propertyKey, {checkFocus: observer.object}).didMatchFocus;
+      }, this);
     },
 
     onUpdate: function(callback){
@@ -743,8 +747,7 @@
 
   var DirectiveList = function($node){
     extend(this, {
-      _$node: $node,
-      _node: $node[0],
+      $node: $node,
       _indexKeyPairs: new TwoWayMap($node.getMeta('indexKeyPairs')),
       _validatedDirectivesString: $node.getMeta('validatedDirectivesString') || $node.getDirectivesString()
     });
@@ -758,8 +761,8 @@
     toString: function(){ return this.orderedForString().join(', '); },
     orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(toArray(this)); },
 
-    getMeta: function(){ return this._$node.getMeta.apply(this._$node, arguments); },
-    setMeta: function(){ return this._$node.setMeta.apply(this._$node, arguments); },
+    getMeta: function(){ return this.$node.getMeta.apply(this.$node, arguments); },
+    setMeta: function(){ return this.$node.setMeta.apply(this.$node, arguments); },
 
     getKey: function(index){ return specialDirectives[index] ? index : this._indexKeyPairs.getRight(index); },
     getIndex: function(key){ return specialDirectives[key] ? key : this._indexKeyPairs.getLeft(key); },
@@ -780,14 +783,13 @@
 
     buildDirectives: function(){
       var i;
-      var $node = this._$node;
+      var $node = this.$node;
       var isInitialized = $node.isInitialized();
       var tokenArrays = $node.getDirectiveArrays();
       var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
 
       extend(this, {
         length: tokenArrays.length,
-
         before: $node.makeDirective('before', ['before']),
         anchored: $node.makeDirective('anchored', anchoredTokens),
         after: $node.makeDirective('after', ['after'])
@@ -803,12 +805,12 @@
 
     set: function(index, tokens){
       var key = specialDirectives[index] ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
-      this[index] = this._$node.makeDirective(key, tokens);
+      this[index] = this.$node.makeDirective(key, tokens);
       return this.write();
     },
 
     push: function(tokens){
-      this[this.length] = this._$node.makeDirective(this.makeKey(this.length), tokens);
+      this[this.length] = this.$node.makeDirective(this.makeKey(this.length), tokens);
       this.length += 1;
       return this.write();
     },
@@ -819,7 +821,7 @@
         this.releaseIndex(i);
         this.mapIndexToKey(i+1, this[i+1].key);
       }
-      this[0] = this._$node.makeDirective(this.makeKey('0'), tokens);
+      this[0] = this.$node.makeDirective(this.makeKey('0'), tokens);
       this.length += 1;
 
       return this.write();
@@ -827,10 +829,10 @@
 
     write: function(){
       var newDirectivesString = this.toString();
-      var currentDirectivesString = this._$node.getDirectivesString();
+      var currentDirectivesString = this.$node.getDirectivesString();
       throwErrorIf(currentDirectivesString !== this._validatedDirectivesString, 'conflicting change to directives attribute');
 
-      this._$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setMeta({
+      this.$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setMeta({
         validatedDirectivesString: newDirectivesString,
         indexKeyPairs: this._indexKeyPairs.toString()
       });
@@ -842,8 +844,8 @@
       return (
         index === 'before' ? (
           this.anchored.inputs.length ? nullDirective :
-          !this._$node.wrappedParent() ? nullDirective :
-          this._$node.wrappedParent().directives.after
+          !this.$node.wrappedParent() ? nullDirective :
+          this.$node.wrappedParent().directives.after
         ) :
         index === 'anchored' ? this.before :
         index === '0' ? this.anchored :
@@ -895,7 +897,7 @@
         var keyObserverString;
         for(keyObserverString in this._object.observers[key]){
           var observerTokens = Observer.parseKeyObserverString(keyObserverString);
-          new Observer(this._operation, this._cachedObservers, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix).dirty();
+          this._operation.dirtyObserver(new Observer(this._operation, this._cachedObservers, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
         }
       }
     }
@@ -935,16 +937,6 @@
       var observers = this.object.observers = this.object.observers || {};
       var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
       propertyObservers[this.observerDetailsString] = true;
-    },
-
-    dirty: function(){
-      this.isDirty || this.directive.dirtyObserver(this);
-      this.isDirty = true;
-    },
-
-    pertains: function(){
-      // ignore the object if it's not in the same path that lead to registration of the observer
-      return this.directive.getScopeChain().detailedLookup(this.prefix + this.propertyKey, {checkFocus: this.object}).didMatchFocus;
     }
 
   });
