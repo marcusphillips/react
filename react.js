@@ -413,32 +413,31 @@
   };
 
   NodeWrapper.prototype = create(jQuery.prototype, {
-
     // note: a correct mapping of the .constructor property to NodeWrapper breaks jquery, since it calls new this.constructor() with no arguments
 
     initializeNode: function(){ this.setMeta('initialized', true).directives.write(); },
     isInitialized: function(){ return !!this.getMeta('initialized'); },
 
-    makeDirective: function(key, tokens){ return new DirectiveVisit(this, key, tokens); },
+    store: function(){ react.nodes[this.key] = this.node; },
+    getReactNodes: function(){ return [this].concat(this.getReactDescendants()); },
 
+    makeDirective: function(key, tokens){ return new DirectiveVisit(this, key, tokens); },
     setDirective: function(key, tokens){
       this.directives.set(key, tokens);
       return this;
     },
 
-    getDirectivesString: function(){ return this.attr('react') || ''; },
     setDirectivesString: function(value){
       // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
       // modifying all nodes that lacked attributes to have react="" would result in over-matching of the nodes on subsequent DOM queries
       return (value || this.attr('react')) ? this.attr('react', value) : this;
     },
-
+    getDirectivesString: function(){ return this.attr('react') || ''; },
     getDirectiveStrings: function(){
       return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(string){
         return trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
       });
     },
-
     getDirectiveArrays: function(){
       return reduce(this.getDirectiveStrings(), [], function(memo, string){
         return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
@@ -453,8 +452,12 @@
       );
     },
 
-    store: function(){ react.nodes[this.key] = this.node; },
-
+    // todo: setting "indexKeyPairs: true" results in copies of the node getting their directive indices mapped to the same values, even before being initialized
+    _storeInAttr: {},
+    getMeta: function(key){
+      this.node._boundMeta || (this.node._boundMeta = {});
+      return this._storeInAttr[key] ? this.attr('data-bound-meta-'+key) : this.node._boundMeta[key];
+    },
     setMeta: function(key, value){
       var mappings = {};
       key && typeof key === 'object' ? mappings = key : mappings[key] = value;
@@ -466,15 +469,6 @@
       return this;
     },
 
-    getMeta: function(key){
-      this.node._boundMeta || (this.node._boundMeta = {});
-      return this._storeInAttr[key] ? this.attr('data-bound-meta-'+key) : this.node._boundMeta[key];
-    },
-
-    _storeInAttr: {
-      //indexKeyPairs: true // todo: this results in copies of the node getting their directive indices mapped to the same values, even before being initialized
-    },
-
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
     // todo: optimize selection criteria
     // return map(toArray(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
@@ -482,8 +476,15 @@
       return map((this.find('[react]')), bind(this._operation.$, this._operation));
     },
 
-    getReactNodes: function(){
-      return [this].concat(this.getReactDescendants());
+//asdf
+    search: function(){
+      if(this._operation.isSearched(this)){ return; }
+      // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
+      each(this.getReactNodes(), function($node){
+        // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
+        this._operation.isSearched($node, true);
+        $node.directives.after.consider();
+      }, this);
     }
 
   });
@@ -597,9 +598,7 @@
 
       if(willUpdate){
         this._registerPotentialObservers();
-        if(this.shouldUpdateBranch() && !this._operation.isSearched(this.$node)){
-          this.search();
-        }
+        this.shouldUpdateBranch() && this.search();
       }
       return this;
     },
@@ -623,14 +622,8 @@
       }, this);
     },
 
-    search: function(){
-      // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
-      each(this.$node.getReactNodes(), function($node){
-        // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        this._operation.isSearched($node, true);
-        $node.directives.after.consider();
-      }, this);
-    },
+//asdf short method
+    search: function(){ this.$node.search(); },
 
     parentInfo: function(){
       if(this._parentInfo){ return this._parentInfo; }
