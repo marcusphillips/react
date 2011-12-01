@@ -16,42 +16,31 @@
   var noop = function(){};
 
   var throwError = js.error, throwErrorIf = js.errorIf, log = js.log, catchIf = js.catchIf;
-  var bind = js.bind, create = js.create, unique = js.unique, extend = js.extend, trim = js.trim;
+  var bind = js.bind, create = js.create, unique = js.unique, extend = js.extend, trim = js.trim, isArray = js.isArray;
   var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
-  var keysFor = js.keys, hasKeys = js.hasKeys, isArray = js.isArray, among = js.among;
+  var keysFor = js.keys, hasKeys = js.hasKeys, among = js.among, clear = js.clear;
   var Set = js.Set;
 
+  var arraySlice = Array.prototype.slice;
+  var slice = function(collection){ return arraySlice.call(collection, arraySlice.call(arguments, 1)); };
+
+  var specialDirectives = {before: true, anchored: true, after: true};
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
     space: /\s+/,
     negation: /!\s*/,
     isString: /(^'.*'$)|(^".*"$)/,
-    isNumber: /^\d+$/,
-    specialDirective: /^(before)|(anchored)|(after)$/
+    isNumber: /^\d+$/
   };
 
+  var toArray = js.toArray;
+  var getScopeKey = function(object){ return (object.reactKey = object.reactKey || unique('reactObject')); };
+  var cacheAndGetScopeKey = function(scope){ return getScopeKey(react.scopes[getScopeKey(scope)] = scope); };
   // returns a unique, consistent key for every node
   var getNodeKey = function(node){
-    !(node instanceof jQuery) || (node = node[0]);
+    node instanceof jQuery && (node = node[0]);
     return node._reactKey || (node._reactKey = unique('reactKey'));
   };
-
-  var getScopeKey = function(object){
-    return (object.reactKey = object.reactKey || unique('reactObject'));
-  };
-
-  var cacheAndGetScopeKey = function(scope){
-    return getScopeKey(react.scopes[getScopeKey(scope)] = scope);
-  };
-
-  var makeArrayFromArrayLikeObject = function(arrayLikeObject){
-    var array = [], i, length;
-    for(i = 0, length = arrayLikeObject.length; i < length ; i+=1){
-      array.push(arrayLikeObject[i]);
-    }
-    return array;
-  };
-
 
   // Fallthroughs provide a mechanism for binding one key in a scope to the value at another key
   var Fallthrough = function(key){ this.key = key; };
@@ -66,25 +55,17 @@
     nodes: {},
     scopes: {},
 
-    debug: function(){
-      debugging = true;
-    },
+    debug: function(){ debugging = true; },
 
     // for giving scope objects meaningful names, which appear in the anchor directives on nodes. not yet ready for external consumption
     name: function(name, object){
       throwErrorIf(object.reactKey, 'You tried to name a scope object that already had a name');
-      object.reactKey = name;
-      return this.scopes[name] = object;
+      return this.scopes[name] = extend(object, {reactKey: name});
     },
 
     reset: function(){
-      var key;
-      for(key in this.scopes){
-        delete this.scopes[key];
-      }
-      for(key in this.nodes){
-        delete this.nodes[key];
-      }
+      clear(this.scopes);
+      clear(this.nodes);
     },
 
     // convenience method for setting object values and automatically calling changed on them
@@ -114,7 +95,7 @@
 
     anchor: function(node){
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      var scopes = Array.prototype.slice.call(arguments, 1);
+      var scopes = slice(arguments, 1);
       var anchoredTokens = ['anchored'].concat(map(scopes, cacheAndGetScopeKey));
       new Operation().$(this.nodes[getNodeKey(node)] = node).setDirective('anchored', anchoredTokens).update();
       return node;
@@ -155,9 +136,7 @@
         react.changed(this, keys);
       },
 
-      changed: function(){
-        react.changed(this);
-      }
+      changed: function(){ react.changed(this); }
 
     }),
 
@@ -180,7 +159,7 @@
               throwErrorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
               return scopes[0];
             }
-            return react.anchor.apply(react, [this].concat(Array.prototype.slice.call(arguments)));
+            return react.anchor.apply(react, [this].concat(slice(arguments)));
           },
 
           anchors: function(){
@@ -220,17 +199,9 @@
           },
 */
 
-          items: function(){
-            return this.children().slice(1);
-          },
-
-          item: function(which){
-            return this.items().eq(which);
-          },
-
-          itemTemplate: function(){
-            return this.children().eq(0);
-          }
+          items: function(){ return this.children().slice(1); },
+          item: function(which){ return this.items().eq(which); },
+          itemTemplate: function(){ return this.children().eq(0); }
 
         }, singularize));
       }
@@ -238,9 +209,7 @@
 
   };
 
-  var commands = react.commands = {
-    scopes: react.scopes
-  };
+  var commands = react.commands = {scopes: react.scopes};
 
 
 
@@ -268,23 +237,15 @@
 
   extend(ScopeChain.prototype, {
 
-    contains: function(scope){
-      return this.scope === scope || (this.parent && this.parent.contains(scope));
-    },
-
-    extend: function(type, additionalScope, options){
-      return new ScopeChain(type, this, additionalScope, options);
-    },
-
+    contains: function(scope){ return this.scope === scope || (this.parent && this.parent.contains(scope)); },
+    extend: function(type, additionalScope, options){ return new ScopeChain(type, this, additionalScope, options); },
     extendWithMany: function(type, scopes, options){
-      scopes = scopes || [];
-      var lastLink = this;
-      var which;
-      for(which = 0; which < scopes.length; which+=1){
-        lastLink = lastLink.extend(type, scopes[which], options);
-      }
-      return lastLink;
+      return reduce(scopes || [], this, function(memo, scope){
+        return memo.extend(type, scope, options);
+      });
     },
+
+    lookup: function(){ return this.detailedLookup.apply(this, arguments).value; },
 
     // provides the value at a given key by looking through the scope chain from this leaf up
     detailedLookup: function(key, options){
@@ -358,10 +319,6 @@
       return extendDetails({value: value});
     },
 
-    lookup: function(){
-      return this.detailedLookup.apply(this, arguments).value;
-    },
-
     // provides a description of the scope chain in array format, optimized for viewing in the console
     describe: function(){
       return [
@@ -403,19 +360,13 @@
 
   extend(Operation.prototype, {
 
-    $: function(node){
-      return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapper(this, node));
-    },
+    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapper(this, node)); },
 
     hasRun: function(){ return this._hasRun; },
-
     isRunning: function(){ return this._isRunning; },
+    isSearched: function($node, setting){ return setting === undefined ? this._searched[$node.key] : this._searched[$node.key] = setting; },
 
     visit: function(directive){ return this._toVisit.add(directive); },
-
-    isSearched: function($node, setting){
-      return setting === undefined ? this._searched[$node.key] : this._searched[$node.key] = setting;
-    },
 
     run: function(){
       throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
@@ -424,7 +375,7 @@
       // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
       this._toVisit.exhaust(function(directive){
         directive.visit();
-      }, this);
+      });
 
       extend(this, {_isRunning: false, _hasRun: true});
     },
@@ -433,6 +384,7 @@
       new Proxy(this, object).changed(keys);
       return this;
     }
+
   });
 
 
@@ -501,20 +453,16 @@
       );
     },
 
-    store: function(){
-      react.nodes[this.key] = this.node;
-    },
+    store: function(){ react.nodes[this.key] = this.node; },
 
     setMeta: function(key, value){
       var mappings = {};
       key && typeof key === 'object' ? mappings = key : mappings[key] = value;
 
       this.node._boundMeta || (this.node._boundMeta = {});
-
       for(key in mappings){
         this._storeInAttr[key] ? this.attr('data-bound-meta-'+key, mappings[key]) : this.node._boundMeta[key] = mappings[key];
       }
-
       return this;
     },
 
@@ -528,13 +476,10 @@
     },
 
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
+    // todo: optimize selection criteria
+    // return map(toArray(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
     getReactDescendants: function(){
-      // todo: optimize selection criteria
-      // return map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
-
-      return map(makeArrayFromArrayLikeObject(this.find('[react]')), function(node){
-        return this._operation.$(node);
-      }, this);
+      return map((this.find('[react]')), bind(this._operation.$, this._operation));
     },
 
     getReactNodes: function(){
@@ -564,7 +509,7 @@
 
   extend(Directive.prototype, {
     toString: function(){ return [this.command].concat(this.inputs).join(' '); },
-    uniqueKey: function(){ return this.$node.key+' '+this.key; },
+    uniqueKey: function(){ return this.$node.key+' '+this.key; }
   });
 
 
@@ -810,13 +755,13 @@
   extend(DirectiveList.prototype, {
 
     toString: function(){ return this.orderedForString().join(', '); },
-    orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this)); },
+    orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(toArray(this)); },
 
     getMeta: function(){ return this._$node.getMeta.apply(this._$node, arguments); },
     setMeta: function(){ return this._$node.setMeta.apply(this._$node, arguments); },
 
-    getKey: function(index){ return matchers.specialDirective.test(index) ? index : this._indexKeyPairs.getRight(index); },
-    getIndex: function(key){ return matchers.specialDirective.test(key) ? key : this._indexKeyPairs.getLeft(key); },
+    getKey: function(index){ return specialDirectives[index] ? index : this._indexKeyPairs.getRight(index); },
+    getIndex: function(key){ return specialDirectives[key] ? key : this._indexKeyPairs.getLeft(key); },
     releaseIndex: function(index){ return this._indexKeyPairs.releaseLeft(index); },
     releaseKey: function(key){ return this._indexKeyPairs.releaseRight(key); },
 
@@ -827,7 +772,7 @@
       return key;
     },
     mapIndexToKey: function(index, key){
-      throwErrorIf(matchers.specialDirective.test(index), 'cannot explicitly set keys for special directives');
+      throwErrorIf(specialDirectives[index], 'cannot explicitly set keys for special directives');
       this._indexKeyPairs.map(index, key);
       return this;
     },
@@ -856,7 +801,7 @@
     // mutation methods
 
     set: function(index, tokens){
-      var key = matchers.specialDirective.test(index) ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
+      var key = specialDirectives[index] ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
       this[index] = this._$node.makeDirective(key, tokens);
       return this.write();
     },
@@ -1019,13 +964,13 @@
     resolve_debug: false,
     debug: function(commandKey){
       debugger;
-      this._runCommand(commandKey, Array.prototype.slice.call(arguments, 1));
+      this._runCommand(commandKey, slice(arguments, 1));
     },
 
     resolve_debugIf: false,
     debugIf: function(conditionKey, commandKey){
       if(this.lookup(conditionKey)){ debugger; }
-      this._runCommand(commandKey, Array.prototype.slice.call(arguments, 2));
+      this._runCommand(commandKey, slice(arguments, 2));
     },
 
     before: function(){
@@ -1123,7 +1068,7 @@
 
     resolve_for: false,
     'for': function(keyAlias, valueAlias){
-      var aliases = Array.prototype.slice.call(arguments);
+      var aliases = slice(arguments);
       this.onUpdate(function(){
         // todo: return here (and everywhere else) if collection is undefined.  test for this
         this._createItemNodes(function(index, itemNode){
@@ -1225,10 +1170,10 @@
     attr: function(name, value){
       throwErrorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
       this.onUpdate(function(){
-        if(!among(['string', 'number', 'undefined'], typeof name)){
+        if(!among(typeof value, ['string', 'number', 'undefined'])){
           log('bad attr name: ', name);
           throwError('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
-        }else if(!among(['string', 'number', 'undefined'], typeof value)){
+        }else if(!among(typeof value, ['string', 'number', 'undefined'])){
           log('bad attr value: ', value);
           throwError('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
         }
@@ -1257,10 +1202,7 @@
    * Exporting library
    */
 
-  if(window.jQuery){
-    react.integrate.jQuery();
-  }
-
+  window.jQuery && react.integrate.jQuery();
   window.react = react;
 
 }());
