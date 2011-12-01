@@ -360,7 +360,7 @@
 
   extend(Operation.prototype, {
 
-    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapperVisit(this, node)); },
+    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapperMeta(this, node)); },
 
     hasRun: function(){ return this._hasRun; },
     isRunning: function(){ return this._isRunning; },
@@ -411,22 +411,22 @@
   NodeWrapper.prototype = create(jQuery.prototype, {
     // note: a correct mapping of the .constructor property to NodeWrapper breaks jquery, since it calls new this.constructor() with no arguments
 
-    initializeNode: function(){ this.setMeta('initialized', true).directives.write(); },
-    isInitialized: function(){ return !!this.getMeta('initialized'); },
+    initializeNode: function(){ this.setStorage('initialized', true).directives.write(); },
+    isInitialized: function(){ return !!this.getStorage('initialized'); },
 
     // todo: setting "indexKeyPairs: true" results in copies of the node getting their directive indices mapped to the same values, even before being initialized
     _storeInAttr: {},
-    getMeta: function(key){
-      this.node._boundMeta || (this.node._boundMeta = {});
-      return this._storeInAttr[key] ? this.attr('data-bound-meta-'+key) : this.node._boundMeta[key];
+    getStorage: function(key){
+      this.node._boundStorage || (this.node._boundStorage = {});
+      return this._storeInAttr[key] ? this.attr('data-bound-storage-'+key) : this.node._boundStorage[key];
     },
-    setMeta: function(key, value){
+    setStorage: function(key, value){
       var mappings = {};
       key && typeof key === 'object' ? mappings = key : mappings[key] = value;
 
-      this.node._boundMeta || (this.node._boundMeta = {});
+      this.node._boundStorage || (this.node._boundStorage = {});
       for(key in mappings){
-        this._storeInAttr[key] ? this.attr('data-bound-meta-'+key, mappings[key]) : this.node._boundMeta[key] = mappings[key];
+        this._storeInAttr[key] ? this.attr('data-bound-storage-'+key, mappings[key]) : this.node._boundStorage[key] = mappings[key];
       }
       return this;
     },
@@ -460,16 +460,16 @@
 
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var NodeWrapperVisit = function(operation, node){
-    var result = extend(create(new NodeWrapper(node)), NodeWrapperVisit.prototype, {_operation: operation});
+  var NodeWrapperMeta = function(operation, node){
+    var result = extend(create(new NodeWrapper(node)), NodeWrapperMeta.prototype, {_operation: operation});
     extend(result, {directives: new DirectiveList(result)});
-    result.getMeta('initialized') || result.initializeNode();
+    result.getStorage('initialized') || result.initializeNode();
     return result;
   };
 
-  extend(NodeWrapperVisit.prototype, {
+  extend(NodeWrapperMeta.prototype, {
 
-    makeDirective: function(key, tokens){ return new Directive(this, key, tokens).makeVisit(); },
+    makeDirective: function(key, tokens){ return new Directive(this, key, tokens).makeMeta(); },
     setDirective: function(key, tokens){
       this.directives.set(key, tokens);
       return this;
@@ -524,20 +524,20 @@
   extend(Directive.prototype, {
     toString: function(){ return [this.command].concat(this.inputs).join(' '); },
     uniqueKey: function(){ return this.$node.key+' '+this.key; },
-    makeVisit: function(){ return new DirectiveVisit(this); }
+    makeMeta: function(){ return new DirectiveMeta(this); }
   });
 
 
 
 
   /*
-   * DirectiveVisit
+   * DirectiveMeta
    */
 
   // provides an object representing an operation's perspective on the directive for the duration of that operation's execution
 
-  var DirectiveVisit = function(directive){
-    return extend(create(directive), DirectiveVisit.prototype, {
+  var DirectiveMeta = function(directive){
+    return extend(create(directive), DirectiveMeta.prototype, {
       _operation: directive.$node._operation,
       _isVisited: undefined,
       _isDead: undefined,
@@ -550,8 +550,8 @@
     });
   };
 
-  DirectiveVisit.prototype = extend(create(commands), {
-    constructor: DirectiveVisit,
+  DirectiveMeta.prototype = extend(create(commands), {
+    constructor: DirectiveMeta,
 
     $: function(node){ return this._operation.$(node); },
     search: function(){ this.$node.search(); },
@@ -749,8 +749,8 @@
   var DirectiveList = function($node){
     extend(this, {
       $node: $node,
-      _indexKeyPairs: new TwoWayMap($node.getMeta('indexKeyPairs')),
-      _validatedDirectivesString: $node.getMeta('validatedDirectivesString') || $node.getDirectivesString()
+      _indexKeyPairs: new TwoWayMap($node.getStorage('indexKeyPairs')),
+      _validatedDirectivesString: $node.getStorage('validatedDirectivesString') || $node.getDirectivesString()
     });
     throwErrorIf(this._validatedDirectivesString !== $node.getDirectivesString(), 'directives string changed manually since last visit');
 
@@ -762,8 +762,8 @@
     toString: function(){ return this.orderedForString().join(', '); },
     orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(toArray(this)); },
 
-    getMeta: function(){ return this.$node.getMeta.apply(this.$node, arguments); },
-    setMeta: function(){ return this.$node.setMeta.apply(this.$node, arguments); },
+    getStorage: function(){ return this.$node.getStorage.apply(this.$node, arguments); },
+    setStorage: function(){ return this.$node.setStorage.apply(this.$node, arguments); },
 
     getKey: function(index){ return specialDirectives[index] ? index : this._indexKeyPairs.getRight(index); },
     getIndex: function(key){ return specialDirectives[key] ? key : this._indexKeyPairs.getLeft(key); },
@@ -772,8 +772,8 @@
 
     getByKey: function(key){ return this[this.getIndex(key)]; },
     makeKey: function(index){
-      var key = (this.getMeta('lastDirectiveKey') || 0) + 1;
-      this.mapIndexToKey(index, key).setMeta('lastDirectiveKey', key);
+      var key = (this.getStorage('lastDirectiveKey') || 0) + 1;
+      this.mapIndexToKey(index, key).setStorage('lastDirectiveKey', key);
       return key;
     },
     mapIndexToKey: function(index, key){
@@ -833,7 +833,7 @@
       var currentDirectivesString = this.$node.getDirectivesString();
       throwErrorIf(currentDirectivesString !== this._validatedDirectivesString, 'conflicting change to directives attribute');
 
-      this.$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setMeta({
+      this.$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setStorage({
         validatedDirectivesString: newDirectivesString,
         indexKeyPairs: this._indexKeyPairs.toString()
       });
