@@ -360,7 +360,7 @@
 
   extend(Operation.prototype, {
 
-    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapper(this, node)); },
+    $: function(node){ return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapperVisit(this, node)); },
 
     hasRun: function(){ return this._hasRun; },
     isRunning: function(){ return this._isRunning; },
@@ -396,20 +396,14 @@
 
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var NodeWrapper = function(operation, node){
-    if(node && 'length' in node){ node = node[0]; }
+  var NodeWrapper = function(node){
+    node && 'length' in node && (node = node[0]);
     throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a DOM node');
-
-    if(node instanceof jQuery){ node = node[0]; }
-    throwErrorIf(!node || node.nodeType !== 1 || isArray(node) || node instanceof jQuery, 'node arg must be a DOM node');
 
     extend(jQuery.prototype.init.call(this, node), {
       node: node,
-      key: getNodeKey(node),
-      _operation: operation
-    }).directives = new DirectiveList(this);
-
-    this.getMeta('initialized') ||  this.initializeNode();
+      key: getNodeKey(node)
+    });
   };
 
   NodeWrapper.prototype = create(jQuery.prototype, {
@@ -417,40 +411,6 @@
 
     initializeNode: function(){ this.setMeta('initialized', true).directives.write(); },
     isInitialized: function(){ return !!this.getMeta('initialized'); },
-
-    store: function(){ react.nodes[this.key] = this.node; },
-    getReactNodes: function(){ return [this].concat(this.getReactDescendants()); },
-
-    makeDirective: function(key, tokens){ return new DirectiveVisit(this, key, tokens); },
-    setDirective: function(key, tokens){
-      this.directives.set(key, tokens);
-      return this;
-    },
-
-    setDirectivesString: function(value){
-      // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
-      // modifying all nodes that lacked attributes to have react="" would result in over-matching of the nodes on subsequent DOM queries
-      return (value || this.attr('react')) ? this.attr('react', value) : this;
-    },
-    getDirectivesString: function(){ return this.attr('react') || ''; },
-    getDirectiveStrings: function(){
-      return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(string){
-        return trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
-      });
-    },
-    getDirectiveArrays: function(){
-      return reduce(this.getDirectiveStrings(), [], function(memo, string){
-        return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
-      });
-    },
-
-    wrappedParent: function(){
-      return (
-        ! this.parent()[0] ? null :
-        this.parent()[0] === document ? null :
-        this._operation.$(this.parent()[0])
-      );
-    },
 
     // todo: setting "indexKeyPairs: true" results in copies of the node getting their directive indices mapped to the same values, even before being initialized
     _storeInAttr: {},
@@ -469,6 +429,58 @@
       return this;
     },
 
+    store: function(){ react.nodes[this.key] = this.node; },
+    getReactNodes: function(){ return [this].concat(this.getReactDescendants()); },
+
+    setDirectivesString: function(value){
+      // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
+      // modifying all nodes that lacked attributes to have react="" would result in over-matching of the nodes on subsequent DOM queries
+      return (value || this.attr('react')) ? this.attr('react', value) : this;
+    },
+    getDirectivesString: function(){ return this.attr('react') || ''; },
+    getDirectiveStrings: function(){
+      return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(string){
+        return trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
+      });
+    },
+    getDirectiveArrays: function(){
+      return reduce(this.getDirectiveStrings(), [], function(memo, string){
+        return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
+      });
+    },
+
+  });
+
+
+  /*
+   * NodeWrapper (subclass of jQuery)
+   */
+
+  // Overriding jQuery to provide supplemental functionality to DOM node wrappers
+  // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
+  var NodeWrapperVisit = function(operation, node){
+    var result = extend(create(new NodeWrapper(node)), NodeWrapperVisit.prototype, {_operation: operation});
+    extend(result, {directives: new DirectiveList(result)});
+    result.getMeta('initialized') || result.initializeNode();
+    return result;
+  };
+
+  extend(NodeWrapperVisit.prototype, {
+
+    makeDirective: function(key, tokens){ return new DirectiveVisit(this, key, tokens); },
+    setDirective: function(key, tokens){
+      this.directives.set(key, tokens);
+      return this;
+    },
+
+    wrappedParent: function(){
+      return (
+        ! this.parent()[0] ? null :
+        this.parent()[0] === document ? null :
+        this._operation.$(this.parent()[0])
+      );
+    },
+
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
     // todo: optimize selection criteria
     // return map(toArray(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
@@ -476,7 +488,6 @@
       return map((this.find('[react]')), bind(this._operation.$, this._operation));
     },
 
-//asdf
     search: function(){
       if(this._operation.isSearched(this)){ return; }
       // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
@@ -540,6 +551,7 @@
     constructor: DirectiveVisit,
 
     $: function(node){ return this._operation.$(node); },
+    search: function(){ this.$node.search(); },
 
     resetScopeChain: function(){ this._scopeChain = emptyScopeChain; },
     pushScope: function(type, scope, options){ this._scopeChain = this.getScopeChain().extend(type, scope, options); },
@@ -610,7 +622,6 @@
       var resolver = commands[resolverKey] || (commands[resolverKey] = commands[resolverKey] === false ? this._nonResolver : this._fullResolver);
       commands[command].apply(this, resolver.call(this, inputs));
     },
-
     _nonResolver: function(names){ return names; },
     _fullResolver: function(names){ return map(names, bind(this.lookup, this)); },
 
@@ -621,9 +632,6 @@
         }
       }, this);
     },
-
-//asdf short method
-    search: function(){ this.$node.search(); },
 
     parentInfo: function(){
       if(this._parentInfo){ return this._parentInfo; }
