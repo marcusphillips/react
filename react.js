@@ -469,7 +469,7 @@
 
   extend(NodeWrapperVisit.prototype, {
 
-    makeDirective: function(key, tokens){ return new DirectiveVisit(this, key, tokens); },
+    makeDirective: function(key, tokens){ return new Directive(this, key, tokens).makeVisit(); },
     setDirective: function(key, tokens){
       this.directives.set(key, tokens);
       return this;
@@ -523,7 +523,8 @@
 
   extend(Directive.prototype, {
     toString: function(){ return [this.command].concat(this.inputs).join(' '); },
-    uniqueKey: function(){ return this.$node.key+' '+this.key; }
+    uniqueKey: function(){ return this.$node.key+' '+this.key; },
+    makeVisit: function(){ return new DirectiveVisit(this); }
   });
 
 
@@ -535,9 +536,9 @@
 
   // provides an object representing an operation's perspective on the directive for the duration of that operation's execution
 
-  var DirectiveVisit = function($node, key, tokens){
-    return extend(create(new Directive($node, key, tokens)), DirectiveVisit.prototype, {
-      _operation: $node._operation,
+  var DirectiveVisit = function(directive){
+    return extend(create(directive), DirectiveVisit.prototype, {
+      _operation: directive.$node._operation,
       _isVisited: undefined,
       _isDead: undefined,
       _shouldUpdate: undefined,
@@ -877,7 +878,12 @@
     // writes an association between a directive and a property on an object by annotating the object
     observe: function(key, directive, prefix){
       directive.$node.store();
-      new Observer(this._operation, this._cachedObservers, this._object, key, directive.$node.key, directive.key, prefix).write();
+      this.getObserver(directive, this._object, key, directive.$node.key, directive.key, prefix).write();
+    },
+
+    getObserver: function(directive, object, propertyKey, nodeKey, directiveKey, prefix){
+      var observerKey = propertyKey+' '+Observer.makeKeyObserverString(nodeKey, directiveKey, prefix);
+      return this._cachedObservers[observerKey] || (this._cachedObservers[observerKey] = new Observer(directive, object, propertyKey, nodeKey, directiveKey, prefix));
     },
 
     changed: function(keys){
@@ -897,7 +903,8 @@
         var keyObserverString;
         for(keyObserverString in this._object.observers[key]){
           var observerTokens = Observer.parseKeyObserverString(keyObserverString);
-          this._operation.dirtyObserver(new Observer(this._operation, this._cachedObservers, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
+          var directive = this._operation.$(react.nodes[observerTokens.nodeKey]).directives.getByKey(observerTokens.directiveKey);
+          this._operation.dirtyObserver(this.getObserver(directive, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
         }
       }
     }
@@ -909,17 +916,17 @@
    * Observer
    */
 
-  var Observer = function(operation, cachedObservers, object, propertyKey, nodeKey, directiveKey, prefix){
-    var observerDetailsString = nodeKey+' '+directiveKey+' '+prefix;
+  var Observer = function(directive, object, propertyKey, nodeKey, directiveKey, prefix){
+    var observerDetailsString = Observer.makeKeyObserverString(nodeKey, directiveKey, prefix);
     var observerKey = propertyKey+' '+observerDetailsString;
-    return cachedObservers[observerKey] || (cachedObservers[observerKey] = extend(this, {
+    return extend(this, {
       object: object,
       propertyKey: propertyKey,
       observerDetailsString: observerDetailsString,
       prefix: prefix,
-      directive: operation.$(react.nodes[nodeKey]).directives.getByKey(directiveKey),
+      directive: directive,
       key: observerKey
-    }));
+    });
   };
 
   Observer.parseKeyObserverString = function(keyObserverString){
@@ -930,6 +937,8 @@
       prefix: tokens[2]
     };
   };
+
+  Observer.makeKeyObserverString = function(nodeKey, directiveKey, prefix){ return nodeKey+' '+directiveKey+' '+prefix; };
 
   extend(Observer.prototype, {
 
