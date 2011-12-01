@@ -602,20 +602,12 @@
       return details.value;
     },
 
-    resetScopeChain: function(){
-      this._scopeChain = emptyScopeChain;
-    },
-
-    pushScope: function(type, scope, options){
-      this._scopeChain = this.getScopeChain().extend(type, scope, options);
-    },
-
-    getScope: function(){
-      return this.getScopeChain().scope;
-    },
+    resetScopeChain: function(){ this._scopeChain = emptyScopeChain; },
+    pushScope: function(type, scope, options){ this._scopeChain = this.getScopeChain().extend(type, scope, options); },
+    getScope: function(){ return this.getScopeChain().scope; },
 
     getScopeChain: function(){
-      return this._scopeChain = this._scopeChain || this.getParentScopeChain();
+      return this._scopeChain = this._scopeChain || this.parentInfo().scopeChain;
     },
 
     dirtyObserver: function(observer){
@@ -630,9 +622,7 @@
     },
 
     // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
-    consider: function(){
-      return this._operation.visit(this);
-    },
+    consider: function(){ return this._operation.visit(this); },
 
     update: function(){
       this._shouldUpdate = true;
@@ -645,9 +635,7 @@
     },
 
     onUpdate: function(callback){
-      if(this.shouldUpdate() && callback){
-        callback.call(this);
-      }
+      this.shouldUpdate() && callback && callback.call(this);
       return this;
     },
 
@@ -657,7 +645,7 @@
     visit: function(){
       if(this.isVisited()){ return this; }
       this._isVisited = true;
-      this.getParent().visit();
+      this.parentInfo().parent.visit();
       var willUpdate = this.shouldUpdate();
 
       catchIf(debugging, function(){
@@ -723,7 +711,7 @@
       }, this);
     },
 
-    _getParentInfo: function(){
+    parentInfo: function(){
       if(this._parentInfo){ return this._parentInfo; }
       var repeatLimit = 10000, parent;
       while(parent !== ( parent = this.$node.directives.potentialParentOf(this.key) )){
@@ -738,18 +726,13 @@
       });
     },
 
-    getParent: function(){ return this._getParentInfo().parent; },
-    parentIsDead: function(){ return this._getParentInfo().isDead; },
-    getParentScopeChain: function(){ return this._getParentInfo().scopeChain; },
-    shouldUpdateParentBranch: function(){ return this._getParentInfo().shouldUpdateBranch; },
-
-    isDead: function(){ return this._isDead || this._getParentInfo().isDead; },
+    isDead: function(){ return this._isDead || this.parentInfo().isDead; },
     shouldUpdateBranch: function(){
-      return this.shouldUpdate() && (this._shouldUpdateBranch || this._getParentInfo().shouldUpdateBranch);
+      return this.shouldUpdate() && (this._shouldUpdateBranch || this.parentInfo().shouldUpdateBranch);
     },
     shouldUpdate: function(){
       if(this.isDead()){ return false; }
-      return this._shouldUpdate || (this._shouldUpdate = this._getParentInfo().shouldUpdateBranch || this.dirtyObserverPertains());
+      return this._shouldUpdate || (this._shouldUpdate = this.parentInfo().shouldUpdateBranch || this.dirtyObserverPertains());
     }
 
   });
@@ -760,7 +743,7 @@
     shouldUpdate: noop,
     shouldUpdateBranch: noop,
     getScopeChain: function(){ return emptyScopeChain; },
-    getParent: function(){ throwError('internal error: cannot get the parent of a null directive'); }
+    parentInfo: function(){ throwError('internal error: cannot get the parent of a null directive'); }
   };
 
 
