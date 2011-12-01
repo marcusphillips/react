@@ -16,7 +16,7 @@
   var noop = function(){};
 
   var throwError = js.error, throwErrorIf = js.errorIf, log = js.log, catchIf = js.catchIf;
-  var create = js.create, unique = js.unique, extend = js.extend, trim = js.trim;
+  var bind = js.bind, create = js.create, unique = js.unique, extend = js.extend, trim = js.trim;
   var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
   var keysFor = js.keys, hasKeys = js.hasKeys, isArray = js.isArray, among = js.among;
   var Set = js.Set;
@@ -668,12 +668,7 @@
     },
 
     _nonResolver: function(names){ return names; },
-
-    _fullResolver: function(names){
-      return map(names, function(name){
-        return this.lookup(name);
-      }, this);
-    },
+    _fullResolver: function(names){ return map(names, bind(this.lookup, this)); },
 
     _registerPotentialObservers: function(){
       each(this._potentialObservers, function(potentialObserver){
@@ -814,10 +809,28 @@
 
   extend(DirectiveList.prototype, {
 
-    getByKey: function(key){ return this[this.getIndex(key)]; },
+    toString: function(){ return this.orderedForString().join(', '); },
+    orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this)); },
 
     getMeta: function(){ return this._$node.getMeta.apply(this._$node, arguments); },
     setMeta: function(){ return this._$node.setMeta.apply(this._$node, arguments); },
+
+    getKey: function(index){ return matchers.specialDirective.test(index) ? index : this._indexKeyPairs.getRight(index); },
+    getIndex: function(key){ return matchers.specialDirective.test(key) ? key : this._indexKeyPairs.getLeft(key); },
+    releaseIndex: function(index){ return this._indexKeyPairs.releaseLeft(index); },
+    releaseKey: function(key){ return this._indexKeyPairs.releaseRight(key); },
+
+    getByKey: function(key){ return this[this.getIndex(key)]; },
+    makeKey: function(index){
+      var key = (this.getMeta('lastDirectiveKey') || 0) + 1;
+      this.mapIndexToKey(index, key).setMeta('lastDirectiveKey', key);
+      return key;
+    },
+    mapIndexToKey: function(index, key){
+      throwErrorIf(matchers.specialDirective.test(index), 'cannot explicitly set keys for special directives');
+      this._indexKeyPairs.map(index, key);
+      return this;
+    },
 
     buildDirectives: function(){
       var i;
@@ -839,44 +852,18 @@
       }
     },
 
-    getKey: function(index){
-      return matchers.specialDirective.test(index) ? index : this._indexKeyPairs.getRight(index);
-    },
-
-    getIndex: function(key){
-      return matchers.specialDirective.test(key) ? key : this._indexKeyPairs.getLeft(key);
-    },
-
-    makeKey: function(index){
-      var key = (this.getMeta('lastDirectiveKey') || 0) + 1;
-      this.mapIndexToKey(index, key).setMeta('lastDirectiveKey', key);
-      return key;
-    },
-
-    mapIndexToKey: function(index, key){
-      throwErrorIf(matchers.specialDirective.test(index), 'cannot explicitly set keys for special directives');
-      this._indexKeyPairs.map(index, key);
-      return this;
-    },
-
-    releaseIndex: function(index){ return this._indexKeyPairs.releaseLeft(index); },
-
-    releaseKey: function(key){ return this._indexKeyPairs.releaseRight(key); },
-
 
     // mutation methods
 
     set: function(index, tokens){
       var key = matchers.specialDirective.test(index) ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
       this[index] = this._$node.makeDirective(key, tokens);
-
       return this.write();
     },
 
     push: function(tokens){
       this[this.length] = this._$node.makeDirective(this.makeKey(this.length), tokens);
       this.length += 1;
-
       return this.write();
     },
 
@@ -904,10 +891,6 @@
       return this;
     },
 
-    orderedForString: function(){
-      return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this));
-    },
-
     potentialParentOf: function(key){
       var index = this.getIndex(key).toString();
       return (
@@ -922,9 +905,7 @@
         index === 'after' ? (this.length ? this[this.length-1] : this.anchored) :
         throwError('invalid directive key')
       );
-    },
-
-    toString: function(){ return this.orderedForString().join(', '); }
+    }
 
   });
 
@@ -983,16 +964,14 @@
   var Observer = function(operation, cachedObservers, object, propertyKey, nodeKey, directiveKey, prefix){
     var observerDetailsString = nodeKey+' '+directiveKey+' '+prefix;
     var observerKey = propertyKey+' '+observerDetailsString;
-    if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
-
-    cachedObservers[observerKey] = extend(this, {
+    return cachedObservers[observerKey] || (cachedObservers[observerKey] = extend(this, {
       object: object,
       propertyKey: propertyKey,
       observerDetailsString: observerDetailsString,
       prefix: prefix,
       directive: operation.$(react.nodes[nodeKey]).directives.getByKey(directiveKey),
       key: observerKey
-    });
+    }));
   };
 
   Observer.parseKeyObserverString = function(keyObserverString){
