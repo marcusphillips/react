@@ -88,7 +88,7 @@
       }
       throwErrorIf(!node, 'you did not pass a valid node to react.update()');
       var operation = new Operation();
-      operation.$(node).directives.before.updateBranch();
+      operation.$(node).metaDirectives.before.updateBranch();
       operation.run();
       return input;
     },
@@ -163,7 +163,7 @@
           },
 
           anchors: function(){
-            return map(new Operation().$(this[0]).directives.anchored.inputs, function(scopeName){
+            return map(new Operation().$(this[0]).metaDirectives.anchored.inputs, function(scopeName){
               return react.scopes[scopeName];
             });
           },
@@ -406,6 +406,7 @@
     // note: a correct mapping of the .constructor property to $$ breaks jquery, since it calls new this.constructor() with no arguments
 
     makeMeta: function(operation){ return new MetaNode(this, operation); },
+    makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
 
     // todo: setting "indexKeyPairs: true" results in copies of the node getting their directive indices mapped to the same values, even before being initialized
     _storeInAttr: {},
@@ -456,19 +457,22 @@
       _operation: operation,
       _isSearched: undefined
     });
-    result.directives = new MetaDirectiveList(result);
+    result.metaDirectives = new MetaDirectiveList(result);
     $$node.getStorage('initialized') || result.initializeNode();
     return result;
   };
 
   extend(MetaNode.prototype, {
 
-    initializeNode: function(){ this.$$node.setStorage('initialized', true); this.directives.write(); },
+    initializeNode: function(){
+      this.$$node.setStorage('initialized', true);
+      this.metaDirectives.directives.write();
+    },
     isInitialized: function(){ return !!this.$$node.getStorage('initialized'); },
 
-    makeMetaDirective: function(key, tokens){ return new Directive(this.$$node, key, tokens).makeMeta(this); },
+    makeMetaDirective: function(directive){ return directive.makeMeta(this); },
     setDirective: function(key, tokens){
-      this.directives.set(key, tokens);
+      this.metaDirectives.set(key, tokens);
       return this;
     },
 
@@ -494,7 +498,7 @@
       // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
       this._isSearched || each(this.getReactNodes(), function(metaNode){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        extend(metaNode, {_isSearched: true}).directives.after.consider();
+        extend(metaNode, {_isSearched: true}).metaDirectives.after.consider();
       }, this);
     }
 
@@ -642,7 +646,7 @@
     parentInfo: function(){
       if(this._parentInfo){ return this._parentInfo; }
       var repeatLimit = 10000, parent;
-      while(parent !== ( parent = this.metaNode.directives.potentialParentOf(this.key) )){
+      while(parent !== ( parent = this.metaNode.metaDirectives.potentialParentOf(this.key) )){
         parent.visit();
         throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
       }
@@ -663,7 +667,7 @@
         'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
       }, '(Supplemental dynamic data follows)');
       log('Supplemental: ', {
-        'index of failed directive': this.metaNode.directives.getIndex(this.key),
+        'index of failed directive': this.metaNode.metaDirectives.directives.getIndex(this.key),
         'scope chain description': this.getScopeChain().describe(),
         '(internal scope chain object) ': this.getScopeChain()
       });
@@ -753,10 +757,13 @@
       _indexKeyPairs: new TwoWayMap($$node.getStorage('indexKeyPairs')),
       _validatedDirectivesString: $$node.getStorage('validatedDirectivesString') || $$node.getDirectivesString()
     });
+    this.buildDirectives();
+
     throwErrorIf(this._validatedDirectivesString !== $$node.getDirectivesString(), 'directives string changed manually since last visit');
   };
 
   extend(DirectiveList.prototype, {
+
     toString: function(){ return this.orderedForString().join(', '); },
     orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(toArray(this)); },
 
@@ -780,6 +787,49 @@
       return this;
     },
 
+    buildDirectives: function(){
+      var i;
+      var $$node = this.$$node;
+      var isInitialized = $$node.isInitialized();
+      var tokenArrays = $$node.getDirectiveArrays();
+      var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
+
+      extend(this, {
+        length: tokenArrays.length,
+        before: $$node.makeDirective('before', ['before']),
+        anchored: $$node.makeDirective('anchored', anchoredTokens),
+        after: $$node.makeDirective('after', ['after'])
+      });
+
+      for(i = 0; i < tokenArrays.length; i++){
+        this[i] = $$node.makeDirective(isInitialized ? this.getKey(i) : this.makeKey(i), tokenArrays[i]);
+      }
+    },
+
+    set: function(index, tokens){
+      var key = specialDirectives[index] ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
+      this[index] = this.$$node.makeDirective(key, tokens);
+      return this.write();
+    },
+
+    push: function(tokens){
+      this[this.length] = this.$$node.makeDirective(this.makeKey(this.length), tokens);
+      this.length += 1;
+      return this.write();
+    },
+
+    unshift: function(tokens){
+      for(var i = this.length-1; 0 <= i; i--){
+        this[i+1] = this[i];
+        this.releaseIndex(i);
+        this.mapIndexToKey(i+1, this[i+1].key);
+      }
+      this[0] = this.$$node.makeDirective(this.makeKey('0'), tokens);
+      this.length += 1;
+
+      return this.write();
+    },
+
     write: function(){
       var newDirectivesString = this.toString();
       var currentDirectivesString = this.$$node.getDirectivesString();
@@ -795,34 +845,46 @@
   });
 
 
+
+
   /*
    * Meta Directive List
    */
 
   var MetaDirectiveList = function(metaNode){
-    var result = extend(create(new DirectiveList(metaNode.$$node)), MetaDirectiveList.prototype, {metaNode: metaNode});
+//asdf should get this directiveList from the $$node object - which should build it on first construction
+    var directives = new DirectiveList(metaNode.$$node);
+    var result = extend(this, MetaDirectiveList.prototype, {
+      metaNode: metaNode,
+      $$node: metaNode.$$node,
+      directives: directives
+    });
     result.buildDirectives();
     return result;
   };
 
   extend(MetaDirectiveList.prototype, {
 
+    getByKey: function(key){ return this[this.directives.getIndex(key)]; },
+
     buildDirectives: function(){
       var i;
+      var $$node = this.$$node;
       var metaNode = this.metaNode;
-      var isInitialized = metaNode.isInitialized();
-      var tokenArrays = this.$$node.getDirectiveArrays();
+      var isInitialized = $$node.isInitialized();
+      var tokenArrays = $$node.getDirectiveArrays();
       var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
+      var directives = this.directives;
 
       extend(this, {
-        length: tokenArrays.length,
-        before: metaNode.makeMetaDirective('before', ['before']),
-        anchored: metaNode.makeMetaDirective('anchored', anchoredTokens),
-        after: metaNode.makeMetaDirective('after', ['after'])
+        length: this.directives.length,
+        before: metaNode.makeMetaDirective(directives.before),
+        anchored: metaNode.makeMetaDirective(directives.anchored),
+        after: metaNode.makeMetaDirective(directives.after)
       });
 
-      for(i = 0; i < tokenArrays.length; i++){
-        this[i] = metaNode.makeMetaDirective(isInitialized ? this.getKey(i) : this.makeKey(i), tokenArrays[i]);
+      for(i = 0; i < directives.length; i++){
+        this[i] = metaNode.makeMetaDirective(directives[i]);
       }
     },
 
@@ -830,36 +892,38 @@
     // mutation methods
 
     set: function(index, tokens){
-      var key = specialDirectives[index] ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
-      this[index] = this.metaNode.makeMetaDirective(key, tokens);
-      return this.write();
+//asdf makeMetaDirective should be on metaDirectiveList, not metaNode
+      this.directives.set(index, tokens);
+      this[index] = this.metaNode.makeMetaDirective(this.directives[index]);
+      return this;
     },
 
     push: function(tokens){
-      this[this.length] = this.metaNode.makeMetaDirective(this.makeKey(this.length), tokens);
-      this.length += 1;
-      return this.write();
+      this.directives.push(tokens);
+      this[directives.length-1] = this.metaNode.makeMetaDirective(this.directives[length-1]);
+      this.length++;
+      return this;
     },
 
     unshift: function(tokens){
+//asdf probably don't need to keep track of indexes in the metaDirectiveList
+//asdf fix this janky prototype-masking oriented lookup. probably with the above note
       for(var i = this.length-1; 0 <= i; i--){
         this[i+1] = this[i];
-        this.releaseIndex(i);
-        this.mapIndexToKey(i+1, this[i+1].key);
       }
-      this[0] = this.metaNode.makeMetaDirective(this.makeKey('0'), tokens);
-      this.length += 1;
-
-      return this.write();
+      this.directives.unshift(tokens);
+      this[0] = this.metaNode.makeMetaDirective(this.directives[0]);
+      this.length++;
+      return this;
     },
 
     potentialParentOf: function(key){
-      var index = this.getIndex(key).toString();
+      var index = this.directives.getIndex(key).toString();
       return (
         index === 'before' ? (
           this.anchored.inputs.length ? nullDirective :
           !this.metaNode.wrappedParent() ? nullDirective :
-          this.metaNode.wrappedParent().directives.after
+          this.metaNode.wrappedParent().metaDirectives.after
         ) :
         index === 'anchored' ? this.before :
         index === '0' ? this.anchored :
@@ -916,7 +980,7 @@
         var keyObserverString;
         for(keyObserverString in this._object.observers[key]){
           var observerTokens = Observer.parseKeyObserverString(keyObserverString);
-          var directive = this._operation.$(react.nodes[observerTokens.nodeKey]).directives.getByKey(observerTokens.directiveKey);
+          var directive = this._operation.$(react.nodes[observerTokens.nodeKey]).metaDirectives.getByKey(observerTokens.directiveKey);
           directive.dirtyObserver(this.getObserver(directive, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
         }
       }
@@ -1051,7 +1115,7 @@
 
     withinEach: function(){
       this._createItemNodes(function(index, itemNode){
-        this.$(itemNode).directives.unshift(['withinItem', index]);
+        this.$(itemNode).metaDirectives.unshift(['withinItem', index]);
       });
       this.onUpdate(function(){
         this.updateBranch();
@@ -1087,7 +1151,7 @@
       this.onUpdate(function(){
         // todo: return here (and everywhere else) if collection is undefined.  test for this
         this._createItemNodes(function(index, itemNode){
-          this.$(itemNode).directives.unshift( ['bindItem', index].concat(aliases) );
+          this.$(itemNode).metaDirectives.unshift( ['bindItem', index].concat(aliases) );
         });
         this.updateBranch();
       });
@@ -1113,7 +1177,7 @@
       var newItems = [], newItem;
       for(i = pregeneratedItemCount; i < collection.length; i+=1){
         callback.call(this, i, newItem = $itemTemplate.clone().removeClass('reactItemTemplate').addClass('reactItem')[0]);
-        this.$(newItem).directives.before.updateBranch();
+        this.$(newItem).metaDirectives.before.updateBranch();
         newItems.push(newItem);
       }
       $(itemsToRemove).detach();
@@ -1128,9 +1192,9 @@
         var insertionMethod = content && content.nodeType ? 'append' : 'text';
         jQuery(this.node)[insertionMethod](content);
         // note: .dead() can't happen outside onUpdate() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
-        this.metaNode.directives.after.dead();
+        this.metaNode.metaDirectives.after.dead();
       });
-      this.metaNode.directives.after.resetScopeChain();
+      this.metaNode.metaDirectives.after.resetScopeChain();
     },
 
     'if': function(condition){
