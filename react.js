@@ -399,7 +399,9 @@
     extend(jQuery.prototype.init.call(this, node), {
       node: node,
       key: getNodeKey(node)
-    });
+    }).directives = new DirectiveList(this);
+
+    this.getStorage('initialized') || this.initializeNode();
   };
 
   $$.prototype = create(jQuery.prototype, {
@@ -407,6 +409,12 @@
 
     makeMeta: function(operation){ return new MetaNode(this, operation); },
     makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
+
+    isInitialized: function(){ return !!this.getStorage('initialized'); },
+    initializeNode: function(){
+      this.setStorage('initialized', true);
+      this.directives.write();
+    },
 
     // todo: setting "indexKeyPairs: true" results in copies of the node getting their directive indices mapped to the same values, even before being initialized
     _storeInAttr: {},
@@ -452,23 +460,14 @@
    */
 
   var MetaNode = function($$node, operation){
-    var result = extend($$node, MetaNode.prototype, {
+    extend(this, MetaNode.prototype, {
       $$node: $$node,
       _operation: operation,
       _isSearched: undefined
-    });
-    result.metaDirectives = new MetaDirectiveList(result);
-    $$node.getStorage('initialized') || result.initializeNode();
-    return result;
+    }).metaDirectives = new MetaDirectiveList(this);
   };
 
   extend(MetaNode.prototype, {
-
-    initializeNode: function(){
-      this.$$node.setStorage('initialized', true);
-      this.metaDirectives.directives.write();
-    },
-    isInitialized: function(){ return !!this.$$node.getStorage('initialized'); },
 
     makeMetaDirective: function(directive){ return directive.makeMeta(this); },
     setDirective: function(key, tokens){
@@ -852,15 +851,11 @@
    */
 
   var MetaDirectiveList = function(metaNode){
-//asdf should get this directiveList from the $$node object - which should build it on first construction
-    var directives = new DirectiveList(metaNode.$$node);
-    var result = extend(this, MetaDirectiveList.prototype, {
+    extend(this, MetaDirectiveList.prototype, {
       metaNode: metaNode,
       $$node: metaNode.$$node,
-      directives: directives
-    });
-    result.buildDirectives();
-    return result;
+      directives: metaNode.$$node.directives
+    }).buildDirectives();
   };
 
   extend(MetaDirectiveList.prototype, {
@@ -1169,7 +1164,7 @@
 
       var itemNodes = [], pregeneratedItemCount = 0, lastPregeneratedItem = $itemTemplate, itemsToRemove = [], i;
       for(i = 1; i < $children.length; i+=1){
-        if(this.$($children[i]).hasClass('reactItem')){
+        if(this.$($children[i]).$$node.hasClass('reactItem')){
           pregeneratedItemCount+=1;
           collection.length < pregeneratedItemCount ? itemsToRemove.push($children[i]) : (lastPregeneratedItem = $children[i]);
         }
