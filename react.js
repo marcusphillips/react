@@ -755,9 +755,7 @@
       $$node: $$node,
       _indexKeyPairs: new TwoWayMap($$node.getStorage('indexKeyPairs')),
       _validatedDirectivesString: $$node.getStorage('validatedDirectivesString') || $$node.getDirectivesString()
-    });
-    this.buildDirectives();
-
+    }).buildDirectives();
     throwErrorIf(this._validatedDirectivesString !== $$node.getDirectivesString(), 'directives string changed manually since last visit');
   };
 
@@ -872,7 +870,6 @@
       var directives = this.directives;
 
       extend(this, {
-        length: this.directives.length,
         before: metaNode.makeMetaDirective(directives.before),
         anchored: metaNode.makeMetaDirective(directives.anchored),
         after: metaNode.makeMetaDirective(directives.after)
@@ -887,7 +884,6 @@
     // mutation methods
 
     set: function(index, tokens){
-//asdf makeMetaDirective should be on metaDirectiveList, not metaNode
       this.directives.set(index, tokens);
       this[index] = this.metaNode.makeMetaDirective(this.directives[index]);
       return this;
@@ -895,20 +891,18 @@
 
     push: function(tokens){
       this.directives.push(tokens);
-      this[directives.length-1] = this.metaNode.makeMetaDirective(this.directives[length-1]);
-      this.length++;
+      this[this.directives.length-1] = this.metaNode.makeMetaDirective(this.directives[this.directives.length-1]);
       return this;
     },
 
     unshift: function(tokens){
 //asdf probably don't need to keep track of indexes in the metaDirectiveList
 //asdf fix this janky prototype-masking oriented lookup. probably with the above note
-      for(var i = this.length-1; 0 <= i; i--){
+      for(var i = this.directives.length-1; 0 <= i; i--){
         this[i+1] = this[i];
       }
       this.directives.unshift(tokens);
       this[0] = this.metaNode.makeMetaDirective(this.directives[0]);
-      this.length++;
       return this;
     },
 
@@ -923,7 +917,7 @@
         index === 'anchored' ? this.before :
         index === '0' ? this.anchored :
         index.match(matchers.isNumber) ? this[index-1] :
-        index === 'after' ? (this.length ? this[this.length-1] : this.anchored) :
+        index === 'after' ? (this.directives.length ? this[this.directives.length-1] : this.anchored) :
         throwError('invalid directive key')
       );
     }
