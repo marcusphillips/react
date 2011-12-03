@@ -88,7 +88,7 @@
       }
       throwErrorIf(!node, 'you did not pass a valid node to react.update()');
       var operation = new Operation();
-      operation.$(node).metaDirectives.before.updateBranch();
+      operation.$(node).getDirectiveByKey('before').updateBranch();
       operation.run();
       return input;
     },
@@ -163,7 +163,7 @@
           },
 
           anchors: function(){
-            return map(new Operation().$(this[0]).metaDirectives.anchored.inputs, function(scopeName){
+            return map(new Operation().$(this[0]).metaDirectives.getByKey('anchored').inputs, function(scopeName){
               return react.scopes[scopeName];
             });
           },
@@ -475,6 +475,10 @@
       return this;
     },
 
+    getDirectiveByKey: function(key){
+      return this.metaDirectives.getByKey(key);
+    },
+
     wrappedParent: function(){
       var parent = this.$$node.parent()[0];
       return (
@@ -497,7 +501,7 @@
       // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
       this._isSearched || each(this.getReactNodes(), function(metaNode){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        extend(metaNode, {_isSearched: true}).metaDirectives.after.consider();
+        extend(metaNode, {_isSearched: true}).metaDirectives.getByKey('after').consider();
       }, this);
     }
 
@@ -543,13 +547,13 @@
       metaNode: metaNode,
       $$node: metaNode.$$node,
       _operation: metaNode._operation,
+      _scopeChain: undefined,
       _isVisited: undefined,
       _isDead: undefined,
       _shouldUpdate: undefined,
       _shouldUpdateBranch: undefined,
       _parentInfo: undefined,
       _dirtyObservers: {},
-      _scopeChain: undefined,
       _potentialObservers: []
     });
   };
@@ -853,33 +857,18 @@
       metaNode: metaNode,
       $$node: metaNode.$$node,
       directives: metaNode.$$node.directives
-    }).buildDirectives();
+    });
   };
 
   extend(MetaDirectiveList.prototype, {
 
-    getByKey: function(key){ return this[this.directives.getIndex(key)]; },
-
-    buildDirectives: function(){
-      var i;
-      var $$node = this.$$node;
-      var metaNode = this.metaNode;
-      var isInitialized = $$node.isInitialized();
-      var tokenArrays = $$node.getDirectiveArrays();
-      var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
-      var directives = this.directives;
-
-      extend(this, {
-        before: metaNode.makeMetaDirective(directives.before),
-        anchored: metaNode.makeMetaDirective(directives.anchored),
-        after: metaNode.makeMetaDirective(directives.after)
-      });
-
-      for(i = 0; i < directives.length; i++){
-        this[i] = metaNode.makeMetaDirective(directives[i]);
-      }
+    getByKey: function(key){
+      return this[key] || (this[key] = this.metaNode.makeMetaDirective(this.directives.getByKey(key)));
     },
 
+    getByIndex: function(index){
+      return this.getByKey(this.directives.getKey(index));
+    },
 
     // mutation methods
 
@@ -910,14 +899,14 @@
       var index = this.directives.getIndex(key).toString();
       return (
         index === 'before' ? (
-          this.anchored.inputs.length ? nullDirective :
+          this.getByKey('anchored').inputs.length ? nullDirective :
           !this.metaNode.wrappedParent() ? nullDirective :
-          this.metaNode.wrappedParent().metaDirectives.after
+          this.metaNode.wrappedParent().metaDirectives.getByKey('after')
         ) :
-        index === 'anchored' ? this.before :
-        index === '0' ? this.anchored :
-        index.match(matchers.isNumber) ? this[index-1] :
-        index === 'after' ? (this.directives.length ? this[this.directives.length-1] : this.anchored) :
+        index === 'anchored' ? this.getByKey('before') :
+        index === '0' ? this.getByKey('anchored') :
+        index.match(matchers.isNumber) ? this.getByIndex(index-1) :
+        index === 'after' ? (this.directives.length ? this.getByIndex(this.directives.length-1) : this.getByKey('anchored')) :
         throwError('invalid directive key')
       );
     }
@@ -1166,7 +1155,7 @@
       var newItems = [], newItem;
       for(i = pregeneratedItemCount; i < collection.length; i+=1){
         callback.call(this, i, newItem = $itemTemplate.clone().removeClass('reactItemTemplate').addClass('reactItem')[0]);
-        this.$(newItem).metaDirectives.before.updateBranch();
+        this.$(newItem).metaDirectives.getByKey('before').updateBranch();
         newItems.push(newItem);
       }
       $(itemsToRemove).detach();
@@ -1181,9 +1170,9 @@
         var insertionMethod = content && content.nodeType ? 'append' : 'text';
         jQuery(this.node)[insertionMethod](content);
         // note: .dead() can't happen outside onUpdate() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
-        this.metaNode.metaDirectives.after.dead();
+        this.metaNode.metaDirectives.getByKey('after').dead();
       });
-      this.metaNode.metaDirectives.after.resetScopeChain();
+      this.metaNode.metaDirectives.getByKey('after').resetScopeChain();
     },
 
     'if': function(condition){
