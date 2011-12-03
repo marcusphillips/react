@@ -471,10 +471,7 @@
 
   extend(MetaNode.prototype, {
 
-    getDirective: function(key){
-      return this.metaDirectives[key] || (this.metaDirectives[key] = this.makeMetaDirective(this.$$node.getDirective(key)));
-    },
-
+    getDirective: function(key){ return this.metaDirectives[key] || (this.metaDirectives[key] = this.makeMetaDirective(this.$$node.getDirective(key))); },
     makeMetaDirective: function(directive){ return directive.makeMeta(this); },
     setDirective: function(key, tokens){
       this.$$node.directives.set(key, tokens);
@@ -504,23 +501,7 @@
       this._isSearched || each(this.getReactNodes(), function(metaNode){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
         extend(metaNode, {_isSearched: true}).getDirective('after').consider();
-      }, this);
-    },
-
-    currentParentDirectiveOf: function(key){
-      var index = this.$$node.directives.getIndex(key).toString();
-      return (
-        index === 'before' ? (
-          this.getDirective('anchored').inputs.length ? nullDirective :
-          !this.wrappedParent() ? nullDirective :
-          this.wrappedParent().getDirective('after')
-        ) :
-        index === 'anchored' ? this.getDirective('before') :
-        index === '0' ? this.getDirective('anchored') :
-        index.match(matchers.isNumber) ? this.getDirectiveByIndex(index-1) :
-        index === 'after' ? (this.$$node.directives.length ? this.getDirectiveByIndex(this.$$node.directives.length-1) : this.getDirective('anchored')) :
-        throwError('invalid directive key')
-      );
+      });
     },
 
     getDirectiveByIndex: function(index){
@@ -671,7 +652,7 @@
     parentInfo: function(){
       if(this._parentInfo){ return this._parentInfo; }
       var repeatLimit = 10000, parent;
-      while(parent !== ( parent = this.metaNode.currentParentDirectiveOf(this.key) )){
+      while(parent !== ( parent = this.currentParent() )){
         parent.visit();
         throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
       }
@@ -683,6 +664,22 @@
       });
     },
 
+    currentParent: function(){
+      var index = this.$$node.directives.getIndex(this.key).toString();
+      return (
+        index === 'before' ? (
+          this.metaNode.getDirective('anchored').inputs.length ? nullDirective :
+          !this.metaNode.wrappedParent() ? nullDirective :
+          this.metaNode.wrappedParent().getDirective('after')
+        ) :
+        index === 'anchored' ? this.metaNode.getDirective('before') :
+        index === '0' ? this.metaNode.getDirective('anchored') :
+        index.match(matchers.isNumber) ? this.metaNode.getDirectiveByIndex(index-1) :
+        index === 'after' ? (this.$$node.directives.length ? this.metaNode.getDirectiveByIndex(this.$$node.directives.length-1) : this.metaNode.getDirective('anchored')) :
+        throwError('invalid directive key')
+      );
+    },
+
     _describeError: function(error){
       log('Failure during React update: ', {
         'original error': error,
@@ -692,7 +689,7 @@
         'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
       }, '(Supplemental dynamic data follows)');
       log('Supplemental: ', {
-        'index of failed directive': this.metaNode.$$node.directives.getIndex(this.key),
+        'index of failed directive': this.$$node.directives.getIndex(this.key),
         'scope chain description': this.getScopeChain().describe(),
         '(internal scope chain object) ': this.getScopeChain()
       });
@@ -887,7 +884,7 @@
   extend(Proxy.prototype, {
     // writes an association between a directive and a property on an object by annotating the object
     observe: function(key, directive, prefix){
-      directive.metaNode.$$node.store();
+      directive.$$node.store();
       this.getObserver(directive, this._object, key, directive.$$node.key, directive.key, prefix).write();
     },
 
