@@ -18,7 +18,7 @@
   var throwError = js.error, throwErrorIf = js.errorIf, log = js.log, catchIf = js.catchIf;
   var bind = js.bind, create = js.create, unique = js.unique, extend = js.extend, trim = js.trim, isArray = js.isArray;
   var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
-  var keysFor = js.keys, hasKeys = js.hasKeys, among = js.among, clear = js.clear;
+  var keysFor = js.keys, hasKeys = js.hasKeys, among = js.among, clear = js.clear, concatArrays = js.concatArrays;
   var Set = js.Set;
 
   var arraySlice = Array.prototype.slice;
@@ -34,8 +34,12 @@
   };
 
   var toArray = js.toArray;
-  var getScopeKey = function(object){ return (object.reactKey = object.reactKey || unique('reactObject')); };
-  var cacheAndGetScopeKey = function(scope){ return getScopeKey(react.scopes[getScopeKey(scope)] = scope); };
+// asdf get rid of getScopeKey()
+  var getScopeKey = function(object){
+    var key = object.reactKey || (object.reactKey = unique('reactObject'));
+    react.scopes[key] || (react.scopes[key] = object);
+    return key;
+  };
   // returns a unique, consistent key for every node
   var getNodeKey = function(node){
     node instanceof jQuery && (node = node[0]);
@@ -96,7 +100,7 @@
     anchor: function(node){
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
       var scopes = slice(arguments, 1);
-      var anchoredTokens = ['anchored'].concat(map(scopes, cacheAndGetScopeKey));
+      var anchoredTokens = ['anchored'].concat(map(scopes, getScopeKey));
       new Operation().$(this.nodes[getNodeKey(node)] = node).setDirective('anchored', anchoredTokens).$$node.update();
       return node;
     },
@@ -376,8 +380,14 @@
       extend(this, {_isRunning: false, _hasRun: true});
     },
 
+//asdf get rid of this crazy caching
+    getProxy: function(object){ return this['proxy:'+object.reactKey] || (this['proxy:'+object.reactKey] = new Proxy(object)); },
+
     changed: function(object, keys){
-      new Proxy(this, object).changed(keys);
+      each(this.getProxy(object).observersForKeys(keys), function(observer){
+//asdf replace with this.getMetaObserver(observer).dirty();
+        this.$(observer.directive.$$node).getDirective(observer.directive.key).dirtyObserver(observer);
+      }, this);
       return this;
     }
 
@@ -471,8 +481,8 @@
 
   extend(MetaNode.prototype, {
 
-    getDirective: function(key){ return this.metaDirectives[key] || (this.metaDirectives[key] = this.makeMetaDirective(this.$$node.getDirective(key))); },
-    makeMetaDirective: function(directive){ return directive.makeMeta(this); },
+    getDirective: function(key){ return this.metaDirectives[key] || (this.metaDirectives[key] = this.$$node.getDirective(key).makeMeta(this)); },
+
     setDirective: function(key, tokens){
       this.$$node.directives.set(key, tokens);
       return this;
@@ -642,9 +652,9 @@
     _fullResolver: function(names){ return map(names, bind(this.lookup, this)); },
 
     _registerPotentialObservers: function(){
-      each(this._potentialObservers, function(potentialObserver){
+      each(this._potentialObservers, function(potentialObserver/*, key? might be stored in an object (asdf)*/){
         if(potentialObserver.scopeChain.anchorKey){
-          new Proxy(this._operation, potentialObserver.scopeChain.scope).observe(potentialObserver.key, this, potentialObserver.scopeChain.prefix);
+          new Proxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, this.directive, potentialObserver.scopeChain.prefix);
         }
       }, this);
     },
@@ -873,28 +883,22 @@
    */
 
   // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
-  var Proxy = function(operation, object){
-    extend(this, {
-      _operation: operation,
-      _object: object,
-      _cachedObservers: {}
-    });
+  var Proxy = function(object){
+    this._object = object;
   };
 
   extend(Proxy.prototype, {
     // writes an association between a directive and a property on an object by annotating the object
+//asdf re-order args
+//asdf make observe() a method of directive instead
     observe: function(key, directive, prefix){
       directive.$$node.store();
-      this.getObserver(directive, this._object, key, directive.$$node.key, directive.key, prefix).write();
+      new Observer(directive, this._object, key, prefix).write();
     },
 
-    getObserver: function(directive, object, propertyKey, nodeKey, directiveKey, prefix){
-      var observerKey = propertyKey+' '+Observer.makeKeyObserverString(nodeKey, directiveKey, prefix);
-      return this._cachedObservers[observerKey] || (this._cachedObservers[observerKey] = new Observer(directive, object, propertyKey, nodeKey, directiveKey, prefix));
-    },
-
-    changed: function(keys){
-      if(!this._object.observers){ return; }
+    // if there are no observers for the supplied key, do nothing
+    observersForKey: function(propertyKey){ return map( keysFor(this._object.observers[propertyKey]) || [], Observer.fromKey ); },
+    observersForKeys: function(keys){
       // if no key is supplied, check every key
       keys = (
         isArray(keys) ? keys :
@@ -903,18 +907,9 @@
       );
 
       // we first need to collect all the observers of the changed keys
-      var whichKey;
-      for(whichKey = 0; whichKey < keys.length; whichKey+=1){
-        var key = keys[whichKey];
-        if(!this._object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
-        var keyObserverString;
-        for(keyObserverString in this._object.observers[key]){
-          var observerTokens = Observer.parseKeyObserverString(keyObserverString);
-          var directive = this._operation.$(react.nodes[observerTokens.nodeKey]).getDirective(observerTokens.directiveKey);
-          directive.dirtyObserver(this.getObserver(directive, this._object, key, observerTokens.nodeKey, observerTokens.directiveKey, observerTokens.prefix));
-        }
-      }
+      return concatArrays( map(this._object.observers ? keys : [], this.observersForKey, this) );
     }
+
   });
 
 
@@ -923,38 +918,27 @@
    * Observer
    */
 
-  var Observer = function(directive, object, propertyKey, nodeKey, directiveKey, prefix){
-    var observerDetailsString = Observer.makeKeyObserverString(nodeKey, directiveKey, prefix);
-    var observerKey = propertyKey+' '+observerDetailsString;
+  var Observer = function(directive, object, propertyKey, prefix){
     return extend(this, {
       object: object,
       propertyKey: propertyKey,
-      observerDetailsString: observerDetailsString,
       prefix: prefix,
-      directive: directive,
-      key: observerKey
-    });
+      directive: directive
+    }).key = this._makeKey();
   };
 
-  Observer.parseKeyObserverString = function(keyObserverString){
-    var tokens = keyObserverString.split(matchers.space);
-    return {
-      nodeKey: tokens[0],
-      directiveKey: tokens[1],
-      prefix: tokens[2]
-    };
+  Observer.fromKey = function(key){
+    var tokens = key.split(matchers.space);
+    return new Observer(new $$(react.nodes[tokens[0]]).getDirective(tokens[1]), react.scopes[tokens[2]], tokens[3], tokens[4]);
   };
-
-  Observer.makeKeyObserverString = function(nodeKey, directiveKey, prefix){ return nodeKey+' '+directiveKey+' '+prefix; };
 
   extend(Observer.prototype, {
-
+    _makeKey: function(){ return [this.directive.uniqueKey(), getScopeKey(this.object), this.propertyKey, this.prefix].join(' '); },
     write: function(){
       var observers = this.object.observers = this.object.observers || {};
       var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
-      propertyObservers[this.observerDetailsString] = true;
+      propertyObservers[this.key] = true;
     }
-
   });
 
 
