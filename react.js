@@ -81,9 +81,7 @@
 //asdf make $$ not use 'new'
     anchor: function(node){
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      new $$(node).anchors = slice(arguments, 1);
-// asdf don't think this needs an operation
-      new Operation().$(node).setDirective('anchored', ['anchored']).$$node.update();
+      $$(node).extend({anchors: slice(arguments, 1)}).setDirective('anchored', ['anchored']).update();
       return node;
     },
 
@@ -147,7 +145,7 @@
 
 // asdf change .bound(null) to .bound('_getProxy')
 // asdf add anchors array to each $$ instance
-          anchors: function(){ return new $$(this).anchors; },
+          anchors: function(){ return $$(this).anchors; },
 
 /*
           boundChildren: function(directiveString){
@@ -378,7 +376,7 @@
 
   extend(Operation.prototype, {
 
-    $: function(node){ return this._metaNodes[getNodeKey(node)] || (this._metaNodes[getNodeKey(node)] = new $$(node).makeMeta(this)); },
+    $: function(node){ return this._metaNodes[getNodeKey(node)] || (this._metaNodes[getNodeKey(node)] = $$(node).makeMeta(this)); },
 
     hasRun: function(){ return this._hasRun; },
     isRunning: function(){ return this._isRunning; },
@@ -426,27 +424,30 @@
     node && 'length' in node && (node = node[0]);
     throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a single DOM node');
     var proxy = getProxy(node);
-    if(proxy){
-      throwErrorIf(proxy.directives._validatedDirectivesString !== proxy.getDirectivesString(), 'directives string changed manually since last visit');
-      return proxy;
-    };
+    throwErrorIf(proxy && proxy.directives._validatedDirectivesString !== proxy.getDirectivesString(), 'directives string changed manually since last visit');
+    return proxy || new _$$(node);
+  };
 
+  var _$$ = function(node){
     jQuery.prototype.init.call(setProxy(node, this), node).extend({
       node: node,
       key: getNodeKey(node),
       anchors: []
     }).extend({
       directives: new DirectiveList(this)
-    });
-    this.getStorage('initialized') || this.initializeNode();
+    }).getStorage('initialized') || this.initializeNode();
   };
 
-  $$.prototype = create(jQuery.prototype, {
+  _$$.prototype = create(jQuery.prototype, {
     // note: a correct mapping of the .constructor property to $$ breaks jquery, since it calls new this.constructor() with no arguments
 
     makeMeta: function(operation){ return new MetaNode(this, operation); },
     makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
     getDirective: function(key){ return this.directives.getByKey(key); },
+    setDirective: function(key, tokens){
+      this.directives.set(key, tokens);
+      return this;
+    },
 
     isInitialized: function(){ return !!this.getStorage('initialized'); },
     initializeNode: function(){
@@ -486,7 +487,7 @@
       return reduce(this.getDirectiveStrings(), [], function(memo, string){
         return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
       });
-    },
+    }
 
   });
 
@@ -507,11 +508,6 @@
   extend(MetaNode.prototype, {
 
     getDirective: function(key){ return this.metaDirectives[key] || (this.metaDirectives[key] = this.$$node.getDirective(key).makeMeta(this)); },
-
-    setDirective: function(key, tokens){
-      this.$$node.directives.set(key, tokens);
-      return this;
-    },
 
     wrappedParent: function(){
       var parent = this.$$node.parent()[0];
