@@ -219,6 +219,25 @@
 
 
   /*
+   * Universal Object Proxies
+   */
+
+  var getProxy = function(target){ return target.hasOwnProperty('bound') && target.bound._isBound && target.bound(null); };
+
+  var setProxy = function(target, proxy){
+    target.hasOwnProperty('bound') || ((target.bound = function(input){
+      throwErrorIf(this !== target, '.bound() can only be called in the context of its original target object');
+      return (
+        input === null ? proxy :
+        throwError()
+      );
+    })._isBound = true);
+    js.errorIf(!target.bound._isBound, 'object already has a different .bound property!');
+    return proxy;
+  };
+
+
+  /*
    * Scope chains
    */
 
@@ -392,13 +411,19 @@
   // Within the scope of the Operation constructor, all calls to $$() return a customized jQuery object. For access to the original, use jQuery()
   var $$ = function(node){
     node && 'length' in node && (node = node[0]);
-    throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a DOM node');
+    throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a single DOM node');
+    var proxy = getProxy(node);
+    if(proxy){
+      throwErrorIf(proxy.directives._validatedDirectivesString !== proxy.getDirectivesString(), 'directives string changed manually since last visit');
+      return proxy;
+    };
 
-    extend(jQuery.prototype.init.call(this, node), {
+    jQuery.prototype.init.call(setProxy(node, this), node).extend({
       node: node,
       key: getNodeKey(node)
-    }).directives = new DirectiveList(this);
-
+    }).extend({
+      directives: new DirectiveList(this)
+    });
     this.getStorage('initialized') || this.initializeNode();
   };
 
@@ -777,7 +802,6 @@
       _indexKeyPairs: new TwoWayMap($$node.getStorage('indexKeyPairs')),
       _validatedDirectivesString: $$node.getStorage('validatedDirectivesString') || $$node.getDirectivesString()
     }).buildDirectives();
-    throwErrorIf(this._validatedDirectivesString !== $$node.getDirectivesString(), 'directives string changed manually since last visit');
   };
 
   extend(DirectiveList.prototype, {
