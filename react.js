@@ -33,12 +33,6 @@
     isNumber: /^\d+$/
   };
 
-// asdf get rid of getScopeKey()
-  var getScopeKey = function(object){
-    var key = object.reactKey || (object.reactKey = unique('reactObject'));
-    react.scopes[key] || (react.scopes[key] = object);
-    return key;
-  };
   // returns a unique, consistent key for every node
   var getNodeKey = function(node){
     node instanceof jQuery && (node = node[0]);
@@ -56,18 +50,10 @@
   var react = {
 
     nodes: {},
-    scopes: {},
 
     debug: function(){ debugging = true; },
 
-    // for giving scope objects meaningful names, which appear in the anchor directives on nodes. not yet ready for external consumption
-    name: function(name, object){
-      throwErrorIf(object.reactKey, 'You tried to name a scope object that already had a name');
-      return this.scopes[name] = extend(object, {reactKey: name});
-    },
-
     reset: function(){
-      clear(this.scopes);
       clear(this.nodes);
     },
 
@@ -204,11 +190,13 @@
 
         }, singularize));
       }
-    }
+    },
+
+    commands: {}
 
   };
 
-  var commands = react.commands = {scopes: react.scopes};
+  var commands = react.commands;
 
 
 
@@ -928,7 +916,7 @@
 
   var Observer = function(directive, object, propertyKey, prefix){
     var proxy = getProxy(object);
-    var key = [directive.uniqueKey(), getScopeKey(object), propertyKey, prefix].join(' ');
+    var key = [directive.uniqueKey(), propertyKey, prefix].join(' ');
     var observersByProperty = proxy.observersByProperty[propertyKey] || (proxy.observersByProperty[propertyKey] = {});
     return proxy.observers[key] || (proxy.observers[key] = observersByProperty[key] = directive.observers[key] = extend(this, {
       object: object,

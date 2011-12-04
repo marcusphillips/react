@@ -5,6 +5,7 @@ local
 - (internal) js.* iterators now run in the context of the input collection, unless you pass a context argument in after the block.
 - (internal) js.* iterators can accept strings and arrays to be transformed into a block
 - (internal) anchors now stored on node proxies, rather than in central hash
+- deprecated react.name(object, nameKey) - objects are not centrally stored anymore, and global the scope feature isnt supported fully enough yet to leave in
 
 1.3
 ---

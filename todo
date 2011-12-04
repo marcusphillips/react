@@ -40,6 +40,13 @@
 - assignments to the local scope chain object
 - allow literals like true and false
 - allow inline numbers
+- some sort of explicitly named anchor feature? similar to the old react.name() function:
+  test('can name objects', function(){
+    ok(react.name('visitor', alice) === alice, 'naming a scope returns the scope');
+    ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
+  });
+
+
 
 --- improvements ---
 - allow string inputs to have spaces (build a parser to replace regexes - ack!)

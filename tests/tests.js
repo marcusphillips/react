@@ -425,11 +425,6 @@ test('functions can be used as namespaces without running', function(){
 
 module('anchor');
 
-test('can name objects', function(){
-  ok(react.name('visitor', alice) === alice, 'naming a scope returns the scope');
-  ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
-});
-
 test('anchored nodes re-render on object change', function(){
   alice.anchor($name).anchor($username).set({name: 'alison', username: 'crazygrrl'});
   same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
