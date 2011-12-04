@@ -298,7 +298,7 @@
       }
 
       details.potentialObservers.push({scopeChain: this, key: baseKey});
-      details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === this.scope);
+      details.didMatchFocus || (details.didMatchFocus = !path.length && options.checkFocus && options.checkFocus === this.scope);
       // recurse onto the parent scopeChain if the lookup fails at this level
       if(! (baseKey in this.scope) ){
         return extendDetails(this.parent.detailedLookup(key, options));
@@ -344,19 +344,9 @@
   // An operation provides a shared context where complex interactions may rely upon shared state
 
   var Operation = function(){
-    extend(this, {
-
-      // within an operation, all $$node objects are cached to maintain object-identicality across calls to $()
-      _metaNodes: {},
-
-      // directives we plan to visit, by key
-      // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-      _toVisit: makeDirectiveSet(),
-
-      _hasRun: false,
-      _isRunning: false
-
-    });
+    // directives we plan to visit, by key
+    // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
+    extend(this, { _toVisit: makeDirectiveSet(), _metaNodes: {}, _hasRun: false, _isRunning: false });
   };
 
   extend(Operation.prototype, {
@@ -373,9 +363,7 @@
       extend(this, {_isRunning: true});
 
       // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
-      this._toVisit.exhaust(function(directive){
-        directive.visit();
-      });
+      this._toVisit.exhaust('visit');
 
       extend(this, {_isRunning: false, _hasRun: true});
     },
