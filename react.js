@@ -17,8 +17,8 @@
 
   var throwError = js.error, throwErrorIf = js.errorIf, log = js.log, catchIf = js.catchIf;
   var bind = js.bind, create = js.create, unique = js.unique, extend = js.extend, trim = js.trim, isArray = js.isArray;
+  var keysFor = js.keys, hasKeys = js.hasKeys, among = js.among, clear = js.clear, concatArrays = js.concatArrays, toArray = js.toArray;
   var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
-  var keysFor = js.keys, hasKeys = js.hasKeys, among = js.among, clear = js.clear, concatArrays = js.concatArrays;
   var Set = js.Set;
 
   var arraySlice = Array.prototype.slice;
@@ -33,7 +33,6 @@
     isNumber: /^\d+$/
   };
 
-  var toArray = js.toArray;
 // asdf get rid of getScopeKey()
   var getScopeKey = function(object){
     var key = object.reactKey || (object.reactKey = unique('reactObject'));
@@ -247,7 +246,8 @@
   var Proxy = function(target){
     return getProxy(target) || setProxy(target, extend(this, {
       target: target,
-      observers: {}
+      observers: {},
+      observersByProperty: {}
     }));
   };
 
@@ -258,21 +258,6 @@
     observe: function(key, directive, prefix){
       directive.$$node.store();
       new Observer(directive, this.target, key, prefix).write();
-    },
-
-// asdf getting rid of Directive.fromKey entirely
-    // if there are no observers for the supplied key, do nothing
-    observersForKey: function(propertyKey){ return map( keysFor(this.target.observers[propertyKey]) || [], Observer.fromKey ); },
-    observersForKeys: function(keys){
-      // if no key is supplied, check every key
-      keys = (
-        isArray(keys) ? keys :
-        keys !== undefined ? [keys] :
-        keysFor(this.target).concat('length' in this.target && !this.target.propertyIsEnumerable('length') ? ['length'] : [])
-      );
-
-      // we first need to collect all the observers of the changed keys
-      return concatArrays( map(this.target.observers ? keys : [], this.observersForKey, this) );
     }
 
   });
@@ -430,13 +415,18 @@
       extend(this, {_isRunning: false, _hasRun: true});
     },
 
-//asdf get rid of this crazy caching
-    getProxy: function(object){ return this['proxy:'+object.reactKey] || (this['proxy:'+object.reactKey] = new Proxy(object)); },
-
     changed: function(object, keys){
-      each(this.getProxy(object).observersForKeys(keys), function(observer){
+      keys = (
+        isArray(keys) ? keys :
+        keys !== undefined ? [keys] :
+        keysFor(object).concat('length' in object && !object.propertyIsEnumerable('length') ? ['length'] : [])
+      );
+
+      each(keys, function(key){
+        each(toArray(new Proxy(object).observersByProperty[key] || {}), function(observer){
 //asdf replace with this.getMetaObserver(observer).dirty();
-        this.$(observer.directive.$$node).getDirective(observer.directive.key).dirtyObserver(observer);
+          this.$(observer.directive.$$node).getDirective(observer.directive.key).dirtyObserver(observer);
+        }, this);
       }, this);
       return this;
     }
@@ -591,7 +581,8 @@
       node: $$node[0],
       command: tokens[0],
       inputs: tokens.slice(1),
-      key: key
+      key: key,
+      observers: {}
     });
   };
 
@@ -940,7 +931,8 @@
   var Observer = function(directive, object, propertyKey, prefix){
     var proxy = getProxy(object);
     var key = [directive.uniqueKey(), getScopeKey(object), propertyKey, prefix].join(' ');
-    return proxy.observers[key] || (proxy.observers[key] = extend(this, {
+    var observersByProperty = proxy.observersByProperty[propertyKey] || (proxy.observersByProperty[propertyKey] = {});
+    return proxy.observers[key] || (proxy.observers[key] = observersByProperty[key] = directive.observers[key] = extend(this, {
       object: object,
       propertyKey: propertyKey,
       prefix: prefix,
@@ -950,10 +942,6 @@
   };
 
 //asdf change directive keys to be based on the strings of their definition (normalized)
-  Observer.fromKey = function(key){
-    var tokens = key.split(matchers.space);
-    return new Observer(new $$(react.nodes[tokens[0]]).getDirective(tokens[1]), react.scopes[tokens[2]], tokens[3], tokens[4]);
-  };
 
   extend(Observer.prototype, {
     write: function(){
