@@ -96,11 +96,12 @@
       return input;
     },
 
+//asdf make $$ not use 'new'
     anchor: function(node){
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-      var scopes = slice(arguments, 1);
-      var anchoredTokens = ['anchored'].concat(map(scopes, getScopeKey));
-      new Operation().$(this.nodes[getNodeKey(node)] = node).setDirective('anchored', anchoredTokens).$$node.update();
+      new $$(node).anchors = slice(arguments, 1);
+// asdf don't think this needs an operation
+      new Operation().$(this.nodes[getNodeKey(node)] = node).setDirective('anchored', ['anchored']).$$node.update();
       return node;
     },
 
@@ -119,6 +120,7 @@
       return focus;
     },{
 
+// asdf get rid of these helpers, rewrite for new .bound() syntax
       anchor: function(node){
         jQuery(node).anchor(this);
         return this;
@@ -157,19 +159,13 @@
           update: function(){ return react.update(this); },
 
           anchor: function(){
-            if(!arguments.length){
-              var scopes = this.anchors();
-              throwErrorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
-              return scopes[0];
-            }
-            return react.anchor.apply(react, [this].concat(slice(arguments)));
+            throwErrorIf(!arguments.length && this.anchors().length !== 1, '.anchor() can only be called on nodes with a single anchored object');
+            return arguments.length ? react.anchor.apply(react, [this].concat(slice(arguments))) : this.anchors()[0];
           },
 
-          anchors: function(){
-            return map(new Operation().$(this[0]).getDirective('anchored').inputs, function(scopeName){
-              return react.scopes[scopeName];
-            });
-          },
+// asdf change .bound(null) to .bound('_getProxy')
+// asdf add anchors array to each $$ instance
+          anchors: function(){ return new $$(this).anchors; },
 
 /*
           boundChildren: function(directiveString){
@@ -282,6 +278,7 @@
       key: options.key,
       prefix: options.prefix || '',
       // todo this shouldn't need a prefix
+// asdf don't need an anchor key?
       anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey)
     });
   };
@@ -453,7 +450,8 @@
 
     jQuery.prototype.init.call(setProxy(node, this), node).extend({
       node: node,
-      key: getNodeKey(node)
+      key: getNodeKey(node),
+      anchors: []
     }).extend({
       directives: new DirectiveList(this)
     });
@@ -725,7 +723,7 @@
       var index = this.$$node.directives.getIndex(this.key).toString();
       return (
         index === 'before' ? (
-          this.metaNode.getDirective('anchored').inputs.length ? nullDirective :
+          this.$$node.anchors.length ? nullDirective :
           !this.metaNode.wrappedParent() ? nullDirective :
           this.metaNode.wrappedParent().getDirective('after')
         ) :
@@ -841,7 +839,7 @@
   extend(DirectiveList.prototype, {
 
     toString: function(){ return this.orderedForString().join(', '); },
-    orderedForString: function(){ return (this.anchored.inputs.length ? [this.anchored] : []).concat(toArray(this)); },
+    orderedForString: function(){ return (this.$$node.anchors.length ? [this.anchored] : []).concat(toArray(this)); },
 
     getStorage: function(){ return this.$$node.getStorage.apply(this.$$node, arguments); },
     setStorage: function(){ return this.$$node.setStorage.apply(this.$$node, arguments); },
@@ -989,18 +987,11 @@
     },
 
     resolve_anchored: false,
-    anchored: function(/*token1, ...tokenN */){
-      //this.resetScopeChain();
-      var i;
-      for(i = 0; i < arguments.length; i+=1){
-        var token = arguments[i];
-        if(this.scopes[token]){
-          this.pushScope('anchor', this.scopes[token], {key:token});
-        }else{
-          // anchored directive failed to find a scope for the key
-          this.dead();
-        }
-      }
+    anchored: function(){
+// asdf whats this doing here? //this.resetScopeChain();
+      each(this.$$node.anchors, function(anchor){
+        this.pushScope('anchor', anchor, {key:'ASDF'}); // asdf key is now meaningless for anchors..?
+      }, this);
       this.onUpdate(function(){
         this.updateBranch();
       });

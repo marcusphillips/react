@@ -13,6 +13,7 @@
   - fix it so it filters out bound children
 - jquery syntax for finding anchored children
 - allow string inputs for templates
+- cache scopeChain objects between operations, invalidate only as necessary
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes
