@@ -48,7 +48,6 @@ QUnit.testStart = function(){
 QUnit.testDone = function(){
   $('#qunit-fixture')[0].innerHTML = '';
   $('#qunit-fixture')[0].innerHTML = '';
-  react.reset();
 };
 
 

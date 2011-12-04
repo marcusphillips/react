@@ -49,13 +49,9 @@
 
   var react = {
 
-    nodes: {},
-
     debug: function(){ debugging = true; },
-
-    reset: function(){
-      clear(this.nodes);
-    },
+    name: function(){ console && console.warn('react.name() is deprecated'); },
+    reset: function(){ console && console.warn('react.reset() is deprecated'); },
 
     // convenience method for setting object values and automatically calling changed on them
     set: function(object, key, value){
@@ -87,7 +83,7 @@
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
       new $$(node).anchors = slice(arguments, 1);
 // asdf don't think this needs an operation
-      new Operation().$(this.nodes[getNodeKey(node)] = node).setDirective('anchored', ['anchored']).$$node.update();
+      new Operation().$(node).setDirective('anchored', ['anchored']).$$node.update();
       return node;
     },
 
@@ -240,7 +236,6 @@
 //asdf re-order args
 //asdf make observe() a method of directive instead
     observe: function(key, directive, prefix){
-      directive.$$node.store();
       new Observer(directive, this.target, key, prefix).write();
     }
 
@@ -475,8 +470,6 @@
       }
       return this;
     },
-
-    store: function(){ react.nodes[this.key] = this.node; },
 
     setDirectivesString: function(value){
       // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
