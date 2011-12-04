@@ -78,7 +78,6 @@
       return input;
     },
 
-//asdf make $$ not use 'new'
     anchor: function(node){
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
       $$(node).extend({anchors: slice(arguments, 1)}).setDirective('anchored', ['anchored']).update();
@@ -87,16 +86,9 @@
 
     helpers: extend(function(focus, deeply){
       extend(focus, react.helpers);
-
-      if(deeply){
-        var key;
-        for(key in focus){
-          if(key !== 'set' && focus[key] && typeof focus[key] === 'object' && !focus[key].set){
-            react.helpers(focus[key], deeply);
-          }
-        }
-      }
-
+      deeply && each(focus, function(item, key){
+        key !== 'set' && item && typeof item === 'object' && !item.set && react.helpers(item, deeply);
+      });
       return focus;
     },{
 
@@ -113,11 +105,9 @@
       },
 
       del: function(keys){
-        var i;
-        keys = isArray(keys) ? keys : [keys];
-        for(i = 0; i < keys.length; i+=1){
-          delete this[keys[i]];
-        }
+        each(isArray(keys) ? keys : [keys], function(key){
+          delete this[key];
+        }, this);
         react.changed(this, keys);
       },
 
@@ -143,8 +133,6 @@
             return arguments.length ? react.anchor.apply(react, [this].concat(slice(arguments))) : this.anchors()[0];
           },
 
-// asdf change .bound(null) to .bound('_getProxy')
-// asdf add anchors array to each $$ instance
           anchors: function(){ return $$(this).anchors; },
 
 /*
@@ -199,13 +187,13 @@
    * Universal Object Proxies
    */
 
-  var getProxy = function(target){ return target.hasOwnProperty('bound') && target.bound._isBound && target.bound(null); };
+  var getProxy = function(target){ return target.hasOwnProperty('bound') && target.bound._isBound && target.bound('proxy'); };
 
   var setProxy = function(target, proxy){
     target.hasOwnProperty('bound') || ((target.bound = function(input){
       throwErrorIf(this !== target, '.bound() can only be called in the context of its original target object');
       return (
-        input === null ? proxy :
+        input === 'proxy' ? proxy :
         throwError()
       );
     })._isBound = true);
@@ -222,22 +210,13 @@
 
   // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
   var Proxy = function(target){
+    js.errorIf(target instanceof Proxy, 'Proxy of a proxy? You crazy.');
     return getProxy(target) || setProxy(target, extend(this, {
       target: target,
       observers: {},
       observersByProperty: {}
     }));
   };
-
-  extend(Proxy.prototype, {
-    // writes an association between a directive and a property on an object by annotating the object
-//asdf re-order args
-//asdf make observe() a method of directive instead
-    observe: function(key, directive, prefix){
-      new Observer(directive, this.target, key, prefix).write();
-    }
-
-  });
 
 
 
@@ -386,10 +365,8 @@
     run: function(){
       throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
       extend(this, {_isRunning: true});
-
       // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
-      this._toVisit.exhaust('visit');
-
+      this._toVisit.exhaust(['visit']);
       extend(this, {_isRunning: false, _hasRun: true});
     },
 
@@ -674,9 +651,10 @@
     _fullResolver: function(names){ return map(names, bind(this.lookup, this)); },
 
     _registerPotentialObservers: function(){
-      each(this._potentialObservers, function(potentialObserver/*, key? might be stored in an object (asdf)*/){
+      each(this._potentialObservers, function(potentialObserver){
         if(potentialObserver.scopeChain.anchorKey){
-          new Proxy(potentialObserver.scopeChain.scope).observe(potentialObserver.key, this.directive, potentialObserver.scopeChain.prefix);
+          new Observer(this.directive, potentialObserver.scopeChain.scope, potentialObserver.key, potentialObserver.scopeChain.prefix).write();
+// asdf potential observers can probably just be conditionally written using a write() method, rather than making the caller do it
         }
       }, this);
     },
@@ -904,7 +882,7 @@
    */
 
   var Observer = function(directive, object, propertyKey, prefix){
-    var proxy = getProxy(object);
+    var proxy = new Proxy(object);
     var key = [directive.uniqueKey(), propertyKey, prefix].join(' ');
     var observersByProperty = proxy.observersByProperty[propertyKey] || (proxy.observersByProperty[propertyKey] = {});
     return proxy.observers[key] || (proxy.observers[key] = observersByProperty[key] = directive.observers[key] = extend(this, {
