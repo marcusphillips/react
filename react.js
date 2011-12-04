@@ -237,6 +237,49 @@
   };
 
 
+
+
+  /*
+   * Object Proxies
+   */
+
+  // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
+  var Proxy = function(target){
+    return getProxy(target) || setProxy(target, extend(this, {
+      target: target,
+      observers: {}
+    }));
+  };
+
+  extend(Proxy.prototype, {
+    // writes an association between a directive and a property on an object by annotating the object
+//asdf re-order args
+//asdf make observe() a method of directive instead
+    observe: function(key, directive, prefix){
+      directive.$$node.store();
+      new Observer(directive, this.target, key, prefix).write();
+    },
+
+// asdf getting rid of Directive.fromKey entirely
+    // if there are no observers for the supplied key, do nothing
+    observersForKey: function(propertyKey){ return map( keysFor(this.target.observers[propertyKey]) || [], Observer.fromKey ); },
+    observersForKeys: function(keys){
+      // if no key is supplied, check every key
+      keys = (
+        isArray(keys) ? keys :
+        keys !== undefined ? [keys] :
+        keysFor(this.target).concat('length' in this.target && !this.target.propertyIsEnumerable('length') ? ['length'] : [])
+      );
+
+      // we first need to collect all the observers of the changed keys
+      return concatArrays( map(this.target.observers ? keys : [], this.observersForKey, this) );
+    }
+
+  });
+
+
+
+
   /*
    * Scope chains
    */
@@ -891,61 +934,28 @@
 
 
   /*
-   * Proxy
-   */
-
-  // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
-  var Proxy = function(object){
-    this._object = object;
-  };
-
-  extend(Proxy.prototype, {
-    // writes an association between a directive and a property on an object by annotating the object
-//asdf re-order args
-//asdf make observe() a method of directive instead
-    observe: function(key, directive, prefix){
-      directive.$$node.store();
-      new Observer(directive, this._object, key, prefix).write();
-    },
-
-    // if there are no observers for the supplied key, do nothing
-    observersForKey: function(propertyKey){ return map( keysFor(this._object.observers[propertyKey]) || [], Observer.fromKey ); },
-    observersForKeys: function(keys){
-      // if no key is supplied, check every key
-      keys = (
-        isArray(keys) ? keys :
-        keys !== undefined ? [keys] :
-        keysFor(this._object).concat('length' in this._object && !this._object.propertyIsEnumerable('length') ? ['length'] : [])
-      );
-
-      // we first need to collect all the observers of the changed keys
-      return concatArrays( map(this._object.observers ? keys : [], this.observersForKey, this) );
-    }
-
-  });
-
-
-
-  /*
    * Observer
    */
 
   var Observer = function(directive, object, propertyKey, prefix){
-    return extend(this, {
+    var proxy = getProxy(object);
+    var key = [directive.uniqueKey(), getScopeKey(object), propertyKey, prefix].join(' ');
+    return proxy.observers[key] || (proxy.observers[key] = extend(this, {
       object: object,
       propertyKey: propertyKey,
       prefix: prefix,
-      directive: directive
-    }).key = this._makeKey();
+      directive: directive,
+      key: key
+    }));
   };
 
+//asdf change directive keys to be based on the strings of their definition (normalized)
   Observer.fromKey = function(key){
     var tokens = key.split(matchers.space);
     return new Observer(new $$(react.nodes[tokens[0]]).getDirective(tokens[1]), react.scopes[tokens[2]], tokens[3], tokens[4]);
   };
 
   extend(Observer.prototype, {
-    _makeKey: function(){ return [this.directive.uniqueKey(), getScopeKey(this.object), this.propertyKey, this.prefix].join(' '); },
     write: function(){
       var observers = this.object.observers = this.object.observers || {};
       var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
