@@ -4,6 +4,7 @@ local
 - (internal) js.* iterators now pass the item as the first argument to the callback block
 - (internal) js.* iterators now run in the context of the input collection, unless you pass a context argument in after the block.
 - (internal) js.* iterators can accept strings and arrays to be transformed into a block
+- (internal) anchors now stored on node proxies, rather than in central hash
 
 1.3
 ---
