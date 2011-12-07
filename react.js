@@ -615,7 +615,7 @@
     _registerPotentialObservers: function(){
       each(this._potentialObservers, function(potentialObserver){
         if(potentialObserver.scopeChain.anchorKey){
-          new Observer(this.directive, potentialObserver.scopeChain.scope, potentialObserver.key, potentialObserver.scopeChain.prefix).write();
+          new Observer(this.directive, potentialObserver.scopeChain.scope, potentialObserver.key, potentialObserver.scopeChain.prefix);
 // asdf potential observers can probably just be conditionally written using a write() method, rather than making the caller do it
         }
       }, this);
@@ -856,16 +856,7 @@
     }));
   };
 
-//asdf change directive keys to be based on the strings of their definition (normalized)
-
-  extend(Observer.prototype, {
-    write: function(){
-      var observers = this.object.observers = this.object.observers || {};
-      var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
-      propertyObservers[this.key] = true;
-    }
-  });
-
+//asdf change directive keys to be based on the (normalized) strings of their definition
 
 
 
@@ -905,7 +896,7 @@
 
     resolve_anchored: false,
     anchored: function(){
-// asdf whats this doing here? //this.resetScopeChain();
+// asdf whats this doing here? "//this.resetScopeChain();"
       each(this.$$node.anchors, function(anchor){
         this.pushScope('anchor', anchor, {key:'ASDF'}); // asdf key is now meaningless for anchors..?
       }, this);
