@@ -1,4 +1,7 @@
 --- upcomming goals ---
+- !! replace all uses of 'in' operator with a call to js.has()
+- ! make bound() return a _$$ instance for any node-like objects
+- remove test calls to same(), replace with equal
 - bug: treat lookup failures like if blocks, turning off render and display
   - anchored
   - bindItem

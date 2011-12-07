@@ -12,18 +12,12 @@
    * Library-wide helpers
    */
 
+  var global = this;
+  // import js.* and other utilities into this scope
+  var among = js.among, bind = js.bind, catchIf = js.catchIf, clear = js.clear, concatArrays = js.concatArrays, create = js.create, curry = js.curry, each = js.each, exhaust = js.exhaust, extend = js.extend, filter = js.filter, hasKeys = js.hasKeys, isArray = js.isArray, keysFor = js.keys, log = js.log, map = js.map, noop = js.noop, reduce = js.reduce, Set = js.Set, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, toArray = js.toArray, trim = js.trim, unique = js.unique;
+  var boundProxy = bound.proxy;
+
   var debugging = false;
-  var noop = function(){};
-
-  var throwError = js.error, throwErrorIf = js.errorIf, log = js.log, catchIf = js.catchIf;
-  var bind = js.bind, create = js.create, unique = js.unique, extend = js.extend, trim = js.trim, isArray = js.isArray;
-  var keysFor = js.keys, hasKeys = js.hasKeys, among = js.among, clear = js.clear, concatArrays = js.concatArrays, toArray = js.toArray;
-  var map = js.map, reduce = js.reduce, each = js.each, filter = js.filter, exhaust = js.exhaust;
-  var Set = js.Set;
-
-  var arraySlice = Array.prototype.slice;
-  var slice = function(collection){ return arraySlice.call(collection, arraySlice.call(arguments, 1)); };
-
   var specialDirectives = {before: true, anchored: true, after: true};
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
@@ -184,44 +178,6 @@
 
 
   /*
-   * Universal Object Proxies
-   */
-
-  var getProxy = function(target){ return target.hasOwnProperty('bound') && target.bound._isBound && target.bound('proxy'); };
-
-  var setProxy = function(target, proxy){
-    target.hasOwnProperty('bound') || ((target.bound = function(input){
-      throwErrorIf(this !== target, '.bound() can only be called in the context of its original target object');
-      return (
-        input === 'proxy' ? proxy :
-        throwError()
-      );
-    })._isBound = true);
-    js.errorIf(!target.bound._isBound, 'object already has a different .bound property!');
-    return proxy;
-  };
-
-
-
-
-  /*
-   * Object Proxies
-   */
-
-  // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
-  var Proxy = function(target){
-    js.errorIf(target instanceof Proxy, 'Proxy of a proxy? You crazy.');
-    return getProxy(target) || setProxy(target, extend(this, {
-      target: target,
-      observers: {},
-      observersByProperty: {}
-    }));
-  };
-
-
-
-
-  /*
    * Scope chains
    */
 
@@ -355,6 +311,8 @@
 
   extend(Operation.prototype, {
 
+// asdf make getNodeKey able to handle jquery-style objects
+// asdf make this just call the MetaNode constructor, which should do the caching, and rename it to $$
     $: function(node){ return this._metaNodes[getNodeKey(node)] || (this._metaNodes[getNodeKey(node)] = $$(node).makeMeta(this)); },
 
     hasRun: function(){ return this._hasRun; },
@@ -378,7 +336,7 @@
       );
 
       each(keys, function(key){
-        each(toArray(new Proxy(object).observersByProperty[key] || {}), function(observer){
+        each(toArray(boundProxy(object).observersByProperty[key] || {}), function(observer){
 //asdf replace with this.getMetaObserver(observer).dirty();
           this.$(observer.directive.$$node).getDirective(observer.directive.key).dirtyObserver(observer);
         }, this);
@@ -400,19 +358,23 @@
   var $$ = function(node){
     node && 'length' in node && (node = node[0]);
     throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a single DOM node');
-    var proxy = getProxy(node);
-    throwErrorIf(proxy && proxy.directives._validatedDirectivesString !== proxy.getDirectivesString(), 'directives string changed manually since last visit');
-    return proxy || new _$$(node);
+    var proxy = boundProxy(node);
+    var $$node = proxy.meta('$$node');
+    throwErrorIf($$node && $$node.directives._validatedDirectivesString !== $$node.getDirectivesString(), 'directives string changed manually since last visit');
+    return $$node || proxy.meta('$$node', new _$$(node)).meta('$$node');
   };
 
   var _$$ = function(node){
-    jQuery.prototype.init.call(setProxy(node, this), node).extend({
+    jQuery.prototype.init.call(this, node);
+    extend(this, {
       node: node,
       key: getNodeKey(node),
       anchors: []
-    }).extend({
+    });
+    extend(this, {
       directives: new DirectiveList(this)
-    }).getStorage('initialized') || this.initializeNode();
+    });
+    this.getStorage('initialized') || this.initializeNode();
   };
 
   _$$.prototype = create(jQuery.prototype, {
@@ -882,7 +844,7 @@
    */
 
   var Observer = function(directive, object, propertyKey, prefix){
-    var proxy = new Proxy(object);
+    var proxy = boundProxy(object);
     var key = [directive.uniqueKey(), propertyKey, prefix].join(' ');
     var observersByProperty = proxy.observersByProperty[propertyKey] || (proxy.observersByProperty[propertyKey] = {});
     return proxy.observers[key] || (proxy.observers[key] = observersByProperty[key] = directive.observers[key] = extend(this, {
@@ -1151,7 +1113,7 @@
    * Exporting library
    */
 
-  window.jQuery && react.integrate.jQuery();
-  window.react = react;
+  global.jQuery && react.integrate.jQuery();
+  global.react = react;
 
 }());
