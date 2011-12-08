@@ -204,7 +204,7 @@
     extend: function(type, additionalScope, options){ return new ScopeChain(type, this, additionalScope, options); },
     extendWithMany: function(type, scopes, options){
       return reduce(scopes || [], this, function(memo, scope){
-        return memo.extend(type, scope, options);
+        memo.extend(type, scope, options);
       });
     },
 
@@ -423,7 +423,7 @@
     },
     getDirectiveArrays: function(){
       return reduce(this.getDirectiveStrings(), [], function(memo, string){
-        return string ? memo.concat([trim(string).split(matchers.space)]) : memo;
+        string && memo.push(trim(string).split(matchers.space));
       });
     }
 
@@ -722,7 +722,6 @@
     toString: function(){
       return reduce(this._ltr, [], function(memo, right, left){
         memo[left] = right;
-        return memo;
       }).join(',');
     },
 
