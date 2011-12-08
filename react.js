@@ -87,7 +87,6 @@
       return focus;
     },{
 
-// asdf get rid of these helpers, rewrite for new .bound() syntax
       anchor: function(node){
         jQuery(node).anchor(this);
         return this;
