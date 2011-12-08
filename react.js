@@ -30,7 +30,8 @@
   // returns a unique, consistent key for every node
   var getNodeKey = function(node){
     node instanceof jQuery && (node = node[0]);
-    return node._reactKey || (node._reactKey = unique('reactKey'));
+    var proxy = boundProxy(node);
+    return proxy.boundKey || (proxy.boundKey = unique('boundKey'));
   };
 
   // Fallthroughs provide a mechanism for binding one key in a scope to the value at another key
@@ -67,7 +68,7 @@
       }
       throwErrorIf(!node, 'you did not pass a valid node to react.update()');
       var operation = new Operation();
-      operation.$(node).getDirective('before').updateBranch();
+      operation.makeMetaNode(node).getDirective('before').updateBranch();
       operation.run();
       return input;
     },
@@ -192,10 +193,8 @@
       scope: additionalScope,
       type: type,
       key: options.key,
-      prefix: options.prefix || '',
+      prefix: options.prefix || ''
       // todo this shouldn't need a prefix
-// asdf don't need an anchor key?
-      anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey)
     });
   };
 
@@ -272,8 +271,7 @@
         }
         return extendDetails(emptyScopeChain.extend('dotAccess', value, {
           // todo - i think this needs to pass a key
-          prefix: this.prefix + baseKey + '.',
-          anchorKey: this.anchorKey
+          prefix: this.prefix + baseKey + '.'
         }).detailedLookup(path.join('.'), options));
       }
 
@@ -286,7 +284,7 @@
     // provides a description of the scope chain in array format, optimized for viewing in the console
     describe: function(){
       return [
-        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.key ? ' (key: '+this.key+')': '') + (this.anchorKey ? ', anchored to: '+this.anchorKey+')': '')]
+        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.key ? ' (key: '+this.key+')': '')]
       ].concat(this.parent ? this.parent.describe() : []);
     }
 
@@ -306,14 +304,12 @@
   var Operation = function(){
     // directives we plan to visit, by key
     // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-    extend(this, { _toVisit: makeDirectiveSet(), _metaNodes: {}, _hasRun: false, _isRunning: false });
+    extend(this, { _toVisit: makeDirectiveSet(), _metaObservers: [], _metaNodes: {}, _hasRun: false, _isRunning: false });
   };
 
   extend(Operation.prototype, {
 
-// asdf make getNodeKey able to handle jquery-style objects
-// asdf make this just call the MetaNode constructor, which should do the caching, and rename it to $$
-    $: function(node){ return this._metaNodes[getNodeKey(node)] || (this._metaNodes[getNodeKey(node)] = $$(node).makeMeta(this)); },
+    makeMetaNode: function(node){ return this._metaNodes[getNodeKey(node)] || (this._metaNodes[getNodeKey(node)] = $$(node).makeMeta(this)); },
 
     hasRun: function(){ return this._hasRun; },
     isRunning: function(){ return this._isRunning; },
@@ -337,11 +333,14 @@
 
       each(keys, function(key){
         each(toArray(boundProxy(object).observersByProperty[key] || {}), function(observer){
-//asdf replace with this.getMetaObserver(observer).dirty();
-          this.$(observer.directive.$$node).getDirective(observer.directive.key).dirtyObserver(observer);
+          this.getMetaObserver(observer).dirty();
         }, this);
       }, this);
       return this;
+    },
+
+    getMetaObserver: function(observer){
+      return this._metaObservers[observer.key] || (this._metaObservers[observer.key] = new MetaObserver(this, observer));
     }
 
   });
@@ -436,10 +435,10 @@
    */
 
   var MetaNode = function($$node, operation){
-    extend(this, MetaNode.prototype, {
+    extend(this, {
       $$node: $$node,
       metaDirectives: {},
-      _operation: operation,
+      operation: operation,
       _isSearched: undefined
     });
   };
@@ -453,7 +452,7 @@
       return (
         ! parent ? null :
         parent === document ? null :
-        this._operation.$(parent)
+        this.operation.makeMetaNode(parent)
       );
     },
 
@@ -463,7 +462,7 @@
     // todo: optimize selection criteria
     // return map(toArray(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
     getReactDescendants: function(){
-      return map((this.$$node.find('[react]')), bind(this._operation.$, this._operation));
+      return map((this.$$node.find('[react]')), bind(this.operation.makeMetaNode, this.operation));
     },
 
     search: function(){
@@ -520,7 +519,7 @@
       directive: directive,
       metaNode: metaNode,
       $$node: metaNode.$$node,
-      _operation: metaNode._operation,
+      _operation: metaNode.operation,
       _scopeChain: undefined,
       _isVisited: undefined,
       _isDead: undefined,
@@ -535,7 +534,7 @@
   MetaDirective.prototype = extend(create(commands), {
     constructor: MetaDirective,
 
-    $: function(node){ return this._operation.$(node); },
+    $: function(node){ return this._operation.makeMetaNode(node); },
     search: function(){ this.metaNode.search(); },
 
     resetScopeChain: function(){ this._scopeChain = emptyScopeChain; },
@@ -614,10 +613,8 @@
 
     _registerPotentialObservers: function(){
       each(this._potentialObservers, function(potentialObserver){
-        if(potentialObserver.scopeChain.anchorKey){
-          new Observer(this.directive, potentialObserver.scopeChain.scope, potentialObserver.key, potentialObserver.scopeChain.prefix);
+        new Observer(this.directive, potentialObserver.scopeChain.scope, potentialObserver.key, potentialObserver.scopeChain.prefix);
 // asdf potential observers can probably just be conditionally written using a write() method, rather than making the caller do it
-        }
       }, this);
     },
 
@@ -792,7 +789,6 @@
         after: $$node.makeDirective('after', ['after'])
       });
 
-//asdf move to a linked list, and store all directives by their key, not index
       for(i = 0; i < tokenArrays.length; i++){
         this[i] = $$node.makeDirective(isInitialized ? this.getKey(i) : this.makeKey(i), tokenArrays[i]);
       }
@@ -857,6 +853,27 @@
   };
 
 //asdf change directive keys to be based on the (normalized) strings of their definition
+
+
+
+
+  /*
+   * MetaObserver
+   */
+
+  var MetaObserver = function(operation, observer){
+    extend(this, {
+      operation: operation,
+      observer: observer
+    });
+  };
+
+  extend(MetaObserver.prototype, {
+    dirty: function(){
+      this.operation.makeMetaNode(this.observer.directive.$$node).getDirective(this.observer.directive.key).dirtyObserver(this.observer);
+    }
+  });
+
 
 
 
