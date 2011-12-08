@@ -14,7 +14,7 @@
 
   var global = this;
   // import js.* and other utilities into this scope
-  var among = js.among, bind = js.bind, catchIf = js.catchIf, clear = js.clear, concatArrays = js.concatArrays, create = js.create, curry = js.curry, each = js.each, exhaust = js.exhaust, extend = js.extend, filter = js.filter, hasKeys = js.hasKeys, isArray = js.isArray, keysFor = js.keys, log = js.log, map = js.map, noop = js.noop, reduce = js.reduce, Set = js.Set, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, toArray = js.toArray, trim = js.trim, unique = js.unique;
+  var among = js.among, bind = js.bind, catchIf = js.catchIf, clear = js.clear, concatArrays = js.concatArrays, create = js.create, curry = js.curry, each = js.each, exhaust = js.exhaust, extend = js.extend, filter = js.filter, has = js.has, hasKeys = js.hasKeys, isArray = js.isArray, keysFor = js.keys, log = js.log, map = js.map, noop = js.noop, reduce = js.reduce, Set = js.Set, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, toArray = js.toArray, trim = js.trim, unique = js.unique;
   var boundProxy = bound.proxy;
 
   var debugging = false;
@@ -259,7 +259,7 @@
       details.potentialObservers.push({scopeChain: this, key: baseKey});
       details.didMatchFocus || (details.didMatchFocus = !path.length && options.checkFocus && options.checkFocus === this.scope);
       // recurse onto the parent scopeChain if the lookup fails at this level
-      if(! (baseKey in this.scope) ){
+      if(!has(this.scope, baseKey)){
         return extendDetails(this.parent.detailedLookup(key, options));
       }
 
@@ -328,7 +328,7 @@
       keys = (
         isArray(keys) ? keys :
         keys !== undefined ? [keys] :
-        keysFor(object).concat('length' in object && !object.propertyIsEnumerable('length') ? ['length'] : [])
+        keysFor(object).concat(has(object, 'length') && !object.propertyIsEnumerable('length') ? ['length'] : [])
       );
 
       each(keys, function(key){
@@ -355,7 +355,7 @@
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
   // Within the scope of the Operation constructor, all calls to $$() return a customized jQuery object. For access to the original, use jQuery()
   var $$ = function(node){
-    node && 'length' in node && (node = node[0]);
+    node && has(node, 'length') && (node = node[0]);
     throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a single DOM node');
     var proxy = boundProxy(node);
     var $$node = proxy.meta('$$node');
