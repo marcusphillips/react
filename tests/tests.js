@@ -391,7 +391,7 @@ test('updating anchored nodes does not revisit all nodes', function(){
 
 test('anchored nodes do not inherit parent scope', function(){
   $userImage.anchor({}); // user has no 'deleted' key
-  $blogPost.anchor({deleted: true})
+  $blogPost.anchor({deleted: true});
   ok(!$userImage.hasClass('deleted'));
 });
 

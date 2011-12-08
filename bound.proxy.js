@@ -41,14 +41,14 @@ myObject.bound('del', 'foo').bound({bar:'baz'}).bound('prop', 'foo');
   var curry = js.curry, each = js.each, extend = js.extend, log = js.log, map = js.map, noop = js.noop, prop = js.prop, reduce = js.reduce, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf;
 
   var bound = function(target){
-    errorIf(window.jQuery && target instanceof window.jQuery || target.nodeType === 1, 'bound() cannot yet proxy node-like objects');
+    throwErrorIf(window.jQuery && target instanceof window.jQuery || target.nodeType === 1, 'bound() cannot yet proxy node-like objects');
     return new Proxy(target);
   };
 
   var proxy = bound.proxy = function(target){ return new Proxy(target); };
 
   var Proxy = function(object){
-    js.errorIf(object instanceof Proxy, 'cannot proxy a proxy');
+    throwErrorIf(object instanceof Proxy, 'cannot proxy a proxy');
 
     // proxies are cached on the object, so if the object has one already, return it
     if(object.hasOwnProperty('bound')){

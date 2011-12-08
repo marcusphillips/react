@@ -577,8 +577,8 @@
       }, this);
     },
 
-    onUpdate: function(callback){
-      this.shouldUpdate() && callback && callback.call(this);
+    onUpdate: function(callback, context){
+      this.shouldUpdate() && callback && callback.call(context || this);
       return this;
     },
 
@@ -896,13 +896,10 @@
 
     resolve_anchored: false,
     anchored: function(){
-// asdf whats this doing here? "//this.resetScopeChain();"
       each(this.$$node.anchors, function(anchor){
         this.pushScope('anchor', anchor, {key:'ASDF'}); // asdf key is now meaningless for anchors..?
       }, this);
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch, this);
     },
 
 
@@ -913,9 +910,7 @@
 
     _withScope: function(type, key){
       var scope = this.lookup(key);
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch, this);
       if(scope){
         this.$$node.removeClass('reactConditionallyHidden');
         this.pushScope(type, scope, {key:key});
@@ -940,9 +935,7 @@
       this._createItemNodes(function(index, itemNode){
         this.$(itemNode).$$node.directives.unshift(['withinItem', index]);
       });
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch(), this);
     },
 
     resolve_bindItem: false,
@@ -962,9 +955,7 @@
 
       this.pushScope('bindItem', itemBindings, {key:key});
 
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch(), this);
     },
 
 
