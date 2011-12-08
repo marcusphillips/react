@@ -1,4 +1,7 @@
 --- upcomming goals ---
+- !! replace all uses of 'in' operator with a call to js.has()
+- ! make bound() return a _$$ instance for any node-like objects
+- remove test calls to same(), replace with equal
 - bug: treat lookup failures like if blocks, turning off render and display
   - anchored
   - bindItem
@@ -13,6 +16,7 @@
   - fix it so it filters out bound children
 - jquery syntax for finding anchored children
 - allow string inputs for templates
+- cache scopeChain objects between operations, invalidate only as necessary
 
 --- quick refactors ---
 - get rid of _conditionalShow(), rely on classes
@@ -39,6 +43,13 @@
 - assignments to the local scope chain object
 - allow literals like true and false
 - allow inline numbers
+- some sort of explicitly named anchor feature? similar to the old react.name() function:
+  test('can name objects', function(){
+    ok(react.name('visitor', alice) === alice, 'naming a scope returns the scope');
+    ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
+  });
+
+
 
 --- improvements ---
 - allow string inputs to have spaces (build a parser to replace regexes - ack!)

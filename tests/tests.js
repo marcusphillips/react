@@ -1,76 +1,5 @@
 (function(){
 
-var $originalFixtureNodes, nodes, scopes;
-
-react.debug();
-
-react.integrate.jQuery();
-
-$(function(){
-  $originalFixtureNodes = $('#fixture-nodes').remove();
-});
-
-for(var key in {'join':1}){
-  jQuery.fn[key] = jQuery.fn[key] || Array.prototype[key];
-}
-
-
-
-
-/*
- * For each test
- */
-
-// clones new fixture nodes from those found in tests/index.html
-var refreshNodes = function(){
-  js.errorIf(!$originalFixtureNodes, 'fixture nodes not defined before attempted node refresh!');
-  nodes = {};
-  for(var i = 0; i < 5; i++){
-    $originalFixtureNodes.clone().find('[data-fixture]').each(function(which, node){
-      var key = $(node).attr('data-fixture') + (i ? (i+1).toString() : '');
-      js.errorIf(nodes[key], 'Two fixture nodes have the same name, "'+key+'"');
-      $(node).attr('data-fixture', key);
-      nodes['$'+key] = window['$'+key] = $(node);
-      nodes[key] = node;
-    }).end().html('');
-  }
-};
-
-QUnit.testStart = function(){
-  refreshNodes();
-  scopes = makeFixtures();
-  // make all scope objects available in the global scope
-  for(var key in scopes){
-    window[key] = scopes[key];
-  }
-};
-
-QUnit.testDone = function(){
-  $('#qunit-fixture')[0].innerHTML = '';
-  $('#qunit-fixture')[0].innerHTML = '';
-  react.reset();
-};
-
-
-
-
-/*
- * helpers
- */
-
-var throws = function(block, description){
-  var didThrow = false;
-  try{
-    block();
-  } catch (error) {
-    didThrow = true;
-  }
-  ok(didThrow, description);
-};
-
-
-
-
 /*
  * basics
  */
@@ -425,11 +354,6 @@ test('functions can be used as namespaces without running', function(){
 
 module('anchor');
 
-test('can name objects', function(){
-  ok(react.name('visitor', alice) === alice, 'naming a scope returns the scope');
-  ok(react.scopes.visitor === alice, 'react.scopes held the specified object at the specified name');
-});
-
 test('anchored nodes re-render on object change', function(){
   alice.anchor($name).anchor($username).set({name: 'alison', username: 'crazygrrl'});
   same([$name.html(), $username.html()], ['alison','crazygrrl'], 'anchored nodes were updated when relevant object was changed');
@@ -467,7 +391,7 @@ test('updating anchored nodes does not revisit all nodes', function(){
 
 test('anchored nodes do not inherit parent scope', function(){
   $userImage.anchor({}); // user has no 'deleted' key
-  $blogPost.anchor({deleted: true})
+  $blogPost.anchor({deleted: true});
   ok(!$userImage.hasClass('deleted'));
 });
 
