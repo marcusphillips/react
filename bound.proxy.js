@@ -38,7 +38,7 @@ myObject.bound('del', 'foo').bound({bar:'baz'}).bound('prop', 'foo');
 (function(){
 
   // import js.* and other utilities into this scope
-  var curry = js.curry, each = js.each, extend = js.extend, log = js.log, map = js.map, noop = js.noop, prop = js.prop, reduce = js.reduce, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf;
+  var curry = js.curry, each = js.each, extend = js.extend, log = js.log, map = js.map, noop = js.noop, prop = js.prop, reduce = js.reduce, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, unique = js.unique;
 
   var bound = function(target){
     throwErrorIf(window.jQuery && target instanceof window.jQuery || target.nodeType === 1, 'bound() cannot yet proxy node-like objects');
@@ -56,6 +56,7 @@ myObject.bound('del', 'foo').bound({bar:'baz'}).bound('prop', 'foo');
     }
 
     var proxy = extend(this, {
+      key: unique(object.nodeType === 1 ? 'boundNode' : 'boundObject'),
       object: object,
       observers: {},
       observersByProperty: {}
@@ -82,8 +83,8 @@ myObject.bound('del', 'foo').bound({bar:'baz'}).bound('prop', 'foo');
   var proxyPrototype = extend(Proxy.prototype, {
     // publish the supplied event, or all pending ones? (could be a conceptual collision between the notions of .commit() and .publish() - might not be able to overlap them)
     proxy: function(){ return this; },
-    pub: function(){ throwError('not written'); },
-    sub: function(){ throwError('not written'); },
+    pub: function(){ throwError('publish is not written'); },
+    sub: function(){ throwError('subscribe is not written'); },
     meta: function(key, val){ return prop.apply(this, [this].concat(slice(arguments))); }
   });
 

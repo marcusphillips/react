@@ -14,7 +14,7 @@
 
   var global = this;
   // import js.* and other utilities into this scope
-  var among = js.among, bind = js.bind, catchIf = js.catchIf, clear = js.clear, concatArrays = js.concatArrays, create = js.create, curry = js.curry, each = js.each, exhaust = js.exhaust, extend = js.extend, filter = js.filter, has = js.has, hasKeys = js.hasKeys, isArray = js.isArray, keysFor = js.keys, log = js.log, map = js.map, noop = js.noop, reduce = js.reduce, Set = js.Set, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, toArray = js.toArray, trim = js.trim, unique = js.unique;
+  var among = js.among, bind = js.bind, catchIf = js.catchIf, clear = js.clear, concatArrays = js.concatArrays, create = js.create, curry = js.curry, each = js.each, exhaust = js.exhaust, extend = js.extend, filter = js.filter, has = js.has, hasKeys = js.hasKeys, isArray = js.isArray, keysFor = js.keys, log = js.log, map = js.map, noop = js.noop, reduce = js.reduce, Set = js.Set, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, toArray = js.toArray, trim = js.trim;
   var boundProxy = bound.proxy;
 
   var debugging = false;
@@ -28,11 +28,7 @@
   };
 
   // returns a unique, consistent key for every node
-  var getNodeKey = function(node){
-    node instanceof jQuery && (node = node[0]);
-    var proxy = boundProxy(node);
-    return proxy.boundKey || (proxy.boundKey = unique('boundKey'));
-  };
+  var getNodeKey = function(node){ return boundProxy(node instanceof jQuery ? node[0] : node).key; };
 
   // Fallthroughs provide a mechanism for binding one key in a scope to the value at another key
   var Fallthrough = function(key){ this.key = key; };
@@ -207,91 +203,79 @@
       });
     },
 
-    lookup: function(){ return this.detailedLookup.apply(this, arguments).value; },
-
-    // provides the value at a given key by looking through the scope chain from this leaf up
-    detailedLookup: function(key, options){
-      var negate;
-      options = options || {};
-      key = key.toString();
-      if(key[0] === '!'){
-        negate = true;
-        key = key.slice(1);
-      }
-      // the details object will contain all interesting aspects of this lookup
-      // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
-      var details = {potentialObservers: []};
-      // extend details must be called on any return values, since it handles the final step of negation
-      var extendDetails = function(moreDetails){
-        var key;
-        for(key in moreDetails||{}){
-          details[key] = (
-            key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
-            key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
-            moreDetails[key]
-          );
-        }
-        if(negate){ details.value = !details.vailue; }
-        return details;
-      };
-
-      // all lookups fail in the empty scope chain
-      if(this === emptyScopeChain){
-        return extendDetails({failed:true});
-      }
-
-      if (matchers.isString.test(key)) {
-        throwErrorIf(negate, 'You can\'t negate literals using the exlamation point');
-        return extendDetails({value: key.slice(1, key.length-1)});
-      }
-
-      var path = key.split('.');
-      // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
-      var baseKey = path.shift();
-      var value = this.scope[baseKey];
-
-      // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
-      if(value instanceof Fallthrough){
-        return extendDetails(this.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
-      }
-
-      details.potentialObservers.push({scopeChain: this, key: baseKey});
-      details.didMatchFocus || (details.didMatchFocus = !path.length && options.checkFocus && options.checkFocus === this.scope);
-      // recurse onto the parent scopeChain if the lookup fails at this level
-      if(!has(this.scope, baseKey)){
-        return extendDetails(this.parent.detailedLookup(key, options));
-      }
-
-      // for dot access
-      if(path.length){
-        if(value === undefined || value === null){
-          // Could not find the key on a null or undefined object at path this.prefix+baseKey from this.scope
-          return extendDetails();
-        }
-        return extendDetails(emptyScopeChain.extend('dotAccess', value, {
-          // todo - i think this needs to pass a key
-          prefix: this.prefix + baseKey + '.'
-        }).detailedLookup(path.join('.'), options));
-      }
-
-      // functions are called before being returned
-      value = typeof value === 'function' ? value.call(this.scope) : value;
-
-      return extendDetails({value: value});
-    },
+    lookup: function(){ return this.resolve.apply(this, arguments).value; },
+    resolve: function(pathString, options){ return new Resolution(this, pathString, options); },
 
     // provides a description of the scope chain in array format, optimized for viewing in the console
     describe: function(){
       return [
-        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.key ? ' (key: '+this.key+')': '')]
+        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.prefix ? ' (prefix: '+this.prefix+')': '')]
       ].concat(this.parent ? this.parent.describe() : []);
     }
 
   });
 
   var emptyScopeChain = new ScopeChain('empty');
+  // all lookups fail in the empty scope chain
+  emptyScopeChain.resolve = function(){ return {failed: true, potentialObservers: []}; };
 
 
+
+
+  /*
+   * Resolution
+   */
+
+  // provides the value at a given path key, by looking through the scope chain from a given link upwards
+  var Resolution = function(scopeChain, pathString, options){
+    pathString = isArray(pathString) ? pathString.join('.') : pathString.toString();
+    extend(this, {lowestScopeChain: scopeChain, potentialObservers: [], options: options || {}});
+    var negate = pathString[0] === '!';
+    negate && (pathString = pathString.slice(1));
+
+    if(matchers.isString.test(pathString)){
+      return extend(this, {value: pathString.slice(1, pathString.length-1)});
+    };
+
+    var path = pathString.split('.');
+    this.resolveName(path.shift(), path);
+    typeof this.value === 'function' && (this.value = this.value.call(this.lowestScopeChain.scope));
+    negate && (this.value = !this.value);
+  };
+
+  extend(Resolution.prototype, {
+
+    resolveName: function(key, path){
+      var originalKey = key;
+      var value;
+      while((value = this.lowestScopeChain.scope[key]) instanceof Fallthrough){
+        // a Fallthrough object remaps a key to a different key in the parent scope (acts as binding)
+        this.lowestScopeChain = this.lowestScopeChain.parent;
+        key = value.key;
+      }
+
+      this.potentialObservers.push({scopeChain: this.lowestScopeChain, key: key});
+
+      this.didMatchFocus || (this.didMatchFocus = this.options.checkFocus === this.lowestScopeChain.scope);
+
+      // recurse onto the parent scopeChain if the lookup fails at this level
+      this.extend(has(this.lowestScopeChain.scope, key) ? {value: value} : this.lowestScopeChain.parent.resolve(key, this.options));
+
+      // for dot access
+      path.length && this.value && this.extend(emptyScopeChain.extend('dotAccess', this.value, {
+        prefix: this.lowestScopeChain.prefix + originalKey + '.'
+      }).resolve(path, this.options));
+    },
+
+    extend: function(moreDetails){
+      moreDetails || (moreDetails = {});
+      return extend(this, moreDetails, {
+        potentialObservers: (this.potentialObservers || []).concat(moreDetails.potentialObservers || []),
+        didMatchFocus: this.didMatchFocus || moreDetails.didMatchFocus
+      });
+    }
+
+  });
 
 
   /*
@@ -557,7 +541,7 @@
     },
 
     lookup: function(key){
-      var details = this.getScopeChain().detailedLookup(key);
+      var details = this.getScopeChain().resolve(key);
       this._potentialObservers = this._potentialObservers.concat(details.potentialObservers);
       return details.value;
     },
@@ -568,10 +552,9 @@
     },
 
     dirtyObserverPertains: function(){
-      var scopeChain = this.getScopeChain();
       return reduce(this._dirtyObservers, false, function(memo, observer){
         // ignore the object if it's not in the same path that lead to registration of the observer
-        return memo || scopeChain.detailedLookup(observer.prefix + observer.propertyKey, {checkFocus: observer.object}).didMatchFocus;
+        return memo || this.getScopeChain().resolve(observer.prefix + observer.propertyKey, {checkFocus: observer.object}).didMatchFocus;
       }, this);
     },
 

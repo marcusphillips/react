@@ -34,6 +34,7 @@
   - support precedence (anchor, with, ..., loop)
 - ARCHITECTURE: rename to bound
 
+- INTERFACE: make a way to tell bound to update a moved dom node to reflect its current scope
 - INTERFACE (small): make bound() return a _$$ instance for any node-like objects
 - INTERFACE: add each directive, which doesn't get an index
   - INTERFACE (repair/deprecation): phase out 'for' directive
@@ -111,6 +112,9 @@
 
 
 --- tests ---
+- tests around assumptions for template modification
+  - moving a subtree within the structure makes it stop behaving in a bound fashion
+    - and disassociates the listeners?
 - test iteration count to ensure this behavior is working: earmark any nodes that have been found in a querySelectorAll call, so we don't have to add their children again when they show up in the 'branchesToConsider' list
 - negation doesnt break for dot access
 - classIf is not cumulative. the second time a class is added, the old one will not be cleaned up

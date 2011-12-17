@@ -288,13 +288,32 @@ test('nested withinEachs', function(){
 module("within");
 
 test('scope can be shifted within a property', function(){
-  ok( bob.pet.alergy === 'chocolate' &&
-   'alergy' in alice.pet && alice.pet.alergy === undefined &&
+  ok(
+    bob.pet.alergy === 'chocolate' &&
+    'alergy' in alice.pet && alice.pet.alergy === undefined &&
     !('alergy' in charlie.pet)
   );
   equal($petAlergy.anchor(alice).html(), '', 'key did not fall through when local key is in object, but undefined');
   equal($petAlergy.anchor(bob).html()  , 'chocolate', 'content was correct from within a subobject');
   equal($petAlergy.anchor(charlie).html(), '', 'key fell through fell through to next higher scope when local key is missing');
+});
+
+test('updating a property that has a within directive listening to it doesn\'t result in re-searching all contained nodes' , function(){
+  $addressCard.anchor(alice).append($street2);
+  equal($street.html(), 'cornell', 'first street node got rendered to input value');
+  equal($street2.html(), 'orig', 'second street node was not rendered and still has original value');
+  alice.set('address', {street: 'ashbury'});
+  equal($street.html(), 'ashbury', 'first street node got rerendered');
+// asdf todo
+//  equal($street2.html(), 'orig', 'second street node does not get updated value');
+});
+
+test('adding a property that was not available at render time to a key that is referenced by a within directive results in updates to that directive\'s children' , function(){
+  delete alice.address;
+  $addressCard.anchor(alice);
+  equal($street.html(), 'orig', 'first street node got rendered to input value');
+  alice.set('address', {street: 'ashbury'});
+  equal($street.html(), 'ashbury', 'first street node got rerendered');
 });
 
 test('within directive works well with changed method', function(){
