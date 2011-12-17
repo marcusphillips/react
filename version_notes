@@ -1,3 +1,14 @@
+1.3.1
+---
+- deprecated react.nodes hash, react.scopes hash, and react.name(object, nameKey) - nodes and scope objects are not centrally stored anymore, and global the scope feature isnt supported fully enough yet to leave in
+- (internal) directives are refered to by persistent keys, not thier index in the string
+- (internal) js.* iterators now pass the item as the first argument to the callback block
+- (internal) js.* iterators now run in the context of the input collection, unless you pass a context argument in after the block.
+- (internal) js.* iterators can accept strings and arrays to be transformed into a block
+- (internal) anchors now stored on node proxies, rather than in central hash
+- (internal) annotating objects via bound.prototype closure scope, rather than with string serializations
+- (internal) using a Resolution class to handle .lookup() operation
+
 1.3
 ---
 - react automatically integrates with jQuery if it is available in the global scope

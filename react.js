@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 1.3, http://github.com/marcusphillips/react
+ * Version 1.3.1, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
@@ -12,10 +12,13 @@
    * Library-wide helpers
    */
 
-  var noop = function(){};
+  var global = this;
+  // import js.* and other utilities into this scope
+  var among = js.among, bind = js.bind, catchIf = js.catchIf, clear = js.clear, concatArrays = js.concatArrays, create = js.create, curry = js.curry, each = js.each, exhaust = js.exhaust, extend = js.extend, filter = js.filter, has = js.has, hasKeys = js.hasKeys, isArray = js.isArray, keysFor = js.keys, log = js.log, map = js.map, noop = js.noop, reduce = js.reduce, Set = js.Set, slice = js.slice, throwError = js.error, throwErrorIf = js.errorIf, toArray = js.toArray, trim = js.trim;
+  var boundProxy = bound.proxy;
 
   var debugging = false;
-
+  var specialDirectives = {before: true, anchored: true, after: true};
   var matchers = {
     directiveDelimiter: /\s*,\s*/,
     space: /\s+/,
@@ -25,27 +28,7 @@
   };
 
   // returns a unique, consistent key for every node
-  var getNodeKey = function(node){
-    var key = jQuery(node).data("reactKey");
-    if(!key){
-      key = js.util.unique('reactNode');
-      jQuery(node).data("reactKey", key);
-    }
-    return key;
-  };
-
-  var getScopeKey = function(object){
-    return (object.reactKey = object.reactKey || js.util.unique('reactObject'));
-  };
-
-  var makeArrayFromArrayLikeObject = function(arrayLikeObject){
-    var array = [], i, length;
-    for(i = 0, length = arrayLikeObject.length; i < length ; i+=1){
-      array.push(arrayLikeObject[i]);
-    }
-    return array;
-  };
-
+  var getNodeKey = function(node){ return boundProxy(node instanceof jQuery ? node[0] : node).key; };
 
   // Fallthroughs provide a mechanism for binding one key in a scope to the value at another key
   var Fallthrough = function(key){ this.key = key; };
@@ -57,29 +40,9 @@
 
   var react = {
 
-    nodes: {},
-    scopes: {},
-
-    debug: function(){
-      debugging = true;
-    },
-
-    // for giving scope objects meaningful names, which appear in the anchor directives on nodes. not yet ready for external consumption
-    name: function(name, object){
-      js.errorIf(object.reactKey, 'You tried to name a scope object that already had a name');
-      object.reactKey = name;
-      return this.scopes[name] = object;
-    },
-
-    reset: function(){
-      var key;
-      for(key in this.scopes){
-        delete this.scopes[key];
-      }
-      for(key in this.nodes){
-        delete this.nodes[key];
-      }
-    },
+    debug: function(){ debugging = true; },
+    name: function(){ console && console.warn('react.name() is deprecated'); },
+    reset: function(){ console && console.warn('react.reset() is deprecated'); },
 
     // convenience method for setting object values and automatically calling changed on them
     set: function(object, key, value){
@@ -96,42 +59,27 @@
     update: function(input){
       var node = input;
       if(node instanceof jQuery){
-        js.errorIf(node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
+        throwErrorIf(node.length !== 1, 'you cannot pass a jquery object containing many nodes to react.update()');
         node = node[0];
       }
-      js.errorIf(!node, 'you did not pass a valid node to react.update()');
+      throwErrorIf(!node, 'you did not pass a valid node to react.update()');
       var operation = new Operation();
-      operation.$(node).directives.before.updateBranch();
+      operation.makeMetaNode(node).getDirective('before').updateBranch();
       operation.run();
       return input;
     },
 
     anchor: function(node){
-      var scopes = Array.prototype.slice.call(arguments, 1);
-      this.nodes[getNodeKey(node)] = node;
       // todo: clean up any links elsewhere (like listeners) that are left by potential existing anchors
-
-      new Operation().$(node).directives.set('anchored', ['anchored'].concat(js.map(scopes, function(i, scope){
-        var scopeKey = getScopeKey(scopes[i]);
-        react.scopes[scopeKey] = scopes[i];
-        return scopeKey;
-      })));
-
-      return react.update(node);
+      $$(node).extend({anchors: slice(arguments, 1)}).setDirective('anchored', ['anchored']).update();
+      return node;
     },
 
-    helpers: js.extend(function(focus, deeply){
-      js.extend(focus, react.helpers);
-
-      if(deeply){
-        var key;
-        for(key in focus){
-          if(key !== 'set' && focus[key] && typeof focus[key] === 'object' && !focus[key].set){
-            react.helpers(focus[key], deeply);
-          }
-        }
-      }
-
+    helpers: extend(function(focus, deeply){
+      extend(focus, react.helpers);
+      deeply && each(focus, function(item, key){
+        key !== 'set' && item && typeof item === 'object' && !item.set && react.helpers(item, deeply);
+      });
       return focus;
     },{
 
@@ -141,60 +89,41 @@
       },
 
       set: function(key, value){
-        if(typeof key === 'object'){
-          var newValues = key;
-        } else {
-          newValues = {};
-          newValues[key] = value;
-        }
-        for(key in newValues){
-          this[key] = newValues[key];
-        }
-        react.changed(this, js.keys(newValues));
+        var newValues = {};
+        typeof key === 'object' ? newValues = key : newValues[key] = value;
+        react.changed(extend(this, newValues), keysFor(newValues));
       },
 
       del: function(keys){
-        var i;
-        keys = js.isArray(keys) ? keys : [keys];
-        for(i = 0; i < keys.length; i+=1){
-          delete this[keys[i]];
-        }
+        each(isArray(keys) ? keys : [keys], function(key){
+          delete this[key];
+        }, this);
         react.changed(this, keys);
       },
 
-      changed: function(){
-        react.changed(this);
-      }
+      changed: function(){ react.changed(this); }
 
     }),
 
     integrate: {
       jQuery: function(){
-        var singularize = function(which, method){
+        var singularize = function(method){
           return function(){
-            js.errorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
+            throwErrorIf(this.length !== 1, 'react\'s jQuery helpers can only be run on jQuery objects containing a single member');
             return method.apply(this, arguments);
           };
         };
 
-        jQuery.fn.extend(js.map({
+        jQuery.fn.extend(map({
 
           update: function(){ return react.update(this); },
 
           anchor: function(){
-            if(!arguments.length){
-              var scopes = this.anchors();
-              js.errorIf(scopes.length !== 1, '.anchor() can only be called on nodes with a single anchored object');
-              return scopes[0];
-            }
-            return react.anchor.apply(react, [this].concat(Array.prototype.slice.call(arguments)));
+            throwErrorIf(!arguments.length && this.anchors().length !== 1, '.anchor() can only be called on nodes with a single anchored object');
+            return arguments.length ? react.anchor.apply(react, [this].concat(slice(arguments))) : this.anchors()[0];
           },
 
-          anchors: function(){
-            return js.map(new Operation().$(this[0]).directives.anchored.inputs, function(which, scopeName){
-              return react.scopes[scopeName];
-            });
-          },
+          anchors: function(){ return $$(this).anchors; },
 
 /*
           boundChildren: function(directiveString){
@@ -217,7 +146,7 @@
           boundFilter: function(directiveString){
             var i;
             if(!directiveString){ return this; }
-            var directive = new Directive(directiveString);
+            var directive = new DirectiveVisit(directiveString);
             return this.filter(function(item){
               var directives = jQuery(item).boundDirectives();
               for(i = 0; i < directives.length; i+=1){
@@ -227,27 +156,19 @@
           },
 */
 
-          items: function(){
-            return this.children().slice(1);
-          },
-
-          item: function(which){
-            return this.items().eq(which);
-          },
-
-          itemTemplate: function(){
-            return this.children().eq(0);
-          }
+          items: function(){ return this.children().slice(1); },
+          item: function(which){ return this.items().eq(which); },
+          itemTemplate: function(){ return this.children().eq(0); }
 
         }, singularize));
       }
-    }
+    },
+
+    commands: {}
 
   };
 
-  var commands = react.commands = {
-    scopes: react.scopes
-  };
+  var commands = react.commands;
 
 
 
@@ -262,125 +183,99 @@
   var ScopeChain = function(type, previousLink, additionalScope, options){
     options = options || {};
 
-    js.extend(this, {
+    extend(this, {
       parent: previousLink,
       scope: additionalScope,
       type: type,
       key: options.key,
-      prefix: options.prefix || '',
+      prefix: options.prefix || ''
       // todo this shouldn't need a prefix
-      anchorKey: options.anchorKey || (type === 'anchor' ? options.key : (previousLink||{}).anchorKey),
     });
   };
 
-  js.extend(ScopeChain.prototype, {
+  extend(ScopeChain.prototype, {
 
-    contains: function(scope){
-      return this.scope === scope || (this.parent && this.parent.contains(scope));
-    },
-
-    extend: function(type, additionalScope, options){
-      return new ScopeChain(type, this, additionalScope, options);
-    },
-
+    contains: function(scope){ return this.scope === scope || (this.parent && this.parent.contains(scope)); },
+    extend: function(type, additionalScope, options){ return new ScopeChain(type, this, additionalScope, options); },
     extendWithMany: function(type, scopes, options){
-      scopes = scopes || [];
-      var lastLink = this;
-      var which;
-      for(which = 0; which < scopes.length; which+=1){
-        lastLink = lastLink.extend(type, scopes[which], options);
-      }
-      return lastLink;
+      return reduce(scopes || [], this, function(memo, scope){
+        memo.extend(type, scope, options);
+      });
     },
 
-    // provides the value at a given key by looking through the scope chain from this leaf up
-    detailedLookup: function(key, options){
-      var negate;
-      options = options || {};
-      key = key.toString();
-      if(key[0] === '!'){
-        negate = true;
-        key = key.slice(1);
-      }
-      // the details object will contain all interesting aspects of this lookup
-      // potentialObservers will hold the scopeChain/key pairs that may need to be bound for future updates
-      var details = {potentialObservers: []};
-      // extend details must be called on any return values, since it handles the final step of negation
-      var extendDetails = function(moreDetails){
-        var key;
-        for(key in moreDetails||{}){
-          details[key] = (
-            key === 'potentialObservers' ? details.potentialObservers.concat(moreDetails.potentialObservers || []) :
-            key === 'didMatchFocus' ? details.didMatchFocus || moreDetails.didMatchFocus :
-            moreDetails[key]
-          );
-        }
-        if(negate){ details.value = !details.vailue; }
-        return details;
-      };
-
-      // all lookups fail in the empty scope chain
-      if(this === emptyScopeChain){
-        return extendDetails({failed:true});
-      }
-
-      if (matchers.isString.test(key)) {
-        js.errorIf(negate, 'You can\'t negate literals using the exlamation point');
-        return extendDetails({value: key.slice(1, key.length-1)});
-      }
-
-      var path = key.split('.');
-      // base key is the first segment of a path that uses dot access. It's is the only segment that will be taken from the current scope chain
-      var baseKey = path.shift();
-      var value = this.scope[baseKey];
-
-      // a Fallthrough object remaps the baseKey to a new baseKey in the previous scope
-      if(value instanceof Fallthrough){
-        return extendDetails(this.parent.detailedLookup( [value.key].concat(path).join('.'), options ));
-      }
-
-      details.potentialObservers.push({scopeChain: this, key: baseKey});
-      details.didMatchFocus = details.didMatchFocus || (!path.length && options.checkFocus && options.checkFocus === this.scope);
-      // recurse onto the parent scopeChain if the lookup fails at this level
-      if(! (baseKey in this.scope) ){
-        return extendDetails(this.parent.detailedLookup(key, options));
-      }
-
-      // for dot access
-      if(path.length){
-        if(value === undefined || value === null){
-          // Could not find the key on a null or undefined object at path this.prefix+baseKey from this.scope
-          return extendDetails();
-        }
-        return extendDetails(emptyScopeChain.extend('dotAccess', value, {
-          // todo - i think this needs to pass a key
-          prefix: this.prefix + baseKey + '.',
-          anchorKey: this.anchorKey
-        }).detailedLookup(path.join('.'), options));
-      }
-
-      // functions are called before being returned
-      value = typeof value === 'function' ? value.call(this.scope) : value;
-
-      return extendDetails({value: value});
-    },
-
-    lookup: function(){
-      return this.detailedLookup.apply(this, arguments).value;
-    },
+    lookup: function(){ return this.resolve.apply(this, arguments).value; },
+    resolve: function(pathString, options){ return new Resolution(this, pathString, options); },
 
     // provides a description of the scope chain in array format, optimized for viewing in the console
     describe: function(){
       return [
-        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.key ? ' (key: '+this.key+')': '') + (this.anchorKey ? ', anchored to: '+this.anchorKey+')': '')]
+        ['scope: ', this.scope, ', type of scope shift: ' + this.type + (this.prefix ? ' (prefix: '+this.prefix+')': '')]
       ].concat(this.parent ? this.parent.describe() : []);
     }
 
   });
 
   var emptyScopeChain = new ScopeChain('empty');
+  // all lookups fail in the empty scope chain
+  emptyScopeChain.resolve = function(){ return {failed: true, potentialObservers: []}; };
 
 
+
+
+  /*
+   * Resolution
+   */
+
+  // provides the value at a given path key, by looking through the scope chain from a given link upwards
+  var Resolution = function(scopeChain, pathString, options){
+    pathString = isArray(pathString) ? pathString.join('.') : pathString.toString();
+    extend(this, {lowestScopeChain: scopeChain, potentialObservers: [], options: options || {}});
+    var negate = pathString[0] === '!';
+    negate && (pathString = pathString.slice(1));
+
+    if(matchers.isString.test(pathString)){
+      return extend(this, {value: pathString.slice(1, pathString.length-1)});
+    };
+
+    var path = pathString.split('.');
+    this.resolveName(path.shift(), path);
+    typeof this.value === 'function' && (this.value = this.value.call(this.lowestScopeChain.scope));
+    negate && (this.value = !this.value);
+  };
+
+  extend(Resolution.prototype, {
+
+    resolveName: function(key, path){
+      var originalKey = key;
+      var value;
+      while((value = this.lowestScopeChain.scope[key]) instanceof Fallthrough){
+        // a Fallthrough object remaps a key to a different key in the parent scope (acts as binding)
+        this.lowestScopeChain = this.lowestScopeChain.parent;
+        key = value.key;
+      }
+
+      this.potentialObservers.push({scopeChain: this.lowestScopeChain, key: key});
+
+      this.didMatchFocus || (this.didMatchFocus = this.options.checkFocus === this.lowestScopeChain.scope);
+
+      // recurse onto the parent scopeChain if the lookup fails at this level
+      this.extend(has(this.lowestScopeChain.scope, key) ? {value: value} : this.lowestScopeChain.parent.resolve(key, this.options));
+
+      // for dot access
+      path.length && this.value && this.extend(emptyScopeChain.extend('dotAccess', this.value, {
+        prefix: this.lowestScopeChain.prefix + originalKey + '.'
+      }).resolve(path, this.options));
+    },
+
+    extend: function(moreDetails){
+      moreDetails || (moreDetails = {});
+      return extend(this, moreDetails, {
+        potentialObservers: (this.potentialObservers || []).concat(moreDetails.potentialObservers || []),
+        didMatchFocus: this.didMatchFocus || moreDetails.didMatchFocus
+      });
+    }
+
+  });
 
 
   /*
@@ -390,139 +285,179 @@
   // An operation provides a shared context where complex interactions may rely upon shared state
 
   var Operation = function(){
-    js.extend(this, {
-
-      // within an operation, all $node objects are cached to maintain object-identicality across calls to $()
-      _$nodes: {},
-
-      // directives we plan to visit, by key
-      // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-      _toVisit: {},
-
-      // visited directives, by key
-      _visited: {},
-
-      // branches from which we have already collected all bound descendants
-      _searched: {},
-
-      _hasRun: false,
-      _isRunning: false
-
-    });
+    // directives we plan to visit, by key
+    // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
+    extend(this, { _toVisit: makeDirectiveSet(), _metaObservers: [], _metaNodes: {}, _hasRun: false, _isRunning: false });
   };
 
-  js.extend(Operation.prototype, {
+  extend(Operation.prototype, {
 
-    $: function(node){
-      return this._$nodes[getNodeKey(node)] || (this._$nodes[getNodeKey(node)] = new NodeWrapper(this, node));
-    },
+    makeMetaNode: function(node){ return this._metaNodes[getNodeKey(node)] || (this._metaNodes[getNodeKey(node)] = $$(node).makeMeta(this)); },
 
     hasRun: function(){ return this._hasRun; },
-
     isRunning: function(){ return this._isRunning; },
 
-    visit: function(directive){ this._toVisit[directive.key] = directive; },
-
-    isSearched: function($node, setting){
-      if(setting === undefined){
-        this._searched[$node.key] = setting;
-      } else {
-        return this._searched[$node.key];
-      }
-    },
+    visit: function(directive){ return this._toVisit.add(directive); },
 
     run: function(){
-      var limit = 10000,
-          key;
-      js.errorIf(this._hasRun, 'An operation cannot be run twice');
-      this._isRunning = true;
-      // iterating over the toVisit list once isn't sufficient. Since considering a directive might extend the list, and order of elements in a hash is not guarenteed
-      while(js.hasKeys(this._toVisit)){
-        js.errorIf(!(--limit), 'too many node additions');
-        for(key in this._toVisit){
-          js.errorIf(this._visited[key], 'tried to consider the same directive twice');
-          this._visited[key] = this._toVisit[key].visit();
-          delete this._toVisit[key];
-        }
-      }
-      this._isRunning = false;
-      this._hasRun = true;
+      throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
+      extend(this, {_isRunning: true});
+      // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
+      this._toVisit.exhaust(['visit']);
+      extend(this, {_isRunning: false, _hasRun: true});
     },
 
     changed: function(object, keys){
-      new Proxy(this, object).changed(keys);
+      keys = (
+        isArray(keys) ? keys :
+        keys !== undefined ? [keys] :
+        keysFor(object).concat(has(object, 'length') && !object.propertyIsEnumerable('length') ? ['length'] : [])
+      );
+
+      each(keys, function(key){
+        each(toArray(boundProxy(object).observersByProperty[key] || {}), function(observer){
+          this.getMetaObserver(observer).dirty();
+        }, this);
+      }, this);
       return this;
+    },
+
+    getMetaObserver: function(observer){
+      return this._metaObservers[observer.key] || (this._metaObservers[observer.key] = new MetaObserver(this, observer));
     }
+
   });
 
 
 
 
   /*
-   * NodeWrapper (subclass of jQuery)
+   * $$ (subclass of jQuery)
    */
 
   // Overriding jQuery to provide supplemental functionality to DOM node wrappers
-  // Within the scope of the Operation constructor, all calls to NodeWrapper() return a customized jQuery object. For access to the original, use jQuery()
-  var NodeWrapper = function(operation, node){
-    if(node instanceof jQuery){ node = node[0]; }
-    js.errorIf(!node || node.nodeType !== 1 || js.isArray[node] || node instanceof jQuery, 'node arg must be a DOM node');
-
-    jQuery.prototype.init.call(this, node);
-
-    js.extend(this, {
-      node: node,
-      key: getNodeKey(node),
-      _operation: operation
-    });
-
-    this.directives = new DirectiveSet(this);
+  // Within the scope of the Operation constructor, all calls to $$() return a customized jQuery object. For access to the original, use jQuery()
+  var $$ = function(node){
+    node && has(node, 'length') && (node = node[0]);
+    throwErrorIf(!node || node.nodeType !== 1, 'node arg must be a single DOM node');
+    var proxy = boundProxy(node);
+    var $$node = proxy.meta('$$node');
+    throwErrorIf($$node && $$node.directives._validatedDirectivesString !== $$node.getDirectivesString(), 'directives string changed manually since last visit');
+    return $$node || proxy.meta('$$node', new _$$(node)).meta('$$node');
   };
 
-  NodeWrapper.prototype = js.create(jQuery.prototype, {
-    // a correct constructor mapping breaks with jquery, because it calls this.constructor() with no arguments
-    // constructor: NodeWrapper
+  var _$$ = function(node){
+    jQuery.prototype.init.call(this, node);
+    extend(this, {
+      node: node,
+      key: getNodeKey(node),
+      anchors: []
+    });
+    extend(this, {
+      directives: new DirectiveList(this)
+    });
+    this.getStorage('initialized') || this.initializeNode();
+  };
 
-    makeDirective: function(index, tokens){ return new Directive(this, index, tokens); },
+  _$$.prototype = create(jQuery.prototype, {
+    // note: a correct mapping of the .constructor property to $$ breaks jquery, since it calls new this.constructor() with no arguments
 
+    makeMeta: function(operation){ return new MetaNode(this, operation); },
+    makeDirective: function(key, tokens){ return new Directive(this, key, tokens); },
+    getDirective: function(key){ return this.directives.getByKey(key); },
+    setDirective: function(key, tokens){
+      this.directives.set(key, tokens);
+      return this;
+    },
+
+    isInitialized: function(){ return !!this.getStorage('initialized'); },
+    initializeNode: function(){
+      this.setStorage('initialized', true);
+      this.directives.write();
+    },
+
+    // todo: setting "indexKeyPairs: true" results in copies of the node getting their directive indices mapped to the same values, even before being initialized
+    _storeInAttr: {},
+    getStorage: function(key){
+      this.node._boundStorage || (this.node._boundStorage = {});
+      return this._storeInAttr[key] ? this.attr('data-bound-storage-'+key) : this.node._boundStorage[key];
+    },
+    setStorage: function(key, value){
+      var mappings = {};
+      key && typeof key === 'object' ? mappings = key : mappings[key] = value;
+
+      this.node._boundStorage || (this.node._boundStorage = {});
+      for(key in mappings){
+        this._storeInAttr[key] ? this.attr('data-bound-storage-'+key, mappings[key]) : this.node._boundStorage[key] = mappings[key];
+      }
+      return this;
+    },
+
+    setDirectivesString: function(value){
+      // if the value is being set to empty, and the node already has an inert directives string (empty string or no attribute at all), then don't alter its state
+      // modifying all nodes that lacked attributes to have react="" would result in over-matching of the nodes on subsequent DOM queries
+      return (value || this.attr('react')) ? this.attr('react', value) : this;
+    },
+    getDirectivesString: function(){ return this.attr('react') || ''; },
     getDirectiveStrings: function(){
-      return js.map((this.attr('react')||'').split(matchers.directiveDelimiter), function(which, string){
-        return js.trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
+      return map(this.getDirectivesString().split(matchers.directiveDelimiter), function(string){
+        return trim(string).replace(matchers.negation, '!').replace(matchers.space, ' ');
       });
     },
-
     getDirectiveArrays: function(){
-      return js.reduce(this.getDirectiveStrings(), [], function(which, string, memo){
-        return string ? memo.concat([string.split(matchers.space)]) : memo;
+      return reduce(this.getDirectiveStrings(), [], function(memo, string){
+        string && memo.push(trim(string).split(matchers.space));
       });
-    },
+    }
+
+  });
+
+
+  /*
+   * MetaNode (metadata for operations, about nodes)
+   */
+
+  var MetaNode = function($$node, operation){
+    extend(this, {
+      $$node: $$node,
+      metaDirectives: {},
+      operation: operation,
+      _isSearched: undefined
+    });
+  };
+
+  extend(MetaNode.prototype, {
+
+    getDirective: function(key){ return this.metaDirectives[key] || (this.metaDirectives[key] = this.$$node.getDirective(key).makeMeta(this)); },
 
     wrappedParent: function(){
+      var parent = this.$$node.parent()[0];
       return (
-        ! this.parent()[0] ? null :
-        this.parent()[0] === document ? null :
-        this._operation.$(this.parent()[0])
+        ! parent ? null :
+        parent === document ? null :
+        this.operation.makeMetaNode(parent)
       );
     },
 
-    store: function(){
-      react.nodes[this.key] = this.node;
-    },
+    getReactNodes: function(){ return [this].concat(this.getReactDescendants()); },
 
     // note: getReactDescendants() only returns descendant nodes that have a 'react' attribute on them. any other nodes of interest to react (such as item templates that lack a 'react' attr) will not be included
+    // todo: optimize selection criteria
+    // return map(toArray(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(node){
     getReactDescendants: function(){
-      var that = this;
+      return map((this.$$node.find('[react]')), bind(this.operation.makeMetaNode, this.operation));
+    },
 
-      // todo: optimize selection criteria
-      // return js.map(makeArrayFromArrayLikeObject(this.find('[react]:not([:data-anchored-to]):not([:data-anchored-to] *)')), function(which, node){
-
-      return js.map(makeArrayFromArrayLikeObject(this.find('[react]')), function(which, node){
-        return that._operation.$(node);
+    search: function(){
+      // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
+      this._isSearched || each(this.getReactNodes(), function(metaNode){
+        // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
+        extend(metaNode, {_isSearched: true}).getDirective('after').consider();
       });
     },
 
-    getReactNodes: function(){
-      return [this].concat(this.getReactDescendants());
+    getDirectiveByIndex: function(index){
+      return this.getDirective(this.$$node.directives.getKey(index));
     }
 
   });
@@ -535,66 +470,80 @@
    */
 
   // provides an object representing the directive itself (for example, "contain user.name")
-  var Directive = function($node, index, tokens){
-    js.extend(this, {
-      $node: $node,
-      node: $node[0],
+
+  var Directive = function($$node, key, tokens){
+    extend(this, {
+      $$node: $$node,
+      node: $$node[0],
       command: tokens[0],
       inputs: tokens.slice(1),
+      key: key,
+      observers: {}
+    });
+  };
 
-      _operation: $node._operation,
+  extend(Directive.prototype, {
+    toString: function(){ return [this.command].concat(this.inputs).join(' '); },
+    uniqueKey: function(){ return this.$$node.key+' '+this.key; },
+    makeMeta: function(metaNode){ return new MetaDirective(this, metaNode); }
+  });
 
+
+
+
+  /*
+   * MetaDirective
+   */
+
+  // provides an object representing an operation's perspective on the directive for the duration of that operation's execution
+
+  var MetaDirective = function(directive, metaNode){
+    return extend(create(directive), MetaDirective.prototype, {
+      directive: directive,
+      metaNode: metaNode,
+      $$node: metaNode.$$node,
+      _operation: metaNode.operation,
+      _scopeChain: undefined,
+      _isVisited: undefined,
       _isDead: undefined,
       _shouldUpdate: undefined,
       _shouldUpdateBranch: undefined,
-
-      _parent: undefined,
-      _parentIsDead: undefined,
-      _visitParentBranch: undefined,
-      _gotParentInfo: undefined,
-
+      _parentInfo: undefined,
       _dirtyObservers: {},
-      _scopeChain: undefined,
       _potentialObservers: []
     });
-
-    this.setIndex(index);
   };
 
-  Directive.prototype = js.create(commands);
-  Directive.prototype.constructor = Directive;
+  MetaDirective.prototype = extend(create(commands), {
+    constructor: MetaDirective,
 
-  js.extend(Directive.prototype, {
+    $: function(node){ return this._operation.makeMetaNode(node); },
+    search: function(){ this.metaNode.search(); },
 
-    $: function(node){ return this._operation.$(node); },
+    resetScopeChain: function(){ this._scopeChain = emptyScopeChain; },
+    pushScope: function(type, scope, options){ this._scopeChain = this.getScopeChain().extend(type, scope, options); },
+    getScope: function(){ return this.getScopeChain().scope; },
+    getScopeChain: function(){ return this._scopeChain || (this._scopeChain = this.parentInfo().scopeChain); },
 
-    toString: function(){ return [this.command].concat(this.inputs).join(' '); },
+    // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
+    consider: function(){ return this._operation.visit(this); },
+    update: function(){ return extend(this, {_shouldUpdate: true}).consider(); },
+    updateBranch: function(){ return extend(this, {_shouldUpdateBranch: true}).update(); },
 
-    setIndex: function(newIndex){
-      this.index = newIndex;
-      this.key = this.$node.key+' '+this.index;
+    isVisited: function(){ return this._isVisited; },
+    isDead: function(){ return this._isDead || this.parentInfo().isDead; },
+    shouldUpdateBranch: function(){
+      return this.shouldUpdate() && (this._shouldUpdateBranch || this.parentInfo().shouldUpdateBranch);
+    },
+    shouldUpdate: function(){
+      if(this.isDead()){ return false; }
+      return this._shouldUpdate || (this._shouldUpdate = this.parentInfo().shouldUpdateBranch || this.dirtyObserverPertains());
     },
 
     lookup: function(key){
-      var details = this.getScopeChain().detailedLookup(key);
+      var details = this.getScopeChain().resolve(key);
       this._potentialObservers = this._potentialObservers.concat(details.potentialObservers);
       return details.value;
-    },
-
-    resetScopeChain: function(){
-      this._scopeChain = emptyScopeChain;
-    },
-
-    pushScope: function(type, scope, options){
-      this._scopeChain = this.getScopeChain().extend(type, scope, options);
-    },
-
-    getScopeChain: function(){
-      return this._scopeChain = this._scopeChain || this.getParentScopeChain();
-    },
-
-    getScope: function(){
-      return this.getScopeChain().scope;
     },
 
     dirtyObserver: function(observer){
@@ -603,173 +552,98 @@
     },
 
     dirtyObserverPertains: function(){
-      var key;
-      for(key in this._dirtyObservers){
-        if(this._dirtyObservers[key].pertains()){ return true; }
-      }
+      return reduce(this._dirtyObservers, false, function(memo, observer){
+        // ignore the object if it's not in the same path that lead to registration of the observer
+        return memo || this.getScopeChain().resolve(observer.prefix + observer.propertyKey, {checkFocus: observer.object}).didMatchFocus;
+      }, this);
     },
 
-    // calling this method ensures that the directive (and all its parents) will be considered for updating in the operation, and considered for a rendering update
-    consider: function(){
-      return this._operation.visit(this);
-    },
-
-    update: function(){
-      this._shouldUpdate = true;
-      return this.consider();
-    },
-
-    updateBranch: function(){
-      this._shouldUpdateBranch = true;
-      return this.update();
-    },
-
-    dead: function(){
-      this._isDead = true;
-      return this;
-    },
-
-    onUpdate: function(callback){
-      if(this.shouldUpdate() && callback){
-        callback.call(this);
-      }
+    onUpdate: function(callback, context){
+      this.shouldUpdate() && callback && callback.call(context || this);
       return this;
     },
 
     // the directive's command (for example, 'contain') will be executed with a 'this' context of that directive
     visit: function(){
-      if(this._visited){ return; }
-      this._visited = true;
-      this.getParent().visit();
+      if(this.isVisited()){ return this; }
+      this._isVisited = true;
+      this.parentInfo().parent.visit();
       var willUpdate = this.shouldUpdate();
 
-      if(debugging){
-        try {
-          this._runCommand(this.command, this.inputs);
-        } catch (error) {
-          throw this._describeError(error);
-        }
-      } else {
+      catchIf(debugging, function(){
         this._runCommand(this.command, this.inputs);
-      }
+      }, function(error){
+        throw this._describeError(error);
+      }, this);
 
       if(willUpdate){
         this._registerPotentialObservers();
-        if(this.shouldUpdateBranch() && !this._operation.isSearched(this.$node)){
-          this.search();
-        }
+        this.shouldUpdateBranch() && this.search();
       }
+      return this;
     },
 
     _runCommand: function(command, inputs){
-      js.errorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
-      js.errorIf(!commands[command], 'not a valid react command: '+command);
-      commands["resolve_"+command] || (commands["resolve_"+command] = commands["resolve_"+command] === false ? this._nonResolver : this._fullResolver);
-      var args = commands["resolve_"+command].call(this, inputs);
-      commands[command].apply(this, args);
+      throwErrorIf(!this._operation.isRunning(), 'tried to .visit() a directive outside of operation.run()');
+      throwErrorIf(!commands[command], 'not a valid react command: '+command);
+      var resolverKey = "resolve_"+command;
+      var resolver = commands[resolverKey] || (commands[resolverKey] = commands[resolverKey] === false ? this._nonResolver : this._fullResolver);
+      commands[command].apply(this, resolver.call(this, inputs));
+    },
+    _nonResolver: function(names){ return names; },
+    _fullResolver: function(names){ return map(names, bind(this.lookup, this)); },
+
+    _registerPotentialObservers: function(){
+      each(this._potentialObservers, function(potentialObserver){
+        new Observer(this.directive, potentialObserver.scopeChain.scope, potentialObserver.key, potentialObserver.scopeChain.prefix);
+      }, this);
     },
 
-    _nonResolver: function(names){ return names; },
-
-    _fullResolver: function(names){
-      var that = this;
-      return js.map(names, function(which, name){
-        return that.lookup(name);
+    parentInfo: function(){
+      if(this._parentInfo){ return this._parentInfo; }
+      var repeatLimit = 10000, parent;
+      while(parent !== ( parent = this.currentParent() )){
+        parent.visit();
+        throwErrorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
+      }
+      return (this._parentInfo = {
+        parent: parent,
+        isDead: parent.isDead(),
+        shouldUpdateBranch: parent.shouldUpdateBranch(),
+        scopeChain: parent.getScopeChain()
       });
     },
 
-    _registerPotentialObservers: function(){
-      var i, potentialObserver;
-      for(i = 0; i < this._potentialObservers.length; i+=1){
-        potentialObserver = this._potentialObservers[i];
-        if(potentialObserver.scopeChain.anchorKey){
-          new Proxy(this._operation, potentialObserver.scopeChain.scope).observe(potentialObserver.key, this, potentialObserver.scopeChain.prefix);
-        }
-      }
+    currentParent: function(){
+      var index = this.$$node.directives.getIndex(this.key).toString();
+      return (
+        index === 'before' ? (
+          this.$$node.anchors.length ? nullDirective :
+          !this.metaNode.wrappedParent() ? nullDirective :
+          this.metaNode.wrappedParent().getDirective('after')
+        ) :
+        index === 'anchored' ? this.metaNode.getDirective('before') :
+        index === '0' ? this.metaNode.getDirective('anchored') :
+        index.match(matchers.isNumber) ? this.metaNode.getDirectiveByIndex(index-1) :
+        index === 'after' ? (this.$$node.directives.length ? this.metaNode.getDirectiveByIndex(this.$$node.directives.length-1) : this.metaNode.getDirective('anchored')) :
+        throwError('invalid directive key')
+      );
     },
 
     _describeError: function(error){
-      js.log('Failure during React update: ', {
+      log('Failure during React update: ', {
         'original error': error,
         'original stack': error.stack && error.stack.split ? error.stack.split('\n') : error.stack,
         'while processing node': this.node,
-        'index of failed directive': this.index,
-        'directive call': this.command+'('+this.inputs.join(', ')+')'
+        'key of failed directive': this.key,
+        'directive call': this.command+'('+this.inputs && this.inputs.join(', ')+')'
       }, '(Supplemental dynamic data follows)');
-      js.log('Supplemental: ', {
+      log('Supplemental: ', {
+        'index of failed directive': this.$$node.directives.getIndex(this.key),
         'scope chain description': this.getScopeChain().describe(),
         '(internal scope chain object) ': this.getScopeChain()
       });
       return error;
-    },
-
-    search: function(){
-      // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
-      var $nodes = this.$node.getReactNodes(), which;
-      for(which = 0; which < $nodes.length; which+=1){
-        // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        this._operation.isSearched($nodes[which], true);
-        $nodes[which].directives.after.consider();
-      }
-    },
-
-    _getParentInfo: function(){
-      if(this._gotParentInfo){ return; }
-      this._gotParentInfo = true;
-      this._parent = this._parent || this.getParent();
-      this._parentIsDead = this.parentIsDead();
-      this._shouldUpdateParentBranch = this.shouldUpdateParentBranch();
-      this._parentScopeChain = this._parentScopeChain || this._parent.getScopeChain();
-    },
-
-    getParentScopeChain: function(){
-      this._getParentInfo();
-      return this._parentScopeChain;
-    },
-
-    shouldUpdate: function(){
-      this._getParentInfo();
-      return !this.isDead() && (this._shouldUpdate = this._shouldUpdate || this._shouldUpdateParentBranch || this.dirtyObserverPertains());
-    },
-
-    shouldUpdateBranch: function(){
-      this._getParentInfo();
-      return this.shouldUpdate() && (this._shouldUpdateBranch || this._shouldUpdateParentBranch);
-    },
-
-    isDead: function(){
-      this._getParentInfo();
-      return this._isDead || this._parentIsDead;
-    },
-
-    shouldUpdateParentBranch: function(){
-      return this._shouldUpdateParentBranch !== undefined ? this._shouldUpdateParentBranch : this.getParent().shouldUpdateBranch();
-    },
-
-    parentIsDead: function(){
-      return this._parentIsDead !== undefined ? this._parentIsDead : this.getParent().isDead();
-    },
-
-    getParent: function(){
-      if(this._parent !== undefined){ return this._parent; }
-      var repeatLimit = 10000, parent;
-      while(parent !== (parent = this._potentialParent())){
-        parent && parent.visit();
-        js.errorIf(!(repeatLimit--), 'Too much parent reassignment'); //You've done something in your directive that makes the parent directive change every time the current parent runs. This is most likely caused by lookups to function properties that mutate the DOM structure
-      }
-      return (this._parent = parent);
-    },
-
-    _potentialParent: function(){
-      return (
-        (this.command === "before" && this.$node.directives.anchored.inputs.length) ? nullDirective :
-        this.index === 'before' ? (this.$node.wrappedParent() ? this.$node.wrappedParent().directives.after : nullDirective) :
-        this.index === 'anchored' ? this.$node.directives.before :
-        this.index.toString() === '0' ? this.$node.directives.anchored :
-        this.index.toString().match(matchers.isNumber) ? this.$node.directives[this.index-1] :
-        this.index === 'after' ? (this.$node.directives.length ? this.$node.directives[this.$node.directives.length-1] : this.$node.directives.anchored) :
-        js.error('invalid directive key')
-      );
     }
 
   });
@@ -780,139 +654,164 @@
     shouldUpdate: noop,
     shouldUpdateBranch: noop,
     getScopeChain: function(){ return emptyScopeChain; },
-    getParent: function(){ js.error('internal error: cannot get the parent of a null directive'); }
+    parentInfo: function(){ throwError('internal error: cannot get the parent of a null directive'); }
   };
 
 
 
 
   /*
-   * Directive Set
+   * DirectiveSet
    */
 
-  var DirectiveSet = function($node){
-    var i,
-        key,
-        tokens,
-        tokenArrays = $node.getDirectiveArrays();
+  var makeDirectiveSet = function(){ return new Set(getDirectiveKey); };
+  var getDirectiveKey = function(item){ return item.uniqueKey(); };
 
-    this.length = 0;
 
-    for(i = 0; i < tokenArrays.length; i++){
-      tokens = tokenArrays[i];
-      if(i === 0 && tokens[0] === 'anchored'){
-        this.anchored = $node.makeDirective('anchored', tokens);
-      } else {
-        key = (this.anchored ? i-1 : i).toString();
-        this.push($node.makeDirective(key, tokens));
-      }
-    }
 
-    js.extend(this, {
 
-      _$node: $node,
+  /*
+   * Two-way mapping
+   */
 
-      before: $node.makeDirective('before', ['before']),
-      anchored: this.anchored || $node.makeDirective('anchored', ['anchored']),
-      after: $node.makeDirective('after', ['after']),
-
-    });
-
+  var TwoWayMap = function(serialized){
+    extend(this, { _ltr: {}, _rtl: {} });
+    serialized && this.fromString(serialized);
   };
 
-  js.extend(DirectiveSet.prototype, {
-
-    push: function(element){
-      this[this.length] = element;
-      this.length += 1;
+  extend(TwoWayMap.prototype, {
+    map: function(left, right){
+      throwErrorIf(this._ltr[left], 'mapping already exists for left ', left);
+      throwErrorIf(this._rtl[right], 'mapping already exists for right ', right);
+      this._ltr[left] = right;
+      this._rtl[right] = left;
     },
 
-    unshift: function(element){
-      for(var i = this.length-1; 0 <= i; i--){
-        this[i+1] = this[i];
-      }
-      this[0] = element;
-      this.length += 1;
+    getLeft: function(right){ return this._rtl[right]; },
+    getRight: function(left){ return this._ltr[left]; },
+
+    releaseLeft: function(left){
+      delete this._rtl[this._ltr[left]];
+      delete this._ltr[left];
     },
 
-    // todo: this takes an array, rather than a directive object. that seems odd, but directive objects aren't makable outside this scope
-    set: function(key, directive){
-      this[key] = this._$node.makeDirective(''+key, directive);
-      this.write();
+    releaseRight: function(right){
+      delete this._ltr[this._rtl[right]];
+      delete this._rtl[right];
+    },
+
+    // note: these serialization and de-serialization functions are built to work only with the case where all left-side values are sequential indices
+    toString: function(){
+      return reduce(this._ltr, [], function(memo, right, left){
+        memo[left] = right;
+      }).join(',');
+    },
+
+    fromString: function(string){
+      each(filter(string.split(',')), function(right, left){
+        this.map(left, right);
+      }, this);
+    }
+
+  });
+
+
+
+
+  /*
+   * Directive List
+   */
+
+  var DirectiveList = function($$node){
+    extend(this, {
+      $$node: $$node,
+      _indexKeyPairs: new TwoWayMap($$node.getStorage('indexKeyPairs')),
+      _validatedDirectivesString: $$node.getStorage('validatedDirectivesString') || $$node.getDirectivesString()
+    }).buildDirectives();
+  };
+
+  extend(DirectiveList.prototype, {
+
+    toString: function(){ return this.orderedForString().join(', '); },
+    orderedForString: function(){ return (this.$$node.anchors.length ? [this.anchored] : []).concat(toArray(this)); },
+
+    getStorage: function(){ return this.$$node.getStorage.apply(this.$$node, arguments); },
+    setStorage: function(){ return this.$$node.setStorage.apply(this.$$node, arguments); },
+
+    getKey: function(index){ return specialDirectives[index] ? index : this._indexKeyPairs.getRight(index); },
+    getIndex: function(key){ return specialDirectives[key] ? key : this._indexKeyPairs.getLeft(key); },
+    releaseIndex: function(index){ return this._indexKeyPairs.releaseLeft(index); },
+    releaseKey: function(key){ return this._indexKeyPairs.releaseRight(key); },
+
+    getByKey: function(key){ return this[this.getIndex(key)]; },
+    makeKey: function(index){
+      var key = (this.getStorage('lastDirectiveKey') || 0) + 1;
+      this.mapIndexToKey(index, key).setStorage('lastDirectiveKey', key);
+      return key;
+    },
+    mapIndexToKey: function(index, key){
+      throwErrorIf(specialDirectives[index], 'cannot explicitly set keys for special directives');
+      this._indexKeyPairs.map(index, key);
       return this;
     },
 
-    write: function(){
-      this._$node[0].setAttribute('react', this);
-    },
+    buildDirectives: function(){
+      var i;
+      var $$node = this.$$node;
+      var isInitialized = $$node.isInitialized();
+      var tokenArrays = $$node.getDirectiveArrays();
+      var anchoredTokens = tokenArrays[0] && tokenArrays[0][0] === 'anchored' ? tokenArrays.shift() : ['anchored'];
 
-    orderedForString: function(){
-      return (this.anchored.inputs.length ? [this.anchored] : []).concat(makeArrayFromArrayLikeObject(this));
-    },
-
-    toString: function(){
-      return js.map(this.orderedForString(), function(which, directive){
-        if(!(directive instanceof Directive) && console){ console.log('oops - something\'s wrong with your directives'); }
-        return directive.toString();
-      }).join(', ');
-    },
-
-    prepend: function(directive){
-      directive = directive instanceof Directive ? directive : this._$node.makeDirective('0', directive);
-      this.unshift(directive);
-
-      js.map(this, function(which, directive){
-        directive.setIndex(which.toString());
+      extend(this, {
+        length: tokenArrays.length,
+        before: $$node.makeDirective('before', ['before']),
+        anchored: $$node.makeDirective('anchored', anchoredTokens),
+        after: $$node.makeDirective('after', ['after'])
       });
-      this.write();
-    }
 
-  });
-
-
-
-
-  /*
-   * Proxy
-   */
-
-  // A proxy provides an interface for the observer relationship between any JS object and the nodes/directives observing it's properties
-  var Proxy = function(operation, object){
-    js.extend(this, {
-      _operation: operation,
-      _object: object,
-      _cachedObservers: {}
-    });
-  };
-
-  js.extend(Proxy.prototype, {
-    // writes an association between a directive and a property on an object by annotating the object
-    observe: function(key, directive, prefix){
-      directive.$node.store();
-      new Observer(this._operation, this._cachedObservers, this._object, key, directive.$node.key, directive.index, prefix).write();
+      for(i = 0; i < tokenArrays.length; i++){
+        this[i] = $$node.makeDirective(isInitialized ? this.getKey(i) : this.makeKey(i), tokenArrays[i]);
+      }
     },
 
-    changed: function(keys){
-      // if no key is supplied, check every key
-      if(!this._object || !this._object.observers){ return; }
-      keys = (
-        js.isArray(keys) ? keys :
-        keys !== undefined ? [keys] :
-        js.keys(this._object).concat('length' in this._object && !this._object.propertyIsEnumerable('length') ? ['length'] : [])
-      );
+    set: function(index, tokens){
+      var key = specialDirectives[index] ? this.getKey(index) : (this.releaseKey(index), this.makeKey(index));
+      this[index] = this.$$node.makeDirective(key, tokens);
+      return this.write();
+    },
 
-      // we first need to collect all the observers of the changed keys
-      var whichKey;
-      for(whichKey = 0; whichKey < keys.length; whichKey+=1){
-        var key = keys[whichKey];
-        if(!this._object.observers[key]){ continue; } // if there are no observers for the supplied key, do nothing
-        var keyObserverString;
-        for(keyObserverString in this._object.observers[key]){
-          new Observer(this._operation, this._cachedObservers, this._object, key, keyObserverString).dirty();
-        }
+    push: function(tokens){
+      this[this.length] = this.$$node.makeDirective(this.makeKey(this.length), tokens);
+      this.length += 1;
+      return this.write();
+    },
+
+    unshift: function(tokens){
+      for(var i = this.length-1; 0 <= i; i--){
+        this[i+1] = this[i];
+        this.releaseIndex(i);
+        this.mapIndexToKey(i+1, this[i+1].key);
       }
+      this[0] = this.$$node.makeDirective(this.makeKey('0'), tokens);
+      this.length += 1;
+
+      return this.write();
+    },
+
+    write: function(){
+      var newDirectivesString = this.toString();
+      var currentDirectivesString = this.$$node.getDirectivesString();
+      throwErrorIf(currentDirectivesString !== this._validatedDirectivesString, 'conflicting change to directives attribute');
+
+      this.$$node.setDirectivesString(this._validatedDirectivesString = newDirectivesString).setStorage({
+        validatedDirectivesString: newDirectivesString,
+        indexKeyPairs: this._indexKeyPairs.toString()
+      });
+      return this;
     }
+
   });
+
 
 
 
@@ -920,47 +819,39 @@
    * Observer
    */
 
-  var Observer = function(operation, cachedObservers, object, propertyKey, nodeKey, directiveIndex, prefix){
-    if(arguments.length === 5){
-      var tokens = nodeKey.split(matchers.space);
-      nodeKey = tokens[0];
-      directiveIndex = tokens[1];
-      prefix = tokens[2];
-    }
-
-    var observerDetailsString = nodeKey+' '+directiveIndex+' '+prefix;
-    var observerKey = propertyKey+' '+observerDetailsString;
-    if(cachedObservers[observerKey]){ return cachedObservers[observerKey]; }
-
-    cachedObservers[observerKey] = js.extend(this, {
+  var Observer = function(directive, object, propertyKey, prefix){
+    var proxy = boundProxy(object);
+    var key = [directive.uniqueKey(), propertyKey, prefix].join(' ');
+    var observersByProperty = proxy.observersByProperty[propertyKey] || (proxy.observersByProperty[propertyKey] = {});
+    return proxy.observers[key] || (proxy.observers[key] = observersByProperty[key] = directive.observers[key] = extend(this, {
       object: object,
       propertyKey: propertyKey,
-      observerDetailsString: observerDetailsString,
       prefix: prefix,
-      directive: operation.$(react.nodes[nodeKey]).directives[directiveIndex],
-      key: observerKey
+      directive: directive,
+      key: key
+    }));
+  };
+
+//asdf change directive keys to be based on the (normalized) strings of their definition
+
+
+
+
+  /*
+   * MetaObserver
+   */
+
+  var MetaObserver = function(operation, observer){
+    extend(this, {
+      operation: operation,
+      observer: observer
     });
   };
 
-  js.extend(Observer.prototype, {
-
-    write: function(){
-      var observers = this.object.observers = this.object.observers || {};
-      var propertyObservers = observers[this.propertyKey] = observers[this.propertyKey] || {};
-      propertyObservers[this.observerDetailsString] = true;
-    },
-
+  extend(MetaObserver.prototype, {
     dirty: function(){
-      if(this.isDirty){ return; }
-      this.isDirty = true;
-      this.directive.dirtyObserver(this);
-    },
-
-    pertains: function(){
-      // ignore the object if it's not in the same path that lead to registration of the observer
-      return this.directive.getScopeChain().detailedLookup(this.prefix + this.propertyKey, {checkFocus: this.object}).didMatchFocus;
+      this.operation.makeMetaNode(this.observer.directive.$$node).getDirective(this.observer.directive.key).dirtyObserver(this.observer);
     }
-
   });
 
 
@@ -970,7 +861,7 @@
    * commands
    */
 
-  js.extend(react.commands, {
+  extend(react.commands, {
 
     log: function(){
       typeof console !== 'undefined' && console.log('React render state:', {directive:this, scope:this.getScope(), inputs:arguments});
@@ -979,39 +870,31 @@
     resolve_debug: false,
     debug: function(commandKey){
       debugger;
-      this._runCommand(commandKey, Array.prototype.slice.call(arguments, 1));
+      this._runCommand(commandKey, slice(arguments, 1));
     },
 
     resolve_debugIf: false,
     debugIf: function(conditionKey, commandKey){
       if(this.lookup(conditionKey)){ debugger; }
-      this._runCommand(commandKey, Array.prototype.slice.call(arguments, 2));
+      this._runCommand(commandKey, slice(arguments, 2));
     },
 
     before: function(){
-      if(this.$node.hasClass('reactItemTemplate')){
+      if(this.$$node.hasClass('reactItemTemplate')){
         this.dead();
       }
     },
 
     after: noop,
 
+    dead: function(){
+      return this._isDead = true;
+    },
+
     resolve_anchored: false,
-    anchored: function(/*token1, ...tokenN */){
-      //this.resetScopeChain();
-      var i;
-      for(i = 0; i < arguments.length; i+=1){
-        var token = arguments[i];
-        if(this.scopes[token]){
-          this.pushScope('anchor', this.scopes[token], {key:token});
-        }else{
-          // anchored directive failed to find a scope for the key
-          this.dead();
-        }
-      }
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+    anchored: function(){
+      each(this.$$node.anchors, function(anchor){ this.pushScope('anchor', anchor); }, this);
+      this.onUpdate(this.updateBranch, this);
     },
 
 
@@ -1022,14 +905,12 @@
 
     _withScope: function(type, key){
       var scope = this.lookup(key);
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch, this);
       if(scope){
-        this.$node.removeClass('reactConditionallyHidden');
+        this.$$node.removeClass('reactConditionallyHidden');
         this.pushScope(type, scope, {key:key});
       }else{
-        this.$node.addClass('reactConditionallyHidden');
+        this.$$node.addClass('reactConditionallyHidden');
         this.dead();
       }
     },
@@ -1038,7 +919,7 @@
     withinItem: function(key){
       // todo: add a rule to only allow getting items from last scope (check if key < scope.length?)
       // todo: add a rule to make sure the last scope object is an array
-      if(js.isArray(this.getScope()) && +key < this.getScope().length && this.getScope()[key]){
+      if(isArray(this.getScope()) && +key < this.getScope().length && this.getScope()[key]){
         this._withScope('withinItem', key);
       }else{
         this.dead();
@@ -1047,11 +928,9 @@
 
     withinEach: function(){
       this._createItemNodes(function(index, itemNode){
-        this.$(itemNode).directives.prepend(['withinItem', index]);
+        this.$(itemNode).$$node.directives.unshift(['withinItem', index]);
       });
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch(), this);
     },
 
     resolve_bindItem: false,
@@ -1071,37 +950,35 @@
 
       this.pushScope('bindItem', itemBindings, {key:key});
 
-      this.onUpdate(function(){
-        this.updateBranch();
-      });
+      this.onUpdate(this.updateBranch(), this);
     },
 
 
     resolve_for: false,
     'for': function(keyAlias, valueAlias){
-      var aliases = Array.prototype.slice.call(arguments);
+      var aliases = slice(arguments);
       this.onUpdate(function(){
         // todo: return here (and everywhere else) if collection is undefined.  test for this
         this._createItemNodes(function(index, itemNode){
-          this.$(itemNode).directives.prepend( ['bindItem', index].concat(aliases) );
+          this.$(itemNode).$$node.directives.unshift( ['bindItem', index].concat(aliases) );
         });
         this.updateBranch();
       });
     },
 
     _createItemNodes: function(callback){
-      var $children = this.$node.children();
+      var $children = this.$$node.children();
       var $itemTemplate = $children.first().addClass('reactItemTemplate');
       if(!$itemTemplate.length){ return; }
 
       var collection = this.getScope();
-      if(!js.isArray(collection)){ return this.dead(); }
+      if(!isArray(collection)){ return this.dead(); }
       // this ensures that the directive will depend upon any changes to the length of the array
       this.lookup('length');
 
       var itemNodes = [], pregeneratedItemCount = 0, lastPregeneratedItem = $itemTemplate, itemsToRemove = [], i;
       for(i = 1; i < $children.length; i+=1){
-        if(this.$($children[i]).hasClass('reactItem')){
+        if(this.$($children[i]).$$node.hasClass('reactItem')){
           pregeneratedItemCount+=1;
           collection.length < pregeneratedItemCount ? itemsToRemove.push($children[i]) : (lastPregeneratedItem = $children[i]);
         }
@@ -1109,7 +986,7 @@
       var newItems = [], newItem;
       for(i = pregeneratedItemCount; i < collection.length; i+=1){
         callback.call(this, i, newItem = $itemTemplate.clone().removeClass('reactItemTemplate').addClass('reactItem')[0]);
-        this.$(newItem).directives.before.updateBranch();
+        this.$(newItem).getDirective('before').updateBranch();
         newItems.push(newItem);
       }
       $(itemsToRemove).detach();
@@ -1124,9 +1001,9 @@
         var insertionMethod = content && content.nodeType ? 'append' : 'text';
         jQuery(this.node)[insertionMethod](content);
         // note: .dead() can't happen outside onUpdate() because disabling mutation should only happen when the branch is inserted, not when building an initial scope chain
-        this.$node.directives.after.dead();
+        this.metaNode.getDirective('after').dead();
       });
-      this.$node.directives.after.resetScopeChain();
+      this.metaNode.getDirective('after').resetScopeChain();
     },
 
     'if': function(condition){
@@ -1179,14 +1056,14 @@
     },
 
     attr: function(name, value){
-      js.errorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
+      throwErrorIf(arguments.length !== 2, 'the attr directive requires 2 arguments');
       this.onUpdate(function(){
-        if(!js.among(['string', 'number', 'undefined'], typeof name)){
-          js.log('bad attr name: ', name);
-          js.error('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
-        }else if(!js.among(['string', 'number', 'undefined'], typeof value)){
-          js.log('bad attr value: ', value);
-          js.error('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
+        if(!among(typeof value, ['string', 'number', 'undefined'])){
+          log('bad attr name: ', name);
+          throwError('expected attr name token ' + name + ' to resolve to a string, a number, null, or undefined, not ' + typeof name);
+        }else if(!among(typeof value, ['string', 'number', 'undefined'])){
+          log('bad attr value: ', value);
+          throwError('expected attr value token ' + value + ' to resolve to a string, a number, null, or undefined, not ' + typeof value);
         }
         jQuery(this.node).attr(name, value);
       });
@@ -1213,10 +1090,7 @@
    * Exporting library
    */
 
-  if(window.jQuery){
-    react.integrate.jQuery();
-  }
-
-  window.react = react;
+  global.jQuery && react.integrate.jQuery();
+  global.react = react;
 
 }());
