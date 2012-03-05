@@ -576,7 +576,7 @@
         throw this._describeError(error);
       }, this);
 
-      if(willUpdate){
+      if(willUpdate) {
         this._registerPotentialObservers();
         this.shouldUpdateBranch() && this.search();
       }
@@ -927,10 +927,12 @@
     },
 
     withinEach: function(){
-      this._createItemNodes(function(index, itemNode){
-        this.$(itemNode).$$node.directives.unshift(['withinItem', index]);
-      });
-      this.onUpdate(this.updateBranch(), this);
+      this.onUpdate(function() {
+        this._createItemNodes(function(index, itemNode){
+          this.$(itemNode).$$node.directives.unshift(['withinItem', index]);
+        });
+        this.updateBranch();
+      }, this);
     },
 
     resolve_bindItem: false,
@@ -950,7 +952,7 @@
 
       this.pushScope('bindItem', itemBindings, {key:key});
 
-      this.onUpdate(this.updateBranch(), this);
+      this.onUpdate(this.updateBranch, this);
     },
 
 
