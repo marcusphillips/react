@@ -1096,3 +1096,231 @@
   global.react = react;
 
 }());
+
+
+(function(undefined) {
+
+  var global = this;
+
+  global.parse = (function () {
+    var at, ch, text;
+
+    function next(c) {
+      if (c && c !== ch) {
+        throw new Error("Expected '" + c + "' instead of '" + ch + "'");
+      }
+
+      ch = text.charAt(at);
+      at += 1;
+      return ch;
+    }
+
+    function white() {
+      while (ch && ch <= ' ') {
+        next();
+      }
+    }
+
+    function number() {
+      var number,
+      string = '';
+
+      if (ch == '-') {
+        string = '-';
+        next('-');
+      }
+      while (ch >= '0' && ch <= '9') {
+        string += ch;
+        next();
+      }
+      if (ch === '.') {
+        string += '.';
+        while (next() && ch >= '0' && ch <= '9') {
+          string += ch;
+        }
+      }
+      number = +string;
+      if (isNaN(number)) {
+        throw new Error("Bad number");
+      } else {
+        return {
+          type: 'literal',
+          contents: number
+        };
+      }
+    }
+
+    function word() {
+      var word = '';
+      while (ch) {
+        if (ch.match(/\w/)) {
+          word += ch;
+          next();
+        } else {
+          break;
+        }
+      }
+
+      switch (word) {
+      case "true":
+        return {
+          type: 'literal',
+          contents: true
+        };
+      case "false":
+        return {
+          type: 'literal',
+          contents: false
+        };
+      case "null":
+        return {
+          type: 'literal',
+          contents: null
+        };
+      case "if":
+        return {
+          type: 'conditional',
+          contents: 'if'
+        };
+      default:
+        return {
+          type: 'identifier',
+          contents: word
+        };
+      }
+    }
+
+    function string(quote) {
+      var escapee = {
+        '"':  '"',
+        "'":  "'",
+        '\\': '\\',
+        '/':  '/',
+        b:    'b',
+        f:    '\f',
+        n:    '\n',
+        r:    '\r',
+        t:    '\t'
+      }
+      var string = '';
+      if (ch == quote) {
+        while (next()) {
+          if (ch == quote) {
+            next();
+            return {
+              type: 'literal',
+              contents: string
+            };
+          } else if (ch == '\\') {
+            next();
+            if (typeof escapee[ch] == 'string') {
+              string += escapee[ch];
+            } else {
+              break;
+            }
+          } else {
+            string += ch;
+          }
+        }
+      }
+      throw new Error('Bad string');
+    }
+
+    function singleString() {
+      return string("'");
+    }
+
+    function doubleString() {
+      return string('"');
+    }
+
+    function value() {
+      white();
+      switch (ch) {
+      case "'":
+        return singleString();
+      case '"':
+        return doubleString();
+      case '-':
+        return number();
+      default:
+        return ch >= '0' && ch <= '9' ? number() : word();
+      }
+    }
+
+    // A directive is a space-separated list of arguments
+    function directive() {
+      var args = [];
+
+      while (ch) {
+        args.push(value());
+        if (ch == ' ') {
+          white();
+        }
+        if (ch == ',') {
+          break;
+        }
+      }
+
+      var directive = {
+        type: 'directive',
+        contents: [
+          {
+            type: 'arguments',
+            contents: args
+          }
+        ]
+      };
+
+      if (args[args.length - 2] && args[args.length - 2].type == 'conditional') {
+        directive = processConditional(directive);
+      }
+
+      return directive;
+    }
+
+    function processConditional(directive) {
+      var args = directive.contents[0].contents;
+      var length = args.length;
+      var condition = args[length - 1];
+      var consequences = args.slice(0, length - 2);
+
+      return {
+        type: 'directive',
+        contents: [
+          {
+            type: 'arguments',
+            contents: consequences
+          },
+          {
+            type: 'conditional',
+            contents: condition
+          }
+        ]
+      };
+    }
+
+    // A directiveSet is the top level structure:
+    // a series of elements separated by commas
+    function directiveSet() {
+      var output = [];
+
+      while (ch) {
+        output.push(directive());
+
+        if (! ch) {
+          break;
+        }
+        next(',');
+      }
+      return output;
+    }
+
+    return function (input) {
+      text = input;
+      at = 0;
+      ch = ' ';
+      return directiveSet();
+    };
+  }());
+}());
