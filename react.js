@@ -287,7 +287,14 @@
   var Operation = function(){
     // directives we plan to visit, by key
     // to ensure root-first processing order, we earmark each directive we plan to follow, then follow them all during the run() step
-    extend(this, { _toVisit: makeDirectiveSet(), _metaObservers: [], _metaNodes: {}, _hasRun: false, _isRunning: false });
+    extend(this, {
+      _toVisit: makeDirectiveSet(),
+      _toVisitNodes: makeNodeSet(),
+      _metaObservers: [],
+      _metaNodes: {},
+      _hasRun: false,
+      _isRunning: false
+    });
   };
 
   extend(Operation.prototype, {
@@ -299,11 +306,20 @@
 
     visit: function(directive){ return this._toVisit.add(directive); },
 
+    visitNode: function(node){ return this._toVisitNodes.add(node); },
+
     run: function(){
       throwErrorIf(this._hasRun || this._isRunning, 'An operation cannot be run twice');
       extend(this, {_isRunning: true});
       // iterating over the toVisit list once isn't sufficient, we have to exhaust the hash of keys. Since considering a directive might have the effect of extending the hash further, and order of elements in a hash is not guarenteed
       this._toVisit.exhaust(['visit']);
+      debugger;
+      this._toVisitNodes.exhaust(function (metaNode) {
+        metaNode.eachFreeDirective(function(directive) {
+          directive.visit();
+        });
+      });
+
       extend(this, {_isRunning: false, _hasRun: true});
     },
 
@@ -354,7 +370,8 @@
       anchors: []
     });
     extend(this, {
-      directives: new DirectiveList(this)
+      directives: new DirectiveList(this),
+      freeDirectives: new FreeDirectiveSet(this)
     });
     this.getStorage('initialized') || this.initializeNode();
   };
@@ -421,6 +438,7 @@
     extend(this, {
       $$node: $$node,
       metaDirectives: {},
+      metaFreeDirectives: {},
       operation: operation,
       _isSearched: undefined
     });
@@ -429,6 +447,17 @@
   extend(MetaNode.prototype, {
 
     getDirective: function(key){ return this.metaDirectives[key] || (this.metaDirectives[key] = this.$$node.getDirective(key).makeMeta(this)); },
+
+    getFreeDirective: function(command){
+      return this.metaFreeDirectives[command] ||
+        (this.metaFreeDirectives[command] = this.$$node.freeDirectives[command].makeMeta(this));
+    },
+
+    eachFreeDirective: function(block, context) {
+      this.$$node.freeDirectives.each(function (directive, command) {
+        block.call(context || this, this.getFreeDirective(command), command);
+      }, this);
+    },
 
     wrappedParent: function(){
       var parent = this.$$node.parent()[0];
@@ -452,13 +481,17 @@
       // when considering updating the after directive of all descendant react nodes, we need to include the root as well, since we might be calling this on another earlier directive of that node
       this._isSearched || each(this.getReactNodes(), function(metaNode){
         // since the querySelectorAll operation finds ALL relevant descendants, we will not need to run it again on any of the children returned by the operation
-        extend(metaNode, {_isSearched: true}).getDirective('after').consider();
+        metaNode._isSearched = true;
+        metaNode.getDirective('after').consider();
+        metaNode.consider();
       });
     },
 
     getDirectiveByIndex: function(index){
       return this.getDirective(this.$$node.directives.getKey(index));
-    }
+    },
+
+    consider: function(){ return this.operation.visitNode(this); }
 
   });
 
@@ -666,7 +699,7 @@
 
   var makeDirectiveSet = function(){ return new Set(getDirectiveKey); };
   var getDirectiveKey = function(item){ return item.uniqueKey(); };
-
+  var makeNodeSet = function(){ return new Set(getNodeKey); };
 
 
 
@@ -715,6 +748,52 @@
 
   });
 
+
+  /*
+   * FreeDirectiveSet
+   *
+   * A set of directives scoped to a node (not included in the react attribute)
+   */
+
+  var FreeDirectiveSet = function($$node){
+    extend(this, {
+      $$node: $$node
+    }).buildDirectives();
+  };
+
+  FreeDirectiveSet.directiveCommandNames = [
+    'contain', 'anchored', 'attr', 'attrIf', 'bindItem', 'checkedIf',
+    'classIf', 'debug', 'debugIf', 'for', 'if', 'log',
+    'showIf', 'visIf', 'within', 'withinEach', 'withinItem'
+  ];
+  extend(FreeDirectiveSet.prototype, {
+    buildDirectives: function () {
+      var boundPrefix = 'bound-';
+      var dataBoundPrefix = 'data-' + boundPrefix;
+
+      //move this functionality to $$node, a la DirectiveList#buildDirectives
+      each(FreeDirectiveSet.directiveCommandNames, function (command) {
+        var directiveValue = this.$$node.attr(boundPrefix + command) ||
+          this.$$node.attr(dataBoundPrefix + command);
+
+        if (directiveValue) {
+          //Find the real directive parser and use it here.
+          this[command] = this.$$node.makeDirective(command, [command, directiveValue]);
+        }
+      }, this);
+    },
+
+    each: function(block, context){
+      each(FreeDirectiveSet.directiveCommandNames, function (command) {
+        var directiveValue = this[command];
+        directiveValue && block.call(context || this, directiveValue, command);
+      }, this);
+    },
+
+
+    getByKey: function(key){ return this[key]; },
+
+  });
 
 
 

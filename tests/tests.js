@@ -631,4 +631,8 @@ test('templates are not rerendered when inserted in to the dom', function () {
   ok(!didRun, "function did not run, so inner node was not visited again");
 });
 
+test('sanity', function () {
+  equal($containingStringLiteralBnd.anchor(inert).html(), 'example', 'bound contents');
+});
+
 }());
