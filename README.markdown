@@ -138,9 +138,9 @@ Anyone who dislikes loose coupling, laughter, or puppies.  Also, those who need 
 
 Another thing React doesn't handle for you (yet) is animations.  If the state of your model changes, and visualizing that change requires an animated transition, you have to handle it yourself, the old-fashioned way.  What a drag!
 
-React doesn't support a two-way binding. For exaple, values the user typs into input fields don't get automatically propogated anywhere. This limitation is purposeful, since it's not dead obvious how such a feature should behave.  If it should become clear what the expected result would be though, I'll add support for it.
+React doesn't support a two-way binding. For example, values the user types into input fields don't get automatically propogated anywhere. This limitation is purposeful, since it's not dead obvious how such a feature should behave.  If it should become clear what the expected result would be though, I'll add support for it.
 
-Lastly, React is still a young library, so there are sure to be bugs lurking in dark places.  The priority for this library is delivering consistently on existing interface promises, so you can expect bug fixes to come out before feature additions, but check out the todo readme and inline todos for a glipse of the road map for React.
+Lastly, React is still a young library, so there are sure to be bugs lurking in dark places.  The priority for this library is delivering consistently on existing interface promises, so you can expect bug fixes to come out before feature additions, but check out the todo readme and inline todos for a glimpse of the road map for React.
 
 ***
 
