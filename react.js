@@ -1,6 +1,6 @@
 /*!
  * React for JavaScript - an easy-rerender template language
- * Version 1.3.1, http://github.com/marcusphillips/react
+ * Version 1.3.2, http://github.com/marcusphillips/react
  *
  * Copyright 2010, Marcus Phillips
  * Dual licensed under the MIT or GPL Version 2 licenses.
@@ -106,6 +106,25 @@
     }),
 
     integrate: {
+
+      Backbone: function(){
+        var changeMatcher = /^change:/;
+        Backbone.ReactiveModel = Backbone.Model.extend({
+          constructor: function(options){
+            Backbone.Model.apply(this, arguments);
+            this.JSON = this.toJSON();
+            this.bind('all', function(eventName){
+              if(eventName.match(changeMatcher)){
+                var key = eventName.slice(7);
+                this.JSON[key] = this.get(key);
+                console.log(key, this.JSON);
+                react.changed(this.JSON, key);
+              }
+            }, this);
+          }
+        });
+      },
+
       jQuery: function(){
         var singularize = function(method){
           return function(){
@@ -873,6 +892,10 @@
       this._runCommand(commandKey, slice(arguments, 1));
     },
 
+    value: function(key){
+      this.$$node.val(this.lookup(key));
+    },
+
     resolve_debugIf: false,
     debugIf: function(conditionKey, commandKey){
       if(this.lookup(conditionKey)){ debugger; }
@@ -1009,12 +1032,12 @@
     },
 
     'if': function(condition){
-      if(!condition){ this.dead(); }
       this.onUpdate(function(){
         $(this.node)[condition ? 'removeClass' : 'addClass']('reactConditionallyHidden');
         this._conditionalShow(condition);
         this.updateBranch();
       });
+      if(!condition){ this.dead(); }
     },
 
     _conditionalShow: function(conditional){
@@ -1093,6 +1116,7 @@
    */
 
   global.jQuery && react.integrate.jQuery();
+  global.Backbone && react.integrate.Backbone();
   global.react = react;
 
 }());
